@@ -8,15 +8,15 @@
 - [x] Test USDT from the KaleidoSwap RGB faucet on both
   (asset `rgb:lX~ToKsO-Iup7dJ5-UM794sA-9WD21ge-VHYzBGb-E9PA_h0`, precision 6)
 - [x] First real transfer client → merchant (10 USDT, tx `11feed5e…a394`)
-- [ ] Top up merchant vanilla BTC (only ~8k sats left for fees)
-- [ ] Overpayment test: fixed-amount invoice (10 USDT), try to pay 30
-- [ ] Report the `kaleido asset send` bug to KaleidoSwap (passes the full invoice as
+- [X] Top up merchant vanilla BTC (only ~8k sats left for fees)
+- [X] Overpayment test: fixed-amount invoice (10 USDT), try to pay 30
+- [Not Now ] Report the `kaleido asset send` bug to KaleidoSwap (passes the full invoice as
   `recipient_id`, ignores the invoice's transport endpoints)
-- [ ] Share a working send script with the team (`scripts/send-usdt.py`), since the CLI patch is local only
+- [Not Now ] Share a working send script with the team (`scripts/send-usdt.py`), since the CLI patch is local only
 
 ## 2. Dependencies
-- [ ] `kaleido-sdk@0.1.23` (pinned), `qrcode`, `@types/qrcode`
-- [ ] `better-sqlite3`
+- [X] `kaleido-sdk@0.1.23` (pinned), `qrcode`, `@types/qrcode`
+- [X] `better-sqlite3`
 
 ## 3. `src/main/rgb/` – RGB layer
 - [ ] `config.ts` – node URL, USDT asset id, proxy, precision (6)

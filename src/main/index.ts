@@ -2,6 +2,8 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { createRgb } from './rgb'
+
 
 function createWindow(): void {
   // Create the browser window.
@@ -51,6 +53,10 @@ app.whenReady().then(() => {
 
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
+  //temporary RGB Test
+  const { backend } = createRgb()
+  backend.status().then((s) => console.log('[rgb] status', s))
+  backend.listIncoming().then((t) => console.log('[rgb] incoming', t))
 
   createWindow()
 
