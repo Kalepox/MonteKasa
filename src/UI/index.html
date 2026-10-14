@@ -20,21 +20,22 @@
       --border:  rgba(255,255,255,0.08);
       --borderB: rgba(255,255,255,0.14);
 
-      --blue:    #60a5fa;  /* clear modern sapphire */
-      --blue-d:  rgba(96,165,250,0.16);
-      --green:   #34d399;  /* emerald green */
-      --green-d: rgba(52,211,153,0.16);
-      --red:     #f87171;  /* clean red */
-      --red-d:   rgba(248,113,113,0.16);
-      --amber:   #fbbf24;  /* warm amber gold */
-      --amber-d: rgba(251,191,36,0.16);
-      --purple:  #a78bfa;  /* lavender */
-      --purple-d:rgba(167,139,250,0.16);
+      /* Refined, cohesive status accents (no garish neon) */
+      --blue:    #3b82f6;  /* clean subdued sapphire */
+      --blue-d:  rgba(59,130,246,0.12);
+      --green:   #10b981;  /* natural emerald */
+      --green-d: rgba(16,185,129,0.12);
+      --red:     #ef4444;  /* balanced coral red */
+      --red-d:   rgba(239,68,68,0.12);
+      --amber:   #f59e0b;  /* warm subdued brass gold */
+      --amber-d: rgba(245,158,11,0.12);
+      --purple:  #94a3b8;  /* neutral slate */
+      --purple-d:rgba(148,163,184,0.12);
       --slate:   #94a3b8;
 
       --t1: #f8fafc;   /* pure high-contrast primary text */
       --t2: #cbd5e1;   /* secondary text */
-      --t3: #7c8ba1;   /* muted metadata */
+      --t3: #8a96a6;   /* muted metadata */
 
       --r3: 6px; --r4: 8px; --r5: 12px; --r6: 16px;
       --sw: 224px;
@@ -58,14 +59,14 @@
     .wmeta { flex: 1; min-width: 0; }
     .wnet  { font-size: 9px; color: var(--t3); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700; }
     .waddr { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .wbal  { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; color: var(--green); flex-shrink: 0; }
+    .wbal  { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; color: var(--t1); flex-shrink: 0; }
 
     nav { flex: 1; padding: 8px; overflow-y: auto; }
     .nlbl { font-size: 9px; color: var(--t3); text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700; padding: 12px 8px 4px; }
     .ni { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: var(--r4); color: var(--t2); font-size: 12.5px; font-weight: 500; cursor: pointer; transition: background 0.1s, color 0.1s; user-select: none; position: relative; }
     .ni:hover { background: var(--c3); color: var(--t1); }
-    .ni.on { background: var(--blue-d); color: var(--blue); }
-    .ni.on::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 2px; height: 16px; background: var(--blue); border-radius: 0 2px 2px 0; }
+    .ni.on { background: rgba(255, 255, 255, 0.08); color: #fff; }
+    .ni.on::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 2px; height: 16px; background: #fff; border-radius: 0 2px 2px 0; }
     .nic { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; color: inherit; }
     .nic svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; display: block; }
     .nbadge { margin-left: auto; font-size: 9.5px; font-weight: 700; background: var(--red); color: #fff; padding: 0 5px; border-radius: 10px; line-height: 1.65; }
@@ -92,7 +93,8 @@
 
     /* ─── Buttons ─────────────────────────────────────────────── */
     .btn { display: inline-flex; align-items: center; gap: 5px; padding: 6px 13px; border-radius: var(--r4); font-size: 12px; font-weight: 600; transition: all 0.12s; white-space: nowrap; }
-    .btn-p { background: var(--blue); color: #fff; }
+    .btn-p { background: #f8fafc; color: #09090b; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.3); border: none; }
+    .btn-p:hover { background: #e2e8f0; filter: none; }
     .btn-p:hover { filter: brightness(1.1); }
     .btn-g { background: transparent; border: 1px solid var(--borderB); color: var(--t2); }
     .btn-g:hover { background: var(--c3); color: var(--t1); }
@@ -122,7 +124,8 @@
     .sc-v { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; line-height: 1; }
     .sc-s { font-size: 11px; color: var(--t3); margin-top: 4px; }
     .sc-d { font-size: 10.5px; font-weight: 600; margin-top: 5px; }
-    .up { color: var(--green); } .warn { color: var(--amber); } .cb { color: var(--blue); } .cg { color: var(--green); } .cr { color: var(--red); } .ca { color: var(--amber); }
+    .up { color: var(--green); } .warn { color: var(--amber); } 
+    .cb, .cg, .cr, .ca { color: var(--t1); }
 
     .sh { display: flex; align-items: center; margin-bottom: 10px; }
     .sh-t { font-size: 12.5px; font-weight: 700; flex: 1; color: var(--t1); }
@@ -130,7 +133,7 @@
     .tcard { background: var(--c3); border: 1px solid var(--border); border-radius: var(--r5); overflow: hidden; margin-bottom: 16px; }
     .fbr { padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; gap: 5px; align-items: center; background: var(--c2); }
     .ft { padding: 3px 10px; border-radius: 20px; font-size: 10.5px; font-weight: 600; cursor: pointer; border: 1px solid transparent; color: var(--t3); }
-    .ft.on { background: var(--blue-d); border-color: rgba(59,127,247,0.3); color: var(--blue); }
+    .ft.on { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.2); color: #fff; }
 
     table { width: 100%; border-collapse: collapse; }
     thead th { padding: 8px 14px; text-align: left; font-size: 9.5px; font-weight: 700; color: var(--t3); text-transform: uppercase; border-bottom: 1px solid var(--border); background: var(--c2); }
@@ -151,7 +154,7 @@
     .b-flagged { background:rgba(199,94,94,0.15); color:var(--red); }
 
     .cc { display:flex; align-items:center; gap:8px; }
-    .av { width:26px; height:26px; border-radius:var(--r3); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:800; background:#1a2e4a; color:#5ba3f5; }
+    .av { width:26px; height:26px; border-radius:var(--r3); display:flex; align-items:center; justify-content:center; font-size:10.5px; font-weight:700; background:rgba(255, 255, 255, 0.06); border:1px solid rgba(255, 255, 255, 0.08); color:var(--t2); }
 
     .acard { background: var(--c3); border: 1px solid var(--border); border-radius: var(--r5); padding: 13px 15px; margin-bottom: 10px; }
     .ah { display:flex; align-items:flex-start; gap:9px; margin-bottom:7px; }
@@ -246,9 +249,9 @@
     .ldate  { font-size:10px; color:var(--t3); font-family:'JetBrains Mono',monospace; min-width:64px; }
     .lcli   { flex:1; font-weight:500; font-size:12px; }
     .linv   { font-size:9.5px; color:var(--t3); font-family:'JetBrains Mono',monospace; margin-left:5px; }
-    .lusdt  { font-family:'JetBrains Mono',monospace; font-weight:700; font-size:12.5px; color:var(--green); min-width:100px; text-align:right; }
+    .lusdt  { font-family:'JetBrains Mono',monospace; font-weight:600; font-size:12.5px; color:var(--t1); min-width:100px; text-align:right; }
     .lrate  { font-size:10px; color:var(--t3); min-width:54px; text-align:right; }
-    .leur   { font-family:'JetBrains Mono',monospace; font-weight:700; font-size:12.5px; color:var(--amber); min-width:94px; text-align:right; }
+    .leur   { font-family:'JetBrains Mono',monospace; font-weight:500; font-size:12.5px; color:var(--t2); min-width:94px; text-align:right; }
 
     .qbox { background:var(--c3); border:1px solid var(--border); border-radius:var(--r5); padding:13px 15px; margin-top:14px; }
     .qlbl { font-size:11px; font-weight:600; color:var(--t2); margin-bottom:7px; display:flex; align-items:center; gap:6px; }
@@ -256,8 +259,8 @@
     .qans { display:none; margin-top:8px; font-size:12px; color:var(--t2); line-height:1.6; padding:9px 11px; background:var(--c2); border-radius:var(--r3); border:1px solid var(--border); }
 
     /* QVAC Signature styling */
-    .qvac-hook { position: relative; z-index: 1; border: 1px solid rgba(204,156,80,0.3) !important; background: linear-gradient(180deg, rgba(204,156,80,0.05) 0%, transparent 100%); transition: all 0.3s; }
-    .qvac-hook:hover { border-color: rgba(204,156,80,0.6) !important; box-shadow: 0 0 15px rgba(204,156,80,0.1); }
+    .qvac-hook { position: relative; z-index: 1; border: 1px solid rgba(255,255,255,0.1) !important; background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 100%); transition: all 0.3s; }
+    .qvac-hook:hover { border-color: rgba(255,255,255,0.2) !important; box-shadow: 0 4px 20px rgba(0,0,0,0.25); }
 
     .whero { background: linear-gradient(135deg, #2a2f36, #1a1d21); border:1px solid var(--borderB); border-radius:12px; padding:32px; margin-bottom:24px; display:flex; align-items:center; box-shadow: 0 8px 24px rgba(0,0,0,0.15); }
     .wh-info { flex:1; }
@@ -754,9 +757,9 @@
           <table>
             <thead><tr><th>Invoice</th><th>Client</th><th>Amount</th><th>Due</th><th>Status</th><th>Reason</th></tr></thead>
             <tbody>
-              <tr onclick="openM('INV-0010')"><td class="mono">INV-0010</td><td><div class="cc"><div class="av">MC</div><span style="font-weight:500;">Meridian Creative</span></div></td><td class="mono" style="color:var(--amber);font-weight:700;">800 USDT</td><td class="mono" style="color:var(--red);">Oct 2</td><td><span class="badge b-pending">Pending</span></td><td style="font-size:11px;color:var(--t3);">Awaiting RGB transfer</td></tr>
-              <tr onclick="openM('INV-0009')"><td class="mono">INV-0009</td><td><div class="cc"><div class="av" style="background:#1a3325;color:#22c55e;">AH</div><span style="font-weight:500;">Arco Holdings</span></div></td><td class="mono" style="color:var(--amber);font-weight:700;">1,200 USDT</td><td class="mono" style="color:var(--t3);">Oct 5</td><td><span class="badge b-paid">Paid</span></td><td style="font-size:11px;color:var(--t3);">Sep 28 · 14:37 UTC</td></tr>
-              <tr onclick="openM('INV-0008')"><td class="mono">INV-0008</td><td><div class="cc"><div class="av" style="background:#2a1a48;color:#8b6cf0;">VG</div><span style="font-weight:500;">Vertex Global</span></div></td><td class="mono" style="color:var(--amber);font-weight:700;">500 USDT</td><td class="mono" style="color:var(--t3);">Sep 30</td><td><span class="badge b-overpaid">Overpaid</span></td><td style="font-size:11px;color:var(--purple);">+120 USDT excess</td></tr>
+              <tr onclick="openM('INV-0010')"><td class="mono">INV-0010</td><td><div class="cc"><div class="av">MC</div><span style="font-weight:500;">Meridian Creative</span></div></td><td class="mono" style="color:var(--t1);font-weight:600;">800 USDT</td><td class="mono" style="color:var(--t3);">Oct 2</td><td><span class="badge b-pending">Pending</span></td><td style="font-size:11px;color:var(--t3);">Awaiting RGB transfer</td></tr>
+              <tr onclick="openM('INV-0009')"><td class="mono">INV-0009</td><td><div class="cc"><div class="av">AH</div><span style="font-weight:500;">Arco Holdings</span></div></td><td class="mono" style="color:var(--t1);font-weight:600;">1,200 USDT</td><td class="mono" style="color:var(--t3);">Oct 5</td><td><span class="badge b-paid">Paid</span></td><td style="font-size:11px;color:var(--t3);">Sep 28 · 14:37 UTC</td></tr>
+              <tr onclick="openM('INV-0008')"><td class="mono">INV-0008</td><td><div class="cc"><div class="av">VG</div><span style="font-weight:500;">Vertex Global</span></div></td><td class="mono" style="color:var(--t1);font-weight:600;">500 USDT</td><td class="mono" style="color:var(--t3);">Sep 30</td><td><span class="badge b-overpaid">Overpaid</span></td><td style="font-size:11px;color:var(--t3);">+120 USDT excess</td></tr>
             </tbody>
           </table>
         </div>
@@ -830,7 +833,7 @@
               <div id="qvac-scanner" style="position:absolute; top:0; left:0; right:0; height:3px; background:var(--green); box-shadow:0 0 12px var(--green); display:none;"></div>
            </div>
            <div style="margin-top:20px; font-size:13px; color:var(--t1); font-weight:600;" id="qvac-status">Ready for AI extraction</div>
-           <button id="qvac-btn" class="btn btn-p" style="margin-top:16px; background:var(--green); border-color:var(--green); color:#000; font-weight:700;" onclick="simulateExtractWithScan()">Extract Data with QVAC</button>
+           <button id="qvac-btn" class="btn btn-p" style="margin-top:16px;" onclick="simulateExtractWithScan()">Extract Data with QVAC</button>
         </div>
 
         <!-- Step 1.5: Loading -->
@@ -862,7 +865,7 @@
                   <table class="li-table">
                     <thead><tr><th style="padding:7px 12px;">Description</th><th style="padding:7px 12px;">Qty</th><th style="padding:7px 12px;">Unit</th><th style="padding:7px 12px;text-align:right;">Total</th></tr></thead>
                     <tbody>
-                      <tr><td style="padding:8px 12px;">UI Design – Brand Identity</td><td style="padding:8px 12px;">1</td><td style="padding:8px 12px;" class="mono">600 USDT</td><td style="padding:8px 12px;" class="mono" style="color:var(--amber);">600 USDT</td></tr>
+                      <tr><td style="padding:8px 12px;">UI Design – Brand Identity</td><td style="padding:8px 12px;">1</td><td style="padding:8px 12px;" class="mono">600 USDT</td><td style="padding:8px 12px;" class="mono" style="color:var(--t1);font-weight:600;">600 USDT</td></tr>
                       <tr><td style="padding:8px 12px;">Revision rounds</td><td style="padding:8px 12px;">3</td><td style="padding:8px 12px;" class="mono">50 USDT</td><td style="padding:8px 12px;" class="mono">150 USDT</td></tr>
                       <tr><td style="padding:8px 12px;color:var(--t3);">VAT 0% (B2B non-EU)</td><td></td><td></td><td style="padding:8px 12px;" class="mono" style="color:var(--t3);">0 USDT</td></tr>
                     </tbody>
@@ -928,10 +931,10 @@
           <table>
             <thead><tr><th>Invoice</th><th>Client</th><th>Amount</th><th>Issued</th><th>Due</th><th>Status</th><th>Hash</th></tr></thead>
             <tbody>
-              <tr onclick="openM('INV-0010')"><td class="mono">INV-0010</td><td><div class="cc"><div class="av">MC</div><span style="font-weight:500;">Meridian Creative</span></div></td><td class="mono" style="color:var(--amber);font-weight:700;">800 USDT</td><td class="mono" style="color:var(--t3);">Oct 1</td><td class="mono" style="color:var(--red);">Oct 2</td><td><span class="badge b-pending">Pending</span></td><td class="mono" style="font-size:9.5px;color:var(--t3);">&#x2713; 3a7f&hellip;</td></tr>
-              <tr onclick="openM('INV-0009')"><td class="mono">INV-0009</td><td><div class="cc"><div class="av" style="background:#1a3325;color:#22c55e;">AH</div><span style="font-weight:500;">Arco Holdings</span></div></td><td class="mono" style="color:var(--amber);font-weight:700;">1,200 USDT</td><td class="mono" style="color:var(--t3);">Sep 28</td><td class="mono" style="color:var(--t3);">Oct 5</td><td><span class="badge b-paid">Paid</span></td><td class="mono" style="font-size:9.5px;color:var(--t3);">&#x2713; f81b&hellip;</td></tr>
-              <tr onclick="openM('INV-0008')"><td class="mono">INV-0008</td><td><div class="cc"><div class="av" style="background:#2a1a48;color:#8b6cf0;">VG</div><span style="font-weight:500;">Vertex Global</span></div></td><td class="mono" style="color:var(--amber);font-weight:700;">500 USDT</td><td class="mono" style="color:var(--t3);">Sep 25</td><td class="mono" style="color:var(--t3);">Sep 30</td><td><span class="badge b-overpaid">Overpaid</span></td><td class="mono" style="font-size:9.5px;color:var(--t3);">&#x2713; a12c&hellip;</td></tr>
-              <tr onclick="openM('INV-0007')"><td class="mono">INV-0007</td><td><div class="cc"><div class="av" style="background:#2e1e10;color:#e09b30;">NW</div><span style="font-weight:500;">Nova Works</span></div></td><td class="mono" style="color:var(--amber);font-weight:700;">350 USDT</td><td class="mono" style="color:var(--t3);">Sep 20</td><td class="mono" style="color:var(--t3);">Sep 27</td><td><span class="badge b-flagged">Flagged</span></td><td class="mono" style="font-size:9.5px;color:var(--red);">&#x26A0; error</td></tr>
+              <tr onclick="openM('INV-0010')"><td class="mono">INV-0010</td><td><div class="cc"><div class="av">MC</div><span style="font-weight:500;">Meridian Creative</span></div></td><td class="mono" style="color:var(--t1);font-weight:600;">800 USDT</td><td class="mono" style="color:var(--t3);">Oct 1</td><td class="mono" style="color:var(--t3);">Oct 2</td><td><span class="badge b-pending">Pending</span></td><td class="mono" style="font-size:9.5px;color:var(--t3);">&#x2713; 3a7f&hellip;</td></tr>
+              <tr onclick="openM('INV-0009')"><td class="mono">INV-0009</td><td><div class="cc"><div class="av">AH</div><span style="font-weight:500;">Arco Holdings</span></div></td><td class="mono" style="color:var(--t1);font-weight:600;">1,200 USDT</td><td class="mono" style="color:var(--t3);">Sep 28</td><td class="mono" style="color:var(--t3);">Oct 5</td><td><span class="badge b-paid">Paid</span></td><td class="mono" style="font-size:9.5px;color:var(--t3);">&#x2713; f81b&hellip;</td></tr>
+              <tr onclick="openM('INV-0008')"><td class="mono">INV-0008</td><td><div class="cc"><div class="av">VG</div><span style="font-weight:500;">Vertex Global</span></div></td><td class="mono" style="color:var(--t1);font-weight:600;">500 USDT</td><td class="mono" style="color:var(--t3);">Sep 25</td><td class="mono" style="color:var(--t3);">Sep 30</td><td><span class="badge b-overpaid">Overpaid</span></td><td class="mono" style="font-size:9.5px;color:var(--t3);">&#x2713; a12c&hellip;</td></tr>
+              <tr onclick="openM('INV-0007')"><td class="mono">INV-0007</td><td><div class="cc"><div class="av">NW</div><span style="font-weight:500;">Nova Works</span></div></td><td class="mono" style="color:var(--t1);font-weight:600;">350 USDT</td><td class="mono" style="color:var(--t3);">Sep 20</td><td class="mono" style="color:var(--t3);">Sep 27</td><td><span class="badge b-flagged">Flagged</span></td><td class="mono" style="font-size:9.5px;color:var(--red);">&#x26A0; error</td></tr>
             </tbody>
           </table>
         </div>
@@ -953,8 +956,8 @@
       </div>
       <div class="vb">
         <div class="lstats">
-          <div class="ls"><div class="ls-l">Month Total (USDT)</div><div class="ls-v" style="color:var(--green);">4,850 USDT</div></div>
-          <div class="ls"><div class="ls-l">Month Total (EUR)</div><div class="ls-v" style="color:var(--amber);">&euro;4,481</div></div>
+          <div class="ls"><div class="ls-l">Month Total (USDT)</div><div class="ls-v" style="color:var(--t1);">4,850 USDT</div></div>
+          <div class="ls"><div class="ls-l">Month Total (EUR)</div><div class="ls-v" style="color:var(--t1);">&euro;4,481</div></div>
           <div class="ls"><div class="ls-l">Avg. Rate EUR/USDT</div><div class="ls-v" style="color:var(--t2);">1.0820</div></div>
           <div class="ls"><div class="ls-l">Entries</div><div class="ls-v" style="color:var(--t2);">7</div></div>
         </div>
@@ -970,18 +973,18 @@
         </div>
 
         <div class="qvac-hook" style="padding:15px;background:var(--c3);border-radius:var(--r5);">
-          <div class="qvac-label" style="top:-8px; background:var(--amber); color:#fff;">🧠 QVAC: Financial & Tax Controller</div>
+          <div class="qvac-label" style="top:-8px;">🧠 QVAC: Financial & Tax Controller</div>
           <div class="qlbl" style="margin-bottom:12px;">Run local AI over your RGB ledger to extract tax liabilities and verify compliance.</div>
           <div class="qrow" style="gap:10px;">
             <input id="qi" class="fi" style="flex:1;" placeholder='e.g. "How much did Arco Holdings pay?"' onkeydown="if(event.key==='Enter')qry()"/>
             <button class="btn btn-s sm" onclick="qry()" style="flex-shrink:0;">Ask AI</button>
-            <button class="btn" style="background:var(--amber); color:#fff; font-weight:600; font-size:12px; border-radius:4px; padding:0 12px; flex-shrink:0;" onclick="runTaxReport()">Generate Tax & VAT Report</button>
+            <button class="btn btn-p sm" style="flex-shrink:0;" onclick="runTaxReport()">Generate Tax & VAT Report</button>
           </div>
           <div id="qa" class="qans"></div>
           
           <div id="tax-report" style="display:none; margin-top:14px; background:var(--c1); border:1px solid var(--border); border-radius:var(--r4); padding:16px;">
-            <div id="tax-loading" style="display:flex; align-items:center; gap:10px; color:var(--amber); font-weight:600; font-size:12.5px;">
-              <div class="spinner" style="width:16px;height:16px;border-top-color:var(--amber);margin:0;"></div>
+            <div id="tax-loading" style="display:flex; align-items:center; gap:10px; color:var(--t2); font-weight:600; font-size:12.5px;">
+              <div class="spinner" style="width:16px;height:16px;border-top-color:var(--t1);margin:0;"></div>
               QVAC parsing RGB ledger and extracting VAT boundaries...
             </div>
             <div id="tax-result" style="display:none; margin-top:8px;">
@@ -989,15 +992,15 @@
               <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;">
                 <div style="background:var(--c2); padding:10px; border-radius:var(--r3);">
                   <div style="font-size:10px; color:var(--t3); text-transform:uppercase;">Total Collected</div>
-                  <div style="font-size:15px; font-weight:700; color:var(--green); font-family:monospace;">+4,850.00 USDT</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--t1); font-family:monospace;">+4,850.00 USDT</div>
                 </div>
                 <div style="background:var(--c2); padding:10px; border-radius:var(--r3);">
                   <div style="font-size:10px; color:var(--t3); text-transform:uppercase;">Estimated VAT / Tax</div>
-                  <div style="font-size:15px; font-weight:700; color:var(--amber); font-family:monospace;">970.00 USDT</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--t1); font-family:monospace;">970.00 USDT</div>
                 </div>
                 <div style="background:var(--c2); padding:10px; border-radius:var(--r3);">
                   <div style="font-size:10px; color:var(--t3); text-transform:uppercase;">Compliance Check</div>
-                  <div style="font-size:15px; font-weight:700; color:var(--blue);">100% Verified</div>
+                  <div style="font-size:15px; font-weight:700; color:var(--green);">100% Verified</div>
                 </div>
               </div>
               <div style="margin-top:12px; font-size:12px; color:var(--t2); line-height:1.5;">
@@ -1053,12 +1056,12 @@
           <div class="aro">
             <div class="aico2" style="background:linear-gradient(135deg,#1a5c43,#0e3d2a);color:#26a17b;font-size:14px;">&#x20AE;</div>
             <div><div class="an">Tether USD &mdash; Test asset</div><div class="aid">rgb:2WBcas9&hellip;TmGEn5x &middot; RGB20</div></div>
-            <div class="ab"><div class="abv" style="color:var(--green);">2,450.00 USDT</div><div class="abf">&asymp; &euro;2,264.90</div></div>
+            <div class="ab"><div class="abv" style="color:var(--t1);">2,450.00 USDT</div><div class="abf">&asymp; &euro;2,264.90</div></div>
           </div>
           <div class="aro">
             <div class="aico2" style="background:linear-gradient(135deg,#4a2e10,#2e1c08);color:#f7931a;font-size:14px;">&#x20BF;</div>
             <div><div class="an">Bitcoin</div><div class="aid">Native &middot; RGB fee reserve</div></div>
-            <div class="ab"><div class="abv" style="color:var(--amber);">0.0014 BTC</div><div class="abf">&asymp; &euro;87.40</div></div>
+            <div class="ab"><div class="abv" style="color:var(--t1);">0.0014 BTC</div><div class="abf">&asymp; &euro;87.40</div></div>
           </div>
         </div>
 
@@ -1067,9 +1070,9 @@
           <table>
             <thead><tr><th>RGB Txid</th><th>Direction</th><th>Amount</th><th>Invoice</th><th>Block</th></tr></thead>
             <tbody>
-              <tr><td class="mono" style="color:var(--t3);">9a3c&hellip;f77b</td><td style="color:var(--green);font-size:12px;font-weight:700;">&#x2193; Received</td><td class="mono" style="color:var(--green);">+1,200 USDT</td><td class="mono">INV-0009</td><td class="mono" style="color:var(--t3);">#803,214</td></tr>
-              <tr><td class="mono" style="color:var(--t3);">4d1e&hellip;88cc</td><td style="color:var(--green);font-size:12px;font-weight:700;">&#x2193; Received</td><td class="mono" style="color:var(--green);">+650 USDT</td><td class="mono">INV-0006</td><td class="mono" style="color:var(--t3);">#803,108</td></tr>
-              <tr><td class="mono" style="color:var(--t3);">7b2a&hellip;31ad</td><td style="color:var(--red);font-size:12px;font-weight:700;">&#x2191; Sent</td><td class="mono" style="color:var(--red);">-80 USDT</td><td class="mono">refund</td><td class="mono" style="color:var(--t3);">#803,055</td></tr>
+              <tr><td class="mono" style="color:var(--t3);">9a3c&hellip;f77b</td><td style="color:var(--green);font-size:12px;font-weight:600;">&#x2193; Received</td><td class="mono" style="color:var(--t1);font-weight:600;">+1,200 USDT</td><td class="mono">INV-0009</td><td class="mono" style="color:var(--t3);">#803,214</td></tr>
+              <tr><td class="mono" style="color:var(--t3);">4d1e&hellip;88cc</td><td style="color:var(--green);font-size:12px;font-weight:600;">&#x2193; Received</td><td class="mono" style="color:var(--t1);font-weight:600;">+650 USDT</td><td class="mono">INV-0006</td><td class="mono" style="color:var(--t3);">#803,108</td></tr>
+              <tr><td class="mono" style="color:var(--t3);">7b2a&hellip;31ad</td><td style="color:var(--red);font-size:12px;font-weight:600;">&#x2191; Sent</td><td class="mono" style="color:var(--t1);font-weight:600;">-80 USDT</td><td class="mono">refund</td><td class="mono" style="color:var(--t3);">#803,055</td></tr>
             </tbody>
           </table>
         </div>
@@ -1298,16 +1301,16 @@
             <div style="font-size:11px; color:var(--blue);">Auto-categorized by QVAC</div>
           </div>
           <div style="background:var(--c2); border:1px solid var(--borderB); border-radius:var(--r4); padding:16px;">
-            <div style="font-size:11px; font-weight:700; color:var(--purple); text-transform:uppercase; margin-bottom:8px;">Est. Income Tax (24%)</div>
+            <div style="font-size:11px; font-weight:700; color:var(--t3); text-transform:uppercase; margin-bottom:8px;">Est. Income Tax (24%)</div>
             <div style="font-size:20px; font-weight:700; color:var(--t1); margin-bottom:4px;" class="mono">14,316.00 EURT</div>
             <div style="font-size:11px; color:var(--t3);">Pending end-of-year filing</div>
           </div>
           <div style="background:var(--c2); border:1px solid var(--borderB); border-radius:var(--r4); padding:16px; display:flex; flex-direction:column; justify-content:space-between;">
             <div>
-              <div style="font-size:11px; font-weight:700; color:var(--amber); text-transform:uppercase; margin-bottom:8px;">Net VAT Payable</div>
+              <div style="font-size:11px; font-weight:700; color:var(--t3); text-transform:uppercase; margin-bottom:8px;">Net VAT Payable</div>
               <div style="font-size:20px; font-weight:700; color:var(--t1); margin-bottom:4px;" class="mono">1,420.50 EURT</div>
             </div>
-            <button class="btn btn-p" style="padding:6px; font-size:12px; margin-top:8px; width:100%; justify-content:center; background:var(--amber); border-color:var(--amber); color:#000;" onclick="go('tax-pay')">Pay Now</button>
+            <button class="btn btn-p" style="padding:8px 12px; font-size:12px; margin-top:8px; width:100%; justify-content:center;" onclick="go('tax-pay')">Pay Now</button>
           </div>
         </div>
 
@@ -1430,7 +1433,7 @@
                 <input type="text" placeholder="Enter 6-digit pin or tap key" style="width:100%; background:var(--bg); border:1px solid var(--borderB); border-radius:var(--r3); padding:10px 12px; color:var(--t1); font-family:monospace; text-align:center; font-size:18px; letter-spacing:4px; outline:none;" />
               </div>
 
-              <button id="btn-exec-tax" class="btn btn-p" style="width:100%; padding:14px; font-size:14px; justify-content:center; background:var(--blue); border-color:var(--blue); color:#fff; font-weight:700; text-transform:uppercase;" onclick="executeTaxTransfer()">
+              <button id="btn-exec-tax" class="btn btn-p" style="width:100%; padding:12px; font-size:13px; justify-content:center; font-weight:600;" onclick="executeTaxTransfer()">
                 Execute Transfer
               </button>
               <button class="btn btn-s" style="width:100%; padding:10px; font-size:12px; justify-content:center; margin-top:12px;" onclick="openF24ReceiptModal()">
@@ -1613,7 +1616,7 @@
             <div class="sh"><span class="sh-t">Order Execution</span></div>
             <div style="background:var(--c3); border:1px solid var(--border); border-radius:var(--r5); padding:24px;">
               <div style="display:flex; gap:12px; margin-bottom:20px;">
-                <button class="btn btn-p" style="flex:1; background:var(--green); border-color:var(--green); color:#000;">Buy</button>
+                <button class="btn btn-p" style="flex:1;">Buy</button>
                 <button class="btn btn-s" style="flex:1;">Sell</button>
               </div>
 
@@ -1625,8 +1628,8 @@
               <div style="font-size:11px; color:var(--t3); margin-bottom:12px; text-transform:uppercase; font-weight:700;">Exchange Routing (Select Venue)</div>
               
               <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px;">
-                <div id="exc-kraken" onclick="selectExc('kraken')" style="border:1px solid var(--green); background:rgba(60,186,110,0.05); border-radius:var(--r4); padding:16px; cursor:pointer; position:relative; transition:all 0.2s;">
-                  <div style="position:absolute; top:-8px; right:12px; background:var(--green); color:#000; font-size:9px; font-weight:800; padding:2px 6px; border-radius:8px; text-transform:uppercase; letter-spacing:0.5px;">Best Rate</div>
+                <div id="exc-kraken" onclick="selectExc('kraken')" style="border:1px solid rgba(255,255,255,0.15); background:var(--c3); border-radius:var(--r4); padding:16px; cursor:pointer; position:relative; transition:all 0.2s;">
+                  <div style="position:absolute; top:-8px; right:12px; background:rgba(34,197,94,0.15); color:var(--green); border:1px solid rgba(34,197,94,0.3); font-size:9px; font-weight:700; padding:2px 7px; border-radius:8px; text-transform:uppercase; letter-spacing:0.5px;">Best Rate</div>
                   <div style="font-size:14px; font-weight:700; color:var(--t1); margin-bottom:4px;">Kraken Pro API</div>
                   <div class="mono" style="font-size:18px; font-weight:700; color:var(--t1); margin-bottom:8px;">$64,210.50</div>
                   <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--t3);">
@@ -1834,7 +1837,7 @@
               <div class="sgh">&#x2699; Preferences</div>
               <div class="sgb">
                 <div class="fg"><label class="fl">Default Currency</label><select class="fi"><option>USDT (RGB20)</option><option>EUR (€)</option><option>BTC (Sats)</option></select></div>
-                <button class="btn" style="background:var(--blue); color:#fff; padding:10px 18px; font-weight:700; font-size:12px; border-radius:var(--r3); margin-top:12px; border:none; cursor:pointer;" onclick="saveProfile()">Save Changes</button>
+                <button class="btn btn-p" style="padding:9px 18px; font-size:12px; margin-top:12px;" onclick="saveProfile()">Save Changes</button>
               </div>
             </div>
           </div>
@@ -1885,13 +1888,13 @@
     <div class="mbdy" style="background:var(--c1); padding: 30px;">
       
       <!-- QVAC Insight Box (Injected dynamically) -->
-      <div id="qvac-box" style="display:none; margin-bottom:20px; background:var(--amber-d); border:1px solid var(--amber); border-radius:var(--r5); padding:16px;">
+      <div id="qvac-box" style="display:none; margin-bottom:20px; background:var(--c3); border:1px solid var(--borderB); border-radius:var(--r5); padding:16px;">
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
           <span style="font-size:16px;">🧠</span>
-          <span style="font-weight:700; color:var(--amber);">QVAC AI Insight</span>
+          <span style="font-weight:700; color:var(--t1);">QVAC AI Insight</span>
         </div>
-        <div id="qvac-text" style="color:var(--t1); font-size:12.5px; margin-bottom:12px;"></div>
-        <button class="btn" style="background:var(--amber); color:#fff; padding:8px 12px; font-weight:600; font-size:12px; border-radius:4px;" onclick="executeSend()">Execute Suggested Action</button>
+        <div id="qvac-text" style="color:var(--t2); font-size:12.5px; margin-bottom:12px; line-height:1.5;"></div>
+        <button class="btn btn-p sm" onclick="executeSend()">Execute Suggested Action</button>
       </div>
 
       <!-- Realistic Paper Document -->
@@ -1950,7 +1953,7 @@
         <div class="doc-totals">
           <div class="doc-tr"><span>Subtotal:</span><span class="mono" id="doc-subtotal">1,200.00 USDT</span></div>
           <div class="doc-tr"><span>VAT (0% - Reverse Charge):</span><span class="mono">0.00 USDT</span></div>
-          <div class="doc-tr big"><span>Total Due:</span><span class="mono" id="doc-amt" style="color:var(--green);">1,200.00 USDT</span></div>
+          <div class="doc-tr big"><span>Total Due:</span><span class="mono" id="doc-amt" style="color:var(--t1);font-weight:700;">1,200.00 USDT</span></div>
         </div>
 
         <!-- Verification Seal -->
@@ -2026,7 +2029,7 @@
           <input id="send-amt-input" class="fi" style="background:transparent; border:none; border-bottom:2px solid var(--borderB); border-radius:0; font-size:38px; font-weight:800; text-align:center; width:200px; padding:0 0 4px 0; color:var(--t1); box-shadow:none; outline:none; font-family:'JetBrains Mono',monospace;" value="100.00" placeholder="0.00"/>
           <span style="font-size:18px; font-weight:700; color:var(--t2);">USDT</span>
         </div>
-        <div style="font-size:11px; color:var(--t3); margin-top:8px;">Available: <strong id="send-avail-bal">2,450.00 USDT</strong> <span style="color:var(--amber); cursor:pointer; font-weight:700; margin-left:4px;" onclick="setSendMax()">(MAX)</span></div>
+        <div style="font-size:11px; color:var(--t3); margin-top:8px;">Available: <strong id="send-avail-bal">2,450.00 USDT</strong> <span style="color:var(--t1); cursor:pointer; font-weight:700; margin-left:4px; text-decoration:underline;" onclick="setSendMax()">(MAX)</span></div>
       </div>
 
       <!-- Send Details Card -->
@@ -2047,7 +2050,7 @@
           <div style="flex:1;">
             <div style="font-size:10.5px; color:var(--t3); font-weight:600; margin-bottom:6px; display:flex; justify-content:space-between;">
               <span>Alıcı RGB Fatura Dizesi / Blinded Seal</span>
-              <span style="color:var(--amber); cursor:pointer; display:flex; align-items:center; gap:4px; font-weight:700; font-size:10.5px;" onclick="autofillSendAddress()">📋 Yapıştır</span>
+              <span style="color:var(--t2); cursor:pointer; display:flex; align-items:center; gap:4px; font-weight:600; font-size:10.5px;" onclick="autofillSendAddress()">📋 Yapıştır</span>
             </div>
             <input id="send-addr-input" class="fi" style="width:100%; font-family:'JetBrains Mono',monospace; font-size:11px; background:var(--c2); border:1px solid var(--borderB); padding:9px 11px; color:var(--t1);" value="rgb:invoice:1qr89xj7vertex672k9x2m4/usdt" placeholder="rgb:invoice:... veya bc1q..."/>
           </div>
@@ -2065,7 +2068,7 @@
             <div style="font-size:9.5px; color:var(--t3);">~€0.05</div>
           </div>
           <div class="fee-opt on" onclick="selectFeeSpeed(this, 15, '~€0.09')" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.3); border-radius:6px; padding:8px; text-align:center; cursor:pointer;">
-            <div style="font-size:10px; color:var(--amber); font-weight:700;">Normal</div>
+            <div style="font-size:10px; color:var(--t1); font-weight:700;">Normal</div>
             <div style="font-size:12px; font-weight:700; color:var(--t1); font-family:monospace;">15 sat/vB</div>
             <div style="font-size:9.5px; color:var(--t3);">~€0.09</div>
           </div>
@@ -2251,14 +2254,14 @@
     const qt = document.getElementById('qvac-text');
     if (id === 'INV-0008') {
       qb.style.display = 'block';
-      qb.style.background = 'var(--amber-d)';
-      qb.style.borderColor = 'var(--amber)';
-      qt.innerHTML = 'Client transferred <strong style="color:var(--amber); font-family:monospace;">620.00 USDT</strong> for an invoice totaling <strong style="font-family:monospace;">500.00 USDT</strong>. Recommended action: Refund 120.00 USDT.';
+      qb.style.background = 'rgba(255, 255, 255, 0.04)';
+      qb.style.borderColor = 'rgba(255, 255, 255, 0.12)';
+      qt.innerHTML = 'Client transferred <strong style="color:var(--t1); font-family:monospace;">620.00 USDT</strong> for an invoice totaling <strong style="font-family:monospace;">500.00 USDT</strong>. Recommended action: Refund 120.00 USDT.';
       qb.querySelector('button').style.display = 'inline-block';
     } else if (id === 'INV-0007') {
       qb.style.display = 'block';
-      qb.style.background = 'var(--red-d)';
-      qb.style.borderColor = 'var(--red)';
+      qb.style.background = 'rgba(239, 68, 68, 0.08)';
+      qb.style.borderColor = 'rgba(239, 68, 68, 0.25)';
       qt.innerHTML = 'Hash mismatch detected. The invoice was altered after issuance. Amount changed from <strong style="color:var(--t1); font-family:monospace;">350.00 USDT</strong> to <strong style="color:var(--red); font-family:monospace;">420.00 USDT</strong>.';
       qb.querySelector('button').style.display = 'none';
     } else {
