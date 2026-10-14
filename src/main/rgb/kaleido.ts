@@ -106,6 +106,10 @@ export function createKaleidoBackend(): RgbBackend {
     // decode first: /sendrgb wants the recipient id + endpoints, not the whole invoice
     async send(recipientInvoice, amountRaw) {
       const d = await rln.decodeRgbInvoice({ invoice: recipientInvoice })
+      
+      if (d.asset_id && d.asset_id !== assetId) throw new Error(`Invoice is for another asset (${d.asset_id})`)
+      if (!d.recipient_id.startsWith('sbc:')) throw new Error(`Invoice is not on Mutinynet (${d.recipient_id})`)
+
       return rln.sendRgb({
         donation: false,
         fee_rate: rgbConfig.feeRate,

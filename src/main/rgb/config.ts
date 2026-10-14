@@ -7,5 +7,6 @@ export const rgbConfig = {
     proxy: process.env.RGB_PROXY ?? 'rpcs://proxy.kaleidoswap.com/json-rpc',
     precision: 6,
     invoiceTtlSec: 3600,
-    feeRate: 2
+    feeRate: 2,
+    explorerApi: 'https://mutinynet.com/api'
 }
