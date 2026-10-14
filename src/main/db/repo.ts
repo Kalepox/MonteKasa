@@ -86,3 +86,60 @@ export function listPayments(): PaymentRow[] {
 export function paymentsForInvoice(invoiceId: string): PaymentRow[] {
   return getDb().prepare(`SELECT ${PAYMENT_COLS} FROM payments WHERE invoice_id = ?`).all(invoiceId) as PaymentRow[]
 }
+
+export function paymentsMissingBlockTime(): PaymentRow[] {
+  return getDb()
+    .prepare(`SELECT ${PAYMENT_COLS} FROM payments WHERE status = 'settled' AND txid IS NOT NULL AND block_time IS NULL`)
+    .all() as PaymentRow[]
+}
+
+// ---- proposals ----
+
+export interface ProposalRow {
+  id: string
+  invoiceId: string
+  kind: string
+  amountRaw: number
+  reason: string
+  status: string
+  refundInvoice: string | null
+  txid: string | null
+  error: string | null
+  createdAt: number
+}
+
+const PROPOSAL_COLS = `id, invoice_id AS invoiceId, kind, amount_raw AS amountRaw, reason, status,
+  refund_invoice AS refundInvoice, txid, error, created_at AS createdAt`
+
+// OR IGNORE: a second refund for the same invoice is silently skipped
+export function insertProposal(p: Omit<ProposalRow, 'refundInvoice' | 'txid' | 'error'>): void {
+  getDb()
+    .prepare(
+      `INSERT OR IGNORE INTO proposals (id, invoice_id, kind, amount_raw, reason, status, created_at)
+       VALUES (@id, @invoiceId, @kind, @amountRaw, @reason, @status, @createdAt)`
+    )
+    .run(p)
+}
+
+export function getProposal(id: string): ProposalRow | undefined {
+  return getDb().prepare(`SELECT ${PROPOSAL_COLS} FROM proposals WHERE id = ?`).get(id) as ProposalRow | undefined
+}
+
+export function listProposals(): ProposalRow[] {
+  return getDb().prepare(`SELECT ${PROPOSAL_COLS} FROM proposals ORDER BY created_at DESC`).all() as ProposalRow[]
+}
+
+export function updateProposal(
+  id: string,
+  f: { status: string; refundInvoice?: string; txid?: string; error?: string }
+): void {
+  getDb()
+    .prepare(
+      `UPDATE proposals SET status = @status,
+         refund_invoice = COALESCE(@refundInvoice, refund_invoice),
+         txid = COALESCE(@txid, txid),
+         error = COALESCE(@error, error)
+       WHERE id = @id`
+    )
+    .run({ id, refundInvoice: null, txid: null, error: null, ...f })
+}

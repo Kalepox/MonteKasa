@@ -26,3 +26,20 @@ CREATE TABLE payments (
 
 CREATE INDEX payments_invoice ON payments(invoice_id);
 `
+
+export const SCHEMA_V2 = `
+CREATE TABLE proposals (
+  id             TEXT PRIMARY KEY,
+  invoice_id     TEXT NOT NULL REFERENCES invoices(id),
+  kind           TEXT NOT NULL,            -- refund (later: reissue, remind, hold)
+  amount_raw     INTEGER NOT NULL,
+  reason         TEXT NOT NULL,
+  status         TEXT NOT NULL,            -- open | executing | executed | failed | dismissed
+  refund_invoice TEXT,
+  txid           TEXT,
+  error          TEXT,
+  created_at     INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX one_proposal_per_kind ON proposals(invoice_id, kind);
+`
+

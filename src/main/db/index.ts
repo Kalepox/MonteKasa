@@ -2,7 +2,7 @@ import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
 import { rgbConfig } from '../rgb'
-import { SCHEMA_V1 } from './schema'
+import { SCHEMA_V1, SCHEMA_V2 } from './schema'
 
 let db: Database.Database | undefined
 
@@ -25,6 +25,10 @@ function migrate(d: Database.Database): void {
   if (version < 1) {
     d.exec(SCHEMA_V1)
     d.pragma('user_version = 1')
+  }
+  if (version <2){
+    d.exec(SCHEMA_V2)
+    d.pragma('user_version = 2')
   }
 }
 
