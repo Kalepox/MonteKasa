@@ -906,7 +906,8 @@
             <span>Spotlight</span>
             <kbd class="apple-kbd-sm">⌘K</kbd>
           </button>
-          <button class="btn btn-s sm" onclick="toast('csv', '✓', 'CSV Exported', 'Accounts receivable saved to ledger-2026.csv', 'blue')">&#x2193; Export CSV</button>
+          <button class="btn btn-s sm" onclick="exportInvoicesCSV()">📊 Export CSV</button>
+          <button class="btn btn-s sm" onclick="exportInvoicesXML()">📄 Export XML (FatturaPA)</button>
           <button class="btn btn-p sm" onclick="go('new')">+ New Invoice</button>
         </div>
       </div>
@@ -951,7 +952,8 @@
             <span>Spotlight</span>
             <kbd class="apple-kbd-sm">⌘K</kbd>
           </button>
-          <button class="btn btn-s sm" onclick="toast('csv', '✓', 'CSV Exported', 'Ledger journal exported to double-entry-2026.csv', 'blue')">&#x2193; Export CSV</button>
+          <button class="btn btn-s sm" onclick="exportInvoicesCSV()">📊 Export CSV</button>
+          <button class="btn btn-s sm" onclick="exportLedgerXML()">📄 Export XML (SAF-T)</button>
         </div>
       </div>
       <div class="vb">
@@ -1285,6 +1287,8 @@
             <option>Q2 2026</option>
             <option>Q1 2026</option>
           </select>
+          <button class="btn btn-s sm" onclick="exportTaxCSV()">📊 Export Tax CSV</button>
+          <button class="btn btn-s sm" onclick="exportTaxXML()">📄 Export Tax XML (F24/SDI)</button>
           <button class="btn btn-p" onclick="toast('tax-api','&#x260E;','Tax Authority API','Connecting to local tax authority (e.g. VIES/Agenzia delle Entrate)...','green')">Connect API</button>
         </div>
       </div>
@@ -2002,7 +2006,8 @@
     </div>
     <div class="mftr">
       <button class="btn btn-g sm" onclick="closeM()">Close</button>
-      <button class="btn btn-s sm" onclick="printInvoiceDoc()">🖨️ Print Document</button>
+      <button class="btn btn-s sm" onclick="exportCurrentInvoiceCSV()">📊 Export CSV</button>
+      <button class="btn btn-s sm" onclick="exportCurrentInvoiceXML()">📄 Export XML (FatturaPA)</button>
       <button class="btn btn-s sm" onclick="downloadInvoiceConsignment()">⛓️ Export Consignment (.rgb)</button>
       <button class="btn btn-p sm" onclick="downloadInvoicePdf()">↓ Download Official PDF</button>
     </div>
@@ -2878,7 +2883,227 @@
     }, 1200);
   }
 
-  /* ════ 4. REAL INVOICE PDF & CONSIGNMENT EXPORT ════ */
+  /* ════ 4. REAL INVOICE PDF, XML, CSV & CONSIGNMENT EXPORT ════ */
+  function downloadFile(filename, content, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  }
+
+  function exportInvoicesCSV() {
+    const rows = [
+      ["Invoice_ID", "Client_Name", "Amount_USDT", "Currency", "Issue_Date", "Due_Date", "Status", "RGB_TxID", "VAT_Number", "Jurisdiction"],
+      ["INV-0010", "Meridian Creative LLC", "800.00", "USDT", "2026-10-01", "2026-10-08", "Pending", "rgb:tx:3a7fc29b...", "US123456789", "United States (Export 0%)"],
+      ["INV-0009", "Arco Holdings Ltd", "1200.00", "USDT", "2026-09-28", "2026-10-05", "Paid", "rgb:tx:f81b942e...", "GB987654321", "United Kingdom (Reverse Charge)"],
+      ["INV-0008", "Vertex Global", "500.00", "USDT", "2026-09-25", "2026-09-30", "Overpaid (+120)", "rgb:tx:a12ce940...", "DE112233445", "Germany (EU Reverse Charge)"],
+      ["INV-0007", "Nova Works", "350.00", "USDT", "2026-09-20", "2026-09-27", "Flagged", "rgb:tx:d49a11ef...", "US987654321", "United States (Export 0%)"],
+      ["INV-0006", "Hanseatic Design", "650.00", "USDT", "2026-09-15", "2026-09-22", "Paid", "rgb:tx:4d1e88cc...", "DE882299110", "Germany (EU Reverse Charge)"],
+      ["INV-0005", "Nordic FinTech AB", "1450.00", "USDT", "2026-09-10", "2026-09-18", "Paid", "rgb:tx:9b1104fe...", "SE556677889", "Sweden (EU Reverse Charge)"],
+      ["INV-0004", "Kyoto Creative Lab", "900.00", "USDT", "2026-09-02", "2026-09-12", "Paid", "rgb:tx:6c2a88df...", "JP445566778", "Japan (Export 0%)"]
+    ];
+    const csvContent = rows.map(e => e.map(val => `"${val}"`).join(",")).join("\n");
+    downloadFile("invoices_ledger_2026.csv", csvContent, "text/csv;charset=utf-8;");
+    toast('csv-exp', '📊', 'CSV Dışa Aktarıldı', 'Tüm faturalar invoices_ledger_2026.csv olarak indirildi.', 'blue');
+  }
+
+  function exportInvoicesXML() {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<p:FatturaElettronica versione="FPR12" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:p="http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <FatturaElettronicaHeader>
+    <DatiTrasmissione>
+      <IdTrasmittente>
+        <IdPaese>IT</IdPaese>
+        <IdCodice>09283740156</IdCodice>
+      </IdTrasmittente>
+      <ProgressivoInvio>2026-Q3-BATCH</ProgressivoInvio>
+      <FormatoTrasmissione>FPR12</FormatoTrasmissione>
+      <CodiceDestinatario>0000000</CodiceDestinatario>
+    </DatiTrasmissione>
+    <CedentePrestatore>
+      <DatiAnagrafici>
+        <IdFiscaleIVA>
+          <IdPaese>IT</IdPaese>
+          <IdCodice>09283740156</IdCodice>
+        </IdFiscaleIVA>
+        <Anagrafica>
+          <Denominazione>Studio Mancini - Giulia Mancini</Denominazione>
+        </Anagrafica>
+        <RegimeFiscale>RF19</RegimeFiscale>
+      </DatiAnagrafici>
+      <Sede>
+        <Indirizzo>Via Roma 10</Indirizzo>
+        <CAP>20121</CAP>
+        <Comune>Milano</Comune>
+        <Provincia>MI</Provincia>
+        <Nazione>IT</Nazione>
+      </Sede>
+    </CedentePrestatore>
+  </FatturaElettronicaHeader>
+  <FatturaElettronicaBody>
+    <DatiGenerali>
+      <DatiGeneraliDocumento>
+        <TipoDocumento>TD01</TipoDocumento>
+        <Divisa>EUR</Divisa>
+        <Data>2026-10-01</Data>
+        <Numero>INV-2026-BATCH</Numero>
+        <ImportoTotaleDocumento>5850.00</ImportoTotaleDocumento>
+        <Causale>Servizi di consulenza software architettura e settlement RGB/Bitcoin</Causale>
+      </DatiGeneraliDocumento>
+    </DatiGenerali>
+    <DatiBeniServizi>
+      <DettaglioLinee>
+        <NumeroLinea>1</NumeroLinea>
+        <Descrizione>INV-0010: UI Design Brand Identity - Meridian Creative</Descrizione>
+        <PrezzoUnitario>800.00</PrezzoUnitario>
+        <PrezzoTotale>800.00</PrezzoTotale>
+        <AliquotaIVA>0.00</AliquotaIVA>
+        <Natura>N3.1</Natura>
+      </DettaglioLinee>
+      <DettaglioLinee>
+        <NumeroLinea>2</NumeroLinea>
+        <Descrizione>INV-0009: Software Development Architecture - Arco Holdings Ltd</Descrizione>
+        <PrezzoUnitario>1200.00</PrezzoUnitario>
+        <PrezzoTotale>1200.00</PrezzoTotale>
+        <AliquotaIVA>0.00</AliquotaIVA>
+        <Natura>N3.2</Natura>
+      </DettaglioLinee>
+      <DatiRiepilogo>
+        <AliquotaIVA>0.00</AliquotaIVA>
+        <Natura>N3.2</Natura>
+        <ImponibileImporto>5850.00</ImponibileImporto>
+        <Imposta>0.00</Imposta>
+        <RiferimentoNormativo>Non imponibile art. 7-ter DPR 633/72 - Reverse Charge</RiferimentoNormativo>
+      </DatiRiepilogo>
+    </DatiBeniServizi>
+    <DatiPagamento>
+      <CondizioniPagamento>TP02</CondizioniPagamento>
+      <DettaglioPagamento>
+        <ModalitaPagamento>MP08</ModalitaPagamento>
+        <DataScadenzaPagamento>2026-10-08</DataScadenzaPagamento>
+        <ImportoPagamento>5850.00</ImportoPagamento>
+        <RiferimentoRGB>rgb:contract:2WBcas9TmGEn5x:anchored_btc_834112</RiferimentoRGB>
+      </DettaglioPagamento>
+    </DatiPagamento>
+  </FatturaElettronicaBody>
+</p:FatturaElettronica>`;
+    downloadFile("FatturaElettronica_Bundle_2026.xml", xml, "application/xml;charset=utf-8;");
+    toast('xml-exp', '📄', 'FatturaPA XML Dışa Aktarıldı', 'FatturaElettronica_Bundle_2026.xml (SDI standardı) indirildi.', 'green');
+  }
+
+  function exportCurrentInvoiceCSV() {
+    const docId = document.getElementById('doc-id')?.textContent.trim() || 'INV-0009';
+    const amt = document.getElementById('doc-amt')?.textContent.trim() || '1,200.00 USDT';
+    const date = document.getElementById('doc-date')?.textContent.trim() || 'Sep 28 2026';
+    const due = document.getElementById('doc-due')?.textContent.trim() || 'Oct 5 2026';
+    const csv = `"Invoice_ID","Date","Due_Date","Amount","Issuer","Client","Anchoring_Protocol","RGB_Status"\n"${docId}","${date}","${due}","${amt}","Studio Mancini - IT09283740156","Client via RGB","RGB20 Bitcoin UTXO","Verified Single-Use Seal"`;
+    downloadFile(`Invoice_${docId}.csv`, csv, "text/csv;charset=utf-8;");
+    toast('inv-csv', '📊', 'Fatura CSV İndirildi', `Invoice_${docId}.csv başarıyla kaydedildi.`, 'blue');
+  }
+
+  function exportCurrentInvoiceXML() {
+    const docId = document.getElementById('doc-id')?.textContent.trim() || 'INV-0009';
+    const amt = document.getElementById('doc-amt')?.textContent.replace(/[^0-9.]/g, '') || '1200.00';
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<FatturaElettronica versione="FPR12" xmlns="http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2">
+  <FatturaElettronicaHeader>
+    <DatiTrasmissione>
+      <IdTrasmittente><IdPaese>IT</IdPaese><IdCodice>09283740156</IdCodice></IdTrasmittente>
+      <ProgressivoInvio>${docId}</ProgressivoInvio>
+      <FormatoTrasmissione>FPR12</FormatoTrasmissione>
+      <CodiceDestinatario>0000000</CodiceDestinatario>
+    </DatiTrasmissione>
+    <CedentePrestatore>
+      <DatiAnagrafici>
+        <IdFiscaleIVA><IdPaese>IT</IdPaese><IdCodice>09283740156</IdCodice></IdFiscaleIVA>
+        <Anagrafica><Denominazione>Studio Mancini</Denominazione></Anagrafica>
+      </DatiAnagrafici>
+      <Sede><Indirizzo>Via Roma 10</Indirizzo><CAP>20121</CAP><Comune>Milano</Comune><Nazione>IT</Nazione></Sede>
+    </CedentePrestatore>
+  </FatturaElettronicaHeader>
+  <FatturaElettronicaBody>
+    <DatiGenerali>
+      <DatiGeneraliDocumento>
+        <TipoDocumento>TD01</TipoDocumento>
+        <Divisa>EUR</Divisa>
+        <Data>${new Date().toISOString().slice(0,10)}</Data>
+        <Numero>${docId}</Numero>
+        <ImportoTotaleDocumento>${amt}</ImportoTotaleDocumento>
+      </DatiGeneraliDocumento>
+    </DatiGenerali>
+    <DatiBeniServizi>
+      <DettaglioLinee>
+        <NumeroLinea>1</NumeroLinea>
+        <Descrizione>Crypto-native Professional Services / RGB Settlement</Descrizione>
+        <PrezzoUnitario>${amt}</PrezzoUnitario>
+        <PrezzoTotale>${amt}</PrezzoTotale>
+        <AliquotaIVA>0.00</AliquotaIVA>
+        <Natura>N3.2</Natura>
+      </DettaglioLinee>
+    </DatiBeniServizi>
+  </FatturaElettronicaBody>
+</FatturaElettronica>`;
+    downloadFile(`FatturaPA_${docId}.xml`, xml, "application/xml;charset=utf-8;");
+    toast('inv-xml', '📄', 'Fatura XML İndirildi', `FatturaPA_${docId}.xml (SDI standardı) hazırlandı.`, 'green');
+  }
+
+  function exportTaxCSV() {
+    const csv = `"Quarter","Tax_Year","Gross_Revenue_EUR","Deductible_Expenses_EUR","Net_Taxable_EUR","VAT_Rate","Estimated_VAT_EUR","Corporate_Income_Tax_EUR","Status"\n"Q3","2026","63900.00","4250.00","59650.00","22%","1420.50","14316.00","Audited by QVAC - Ready for Agenzia delle Entrate"`;
+    downloadFile("Tax_Report_Q3_2026.csv", csv, "text/csv;charset=utf-8;");
+    toast('tax-csv', '📊', 'Vergi CSV Dışa Aktarıldı', 'Tax_Report_Q3_2026.csv indirildi.', 'blue');
+  }
+
+  function exportTaxXML() {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<DichiarazioneLiquidazionePeriodicaIVA xmlns="urn:Fornitura-F24:AgenziaEntrate:2026">
+  <Frontespizio>
+    <CodiceFiscale>MNCGLA88M41F205Z</CodiceFiscale>
+    <PartitaIVA>09283740156</PartitaIVA>
+    <AnnoImposta>2026</AnnoImposta>
+    <Periodo>Q3</Periodo>
+  </Frontespizio>
+  <DatiLiquidazioneIVA>
+    <TotaleOperazioniAttive>63900.00</TotaleOperazioniAttive>
+    <TotaleOperazioniPassive>4250.00</TotaleOperazioniPassive>
+    <IVADovuta>1420.50</IVADovuta>
+    <ModelloF24>
+      <Sezione>ERARIO</Sezione>
+      <CodiceTributo>6033</CodiceTributo>
+      <PeriodoRiferimento>2026</PeriodoRiferimento>
+      <ImportoDebitoVersato>1830.00</ImportoDebitoVersato>
+      <StatoQuietanza>CONFERMATO_SDI</StatoQuietanza>
+    </ModelloF24>
+  </DatiLiquidazioneIVA>
+</DichiarazioneLiquidazionePeriodicaIVA>`;
+    downloadFile("F24_Liquidazione_IVA_Q3_2026.xml", xml, "application/xml;charset=utf-8;");
+    toast('tax-xml', '📄', 'Vergi XML Dışa Aktarıldı', 'F24_Liquidazione_IVA_Q3_2026.xml (Agenzia delle Entrate) hazırlandı.', 'green');
+  }
+
+  function exportLedgerXML() {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<AuditFile xmlns="urn:OECD:StandardAuditFile-Tax:2.00">
+  <Header>
+    <AuditFileVersion>2.0</AuditFileVersion>
+    <CompanyID>IT09283740156</CompanyID>
+    <FiscalYear>2026</FiscalYear>
+    <StartDate>2026-07-01</StartDate>
+    <EndDate>2026-09-30</EndDate>
+    <CurrencyCode>USDT</CurrencyCode>
+  </Header>
+  <GeneralLedgerEntries>
+    <NumberOfEntries>7</NumberOfEntries>
+    <TotalDebit>4850.00</TotalDebit>
+    <TotalCredit>4850.00</TotalCredit>
+  </GeneralLedgerEntries>
+</AuditFile>`;
+    downloadFile("Ledger_Audit_Q3_2026.xml", xml, "application/xml;charset=utf-8;");
+    toast('ledger-xml', '📄', 'Ledger XML Dışa Aktarıldı', 'Ledger_Audit_Q3_2026.xml (SAF-T denetim standardı) indirildi.', 'green');
+  }
+
   function printInvoiceDoc() {
     window.print();
   }
@@ -2902,59 +3127,7 @@
           th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; }
           th { background: #f5f5f7; }
           .seal { background: #f0fdf4; border: 1px dashed #16a34a; padding: 12px; border-radius: 6px; font-size: 12px; margin-top: 20px; }
-        
-    /* ─── UI Polish & Custom Scrollbar ─── */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
-
-    input:focus, select:focus, textarea:focus, .fi:focus {
-      border-color: var(--blue) !important;
-      box-shadow: 0 0 0 2px var(--blue-d) !important;
-      outline: none;
-    }
-
-    .tb-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-left: auto;
-      flex-shrink: 0;
-    }
-
-    .kbd-hint {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 9.5px;
-      font-weight: 600;
-      color: var(--t3);
-      background: rgba(255,255,255,0.06);
-      border: 1px solid var(--border);
-      border-radius: 3px;
-      padding: 1px 5px;
-      margin-left: 3px;
-    }
-    .tb-net-pill {
-      font-size: 11px;
-      font-weight: 600;
-      padding: 5px 11px;
-      border-radius: 20px;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background: var(--green-d);
-      color: var(--green);
-      border: 1px solid rgba(52, 211, 153, 0.25);
-    }
-    .net-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--green);
-      box-shadow: 0 0 6px var(--green);
-    }
-
-  </style>
+        </style>
       </head>
       <body>
         <div class="hdr">
@@ -3079,59 +3252,7 @@
           .title { text-align: center; font-weight: bold; font-size: 16px; margin-bottom: 20px; border-bottom: 1px solid #000; padding-bottom: 10px; }
           table { width: 100%; border-collapse: collapse; margin-top: 15px; }
           th, td { border: 1px solid #000; padding: 8px; font-size: 12px; }
-        
-    /* ─── UI Polish & Custom Scrollbar ─── */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
-
-    input:focus, select:focus, textarea:focus, .fi:focus {
-      border-color: var(--blue) !important;
-      box-shadow: 0 0 0 2px var(--blue-d) !important;
-      outline: none;
-    }
-
-    .tb-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-left: auto;
-      flex-shrink: 0;
-    }
-
-    .kbd-hint {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 9.5px;
-      font-weight: 600;
-      color: var(--t3);
-      background: rgba(255,255,255,0.06);
-      border: 1px solid var(--border);
-      border-radius: 3px;
-      padding: 1px 5px;
-      margin-left: 3px;
-    }
-    .tb-net-pill {
-      font-size: 11px;
-      font-weight: 600;
-      padding: 5px 11px;
-      border-radius: 20px;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background: var(--green-d);
-      color: var(--green);
-      border: 1px solid rgba(52, 211, 153, 0.25);
-    }
-    .net-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--green);
-      box-shadow: 0 0 6px var(--green);
-    }
-
-  </style>
+        </style>
       </head>
       <body>
         <div class="border">
@@ -3148,13 +3269,7 @@
       </body>
       </html>
     `;
-    const blob = new Blob([receiptHtml], { type: 'application/pdf' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadFile(filename, receiptHtml, 'application/pdf');
     toast('f24-dl', '✓', 'F24 Makbuzu İndirildi', filename + ' resmi vergi arşivinize eklendi.', 'green');
   }
 </script>
@@ -3324,6 +3439,8 @@
 
     <div class="mftr" style="background:#111317; border-top:1px solid rgba(255,255,255,0.08); padding:12px 20px;">
       <button class="btn btn-g sm" onclick="document.getElementById('f24-receipt-modal').classList.remove('on')">Kapat</button>
+      <button class="btn btn-s sm" onclick="exportTaxCSV()">📊 Export CSV</button>
+      <button class="btn btn-s sm" onclick="exportTaxXML()">📄 Export XML (F24/SDI)</button>
       <button class="btn btn-s sm" onclick="window.print()">🖨️ Yazdır</button>
       <button class="btn btn-p sm" onclick="downloadF24ReceiptPdf()">↓ Resmi PDF Makbuzu İndir</button>
     </div>
