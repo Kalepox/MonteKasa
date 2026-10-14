@@ -8,7 +8,8 @@ export function createMockBackend() {
   const backend: RgbBackend = {
     async status() {
       const balanceRaw = transfers.filter((t) => t.status === 'settled').reduce((s, t) => s + t.receivedRaw, 0)
-      return { state: 'online', mock: true, pubkey: 'mock-node', balanceRaw }
+      return { state: 'online', mock: true, pubkey: 'mock-node', balanceRaw, btcSats: 100_000 }
+
     },
     async createInvoice(amountRaw, expiresAt) {
       const recipientId = `mock:utxob:${++n}`

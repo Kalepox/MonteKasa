@@ -41,13 +41,15 @@ export function createKaleidoBackend(): RgbBackend {
     async status() {
       try {
         const info = await rln.getNodeInfo()
+        const btc = await rln.getBtcBalance(true)
         let balanceRaw = 0
         try {
           balanceRaw = (await rln.getAssetBalance({ asset_id: assetId })).spendable
         } catch (e) {
-          if (!unknownAsset(e)) throw e // never received USDT yet → balance 0
+          if (!unknownAsset(e)) throw e // never received USDT yet balance 0
         }
-        return { state: 'online', mock: false, pubkey: info.pubkey, balanceRaw }
+        return { state: 'online', mock: false, pubkey: info.pubkey, balanceRaw, btcSats: btc.vanilla.spendable }
+
       } catch (e) {
         return { state: stateFromError(e), mock: false }
       }
@@ -106,7 +108,7 @@ export function createKaleidoBackend(): RgbBackend {
     // decode first: /sendrgb wants the recipient id + endpoints, not the whole invoice
     async send(recipientInvoice, amountRaw) {
       const d = await rln.decodeRgbInvoice({ invoice: recipientInvoice })
-      
+
       if (d.asset_id && d.asset_id !== assetId) throw new Error(`Invoice is for another asset (${d.asset_id})`)
       if (!d.recipient_id.startsWith('sbc:')) throw new Error(`Invoice is not on Mutinynet (${d.recipient_id})`)
 

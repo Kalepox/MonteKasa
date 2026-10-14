@@ -4,6 +4,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { createRgb } from './rgb'      
 import { Kasa } from './core/kasa'
+import { toRaw, toUsdt } from './core/units'
 
 function createWindow(): void {
   // Create the browser window.
@@ -54,18 +55,24 @@ app.whenReady().then(() => {
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
 
-  // temporary core test
   const { backend, pay } = createRgb()
   const kasa = new Kasa(backend)
-  kasa.on('changed', () => console.log('[kasa]', JSON.stringify(kasa.snapshot(), null, 1)))
-  kasa.start(2000)
-  if (pay) {
-    kasa.createInvoice('Acme Srl', 10).then((inv) => pay(inv.recipientId, 30_000_000)) // overpay 30
-    setTimeout(() => {
-      const p = kasa.snapshot().proposals.find((x) => x.status === 'open')
-      if (p) kasa.approve(p.id, 'rgb:mock-refund')
-    }, 12_000)
-  }
+  kasa.start()
+
+  ipcMain.handle('kasa:status', async () => {
+    const s = await backend.status()
+    return { ...s, balance: toUsdt(s.balanceRaw ?? 0), btcSats: s.btcSats ?? 0 }
+  })
+  ipcMain.handle('kasa:snapshot', () => kasa.snapshot())
+  ipcMain.handle('kasa:createInvoice', (_e, client: string, amount: number) => kasa.createInvoice(client, amount))
+  ipcMain.handle('kasa:receive', () => kasa.receiveInvoice())
+  ipcMain.handle('kasa:send', (_e, invoice: string, amount: number) => kasa.send(invoice, amount))
+  ipcMain.handle('kasa:approve', (_e, id: string, refundInvoice: string) => kasa.approve(id, refundInvoice))
+  ipcMain.handle('kasa:dismiss', (_e, id: string) => kasa.dismiss(id))
+  // mock mode only: simulate a client paying, from DevTools
+  ipcMain.handle('kasa:mockPay', (_e, recipientId: string, amount: number) => pay?.(recipientId, toRaw(amount)))
+
+  kasa.on('changed', () => BrowserWindow.getAllWindows().forEach((w) => w.webContents.send('kasa:changed')))
 
   createWindow()
 
