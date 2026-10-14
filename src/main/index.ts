@@ -53,11 +53,6 @@ app.whenReady().then(() => {
 
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
-  //temporary RGB Test
-  const { backend } = createRgb()
-  backend.status().then((s) => console.log('[rgb] status', s))
-  backend.listIncoming().then((t) => console.log('[rgb] incoming', t))
-
   createWindow()
 
   app.on('activate', function () {
