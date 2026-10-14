@@ -133,11 +133,31 @@ export class Kasa extends EventEmitter {
     this.emit('changed')
   }
 
+
+  // wallet "Receive": a plain USDT invoice, not tied to a client invoice.
+  // Reused for a few minutes, because every invoice reserves a UTXO.
+  private receiveCache?: { invoice: string; expiresAt: number }
+  async receiveInvoice(): Promise<{ invoice: string; expiresAt: number }> {
+    if (this.receiveCache && this.receiveCache.expiresAt - now() > 300) return this.receiveCache
+    const r = await this.rgb.createInvoice(null, now() + rgbConfig.invoiceTtlSec)
+    this.receiveCache = { invoice: r.invoice, expiresAt: r.expiresAt }
+    return this.receiveCache
+  }
+
+  // wallet "Send": the merchant's own action; same asset/network/proxy checks as refunds
+  async send(invoice: string, amountUsdt: number): Promise<{ txid: string }> {
+    const r = await this.rgb.send(invoice, toRaw(amountUsdt))
+    this.emit('changed')
+    return r
+  }
+
+
   // what the UI gets: amounts already converted to USDT
   snapshot() {
     return {
       invoices: db.listInvoices().map((i) => ({ ...i, amount: toUsdt(i.amountRaw), received: toUsdt(i.receivedRaw) })),
-      proposals: db.listProposals().map((p) => ({ ...p, amount: toUsdt(p.amountRaw) }))
+      proposals: db.listProposals().map((p) => ({ ...p, amount: toUsdt(p.amountRaw) })),
+      payments: db.listPayments().map((p) => ({ ...p, received: toUsdt(p.receivedRaw) }))
     }
   }
 }

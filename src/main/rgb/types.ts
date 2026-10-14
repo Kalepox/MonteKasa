@@ -5,6 +5,7 @@ export interface NodeStatus {
   mock: boolean
   pubkey?: string
   balanceRaw?: number // spendable
+  btcSats?: number // vanilla (fee) balance
 }
 
 export interface RgbInvoice {
@@ -16,7 +17,7 @@ export interface RgbInvoice {
 export type TransferStatus = 'waiting' | 'confirming' | 'settled' | 'failed'
 
 export interface IncomingTransfer {
-  idx: number // node's transfer id, used to avoid double-processing
+  idx: number // node transfer id, used to avoid double-processing
   recipientId: string
   requestedRaw: number | null // null = any amount
   receivedRaw: number
