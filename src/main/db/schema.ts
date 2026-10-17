@@ -42,9 +42,3 @@ CREATE TABLE proposals (
 );
 CREATE UNIQUE INDEX one_proposal_per_kind ON proposals(invoice_id, kind);
 `
-
-
-// V3: payments also records our outgoing transfers (sends/refunds); existing rows are all incoming
-export const SCHEMA_V3 = `
-ALTER TABLE payments ADD COLUMN direction TEXT NOT NULL DEFAULT 'in';
-`

@@ -1,3 +1,4 @@
+import type { SecurityBackend } from '../security/types'
 export type NodeState = 'online' | 'syncing' | 'locked' | 'offline'
 
 export interface NodeStatus {
@@ -28,7 +29,7 @@ export interface RgbTransfer {
   updatedAt: number
 }
 
-export interface RgbBackend {
+export interface RgbBackend extends SecurityBackend {
   status(): Promise<NodeStatus>
   createInvoice(amountRaw: number | null, expiresAt: number): Promise<RgbInvoice>
   listTransfers(): Promise<RgbTransfer[]> // incoming and outgoing USDT transfers

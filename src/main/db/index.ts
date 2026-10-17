@@ -2,7 +2,8 @@ import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
 import { rgbConfig } from '../rgb'
-import { SCHEMA_V1, SCHEMA_V2, SCHEMA_V3 } from './schema'
+import { SCHEMA_V1, SCHEMA_V2 } from './schema'
+import { SECURITY_SCHEMA } from '../security/store'
 
 let db: Database.Database | undefined
 
@@ -20,20 +21,25 @@ export function getDb(): Database.Database {
 }
 
 // user_version is SQLite's built-in schema version number
-function migrate(d: Database.Database): void {
+export function migrate(d: Database.Database): void {
   const version = d.pragma('user_version', { simple: true }) as number
   if (version < 1) {
     d.exec(SCHEMA_V1)
     d.pragma('user_version = 1')
   }
-  if (version <2){
+  if (version < 2) {
     d.exec(SCHEMA_V2)
     d.pragma('user_version = 2')
-  }
-  if (version < 3) {
-    d.exec(SCHEMA_V3)
-    d.pragma('user_version = 3')
-  }
-}
+  if (version < 3)
+    d.transaction(() => {
+      addColumnIfMissing(d, 'payments', 'direction', "TEXT NOT NULL DEFAULT 'in'")
+      d.pragma('user_version = 3')
+    })()
+  if (version < 4)
+    d.transaction(() => {
+      d.exec(SECURITY_SCHEMA)
+      d.pragma('user_version = 4')
+    })()
+
 
 export * from './repo'
