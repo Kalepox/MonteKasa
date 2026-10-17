@@ -1,3 +1,4 @@
+import type { SecurityBackend } from '../security/types'
 export type NodeState = 'online' | 'syncing' | 'locked' | 'offline'
 
 export interface NodeStatus {
@@ -16,20 +17,21 @@ export interface RgbInvoice {
 
 export type TransferStatus = 'waiting' | 'confirming' | 'settled' | 'failed'
 
-export interface IncomingTransfer {
+export interface RgbTransfer {
   idx: number // node transfer id, used to avoid double-processing
-  recipientId: string
-  requestedRaw: number | null // null = any amount
-  receivedRaw: number
+  direction: 'in' | 'out'
+  recipientId: string // in: our invoice's recipient id; out: the receiver's
+  requestedRaw: number | null // in: what the invoice asked (null = any amount); out: what we sent
+  receivedRaw: number // amount moved: received (in) or sent (out)
   status: TransferStatus
   txid?: string
   receiveUtxo?: string
   updatedAt: number
 }
 
-export interface RgbBackend {
+export interface RgbBackend extends SecurityBackend {
   status(): Promise<NodeStatus>
   createInvoice(amountRaw: number | null, expiresAt: number): Promise<RgbInvoice>
-  listIncoming(): Promise<IncomingTransfer[]>
+  listTransfers(): Promise<RgbTransfer[]> // incoming and outgoing USDT transfers
   send(recipientInvoice: string, amountRaw: number): Promise<{ txid: string }>
 }

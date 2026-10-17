@@ -1,4 +1,5 @@
-import { ElectronAPI } from '@electron-toolkit/preload'
+import type { SecurityAPI } from '../shared/security'
+import type { AgentAPI } from '../shared/agent'
 
 export interface KasaStatus {
   state: 'online' | 'syncing' | 'locked' | 'offline'
@@ -33,6 +34,7 @@ export interface KasaProposal {
 
 export interface KasaPayment {
   nodeIdx: number
+  direction: 'in' | 'out'
   invoiceId: string | null
   received: number
   status: string
@@ -48,12 +50,14 @@ export interface KasaSnapshot {
 
 declare global {
   interface Window {
-    electron: ElectronAPI
+    agent: AgentAPI
+    security: SecurityAPI
     kasa: {
       status(): Promise<KasaStatus>
       snapshot(): Promise<KasaSnapshot>
-      createInvoice(client: string, amount: number): Promise<KasaInvoice>
-      receive(): Promise<{ invoice: string; expiresAt: number }>
+      invoicePdf(id: string): Promise<Uint8Array>
+      createInvoice(client: string, amount: number | string): Promise<KasaInvoice>
+      receive(fresh?: boolean): Promise<{ invoice: string; expiresAt: number }>
       send(invoice: string, amount: number): Promise<{ txid: string }>
       approve(id: string, refundInvoice: string): Promise<void>
       dismiss(id: string): Promise<void>

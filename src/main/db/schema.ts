@@ -42,4 +42,3 @@ CREATE TABLE proposals (
 );
 CREATE UNIQUE INDEX one_proposal_per_kind ON proposals(invoice_id, kind);
 `
-
