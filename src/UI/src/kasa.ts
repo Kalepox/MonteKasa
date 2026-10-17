@@ -114,15 +114,18 @@ function renderWallet(st: KasaStatus): void {
   if (!tx) return
   tx.innerHTML =
     snap.payments
-      .filter((p) => p.received > 0)
+      // real movements only: no unpaid invoices (0) and no failed transfers
+      .filter((p) => p.received > 0 && p.status !== 'failed')
       .slice(0, 10)
       .map((p) => {
         const inv = snap.invoices.find((i) => i.id === p.invoiceId)
         const txid = p.txid ? `${p.txid.slice(0, 4)}…${p.txid.slice(-4)}` : '—'
+        const out = p.direction === 'out'
+        const refund = out && snap.proposals.some((x) => x.txid && x.txid === p.txid)
         return `<tr><td class="mono" style="color:var(--t3);">${txid}</td>
-        <td style="color:var(--green);font-size:12px;font-weight:600;">&#x2193; Received</td>
-        <td class="mono" style="color:var(--t1);font-weight:600;">+${fmt(p.received)} USDT</td>
-        <td class="mono">${inv ? shortId(inv) : 'wallet'}</td>
+        <td style="color:var(${out ? '--red' : '--green'});font-size:12px;font-weight:600;">${out ? '&#x2191; Sent' : '&#x2193; Received'}</td>
+        <td class="mono" style="color:var(--t1);font-weight:600;">${out ? '−' : '+'}${fmt(p.received)} USDT</td>
+        <td class="mono">${inv ? shortId(inv) : refund ? 'refund' : 'wallet'}</td>
         <td class="mono" style="color:var(--t3);">${p.status}${p.blockTime ? ' · ' + day(p.blockTime) : ''}</td></tr>`
       })
       .join('') ||

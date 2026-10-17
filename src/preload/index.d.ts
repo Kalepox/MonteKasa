@@ -33,6 +33,7 @@ export interface KasaProposal {
 
 export interface KasaPayment {
   nodeIdx: number
+  direction: 'in' | 'out'
   invoiceId: string | null
   received: number
   status: string

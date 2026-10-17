@@ -14,6 +14,7 @@ export interface InvoiceRow {
 
 export interface PaymentRow {
   nodeIdx: number
+  direction: 'in' | 'out' // in: received, out: sent (receivedRaw = amount moved)
   invoiceId: string | null
   recipientId: string
   requestedRaw: number | null
@@ -29,7 +30,7 @@ const INVOICE_COLS = `id, client, amount_raw AS amountRaw, received_raw AS recei
   rgb_invoice AS rgbInvoice, recipient_id AS recipientId, expires_at AS expiresAt,
   state, created_at AS createdAt`
 
-const PAYMENT_COLS = `node_idx AS nodeIdx, invoice_id AS invoiceId, recipient_id AS recipientId,
+const PAYMENT_COLS = `node_idx AS nodeIdx, direction, invoice_id AS invoiceId, recipient_id AS recipientId,
   requested_raw AS requestedRaw, received_raw AS receivedRaw, status, txid,
   block_time AS blockTime, receive_utxo AS receiveUtxo, updated_at AS updatedAt`
 
@@ -64,8 +65,8 @@ export function getInvoiceByRecipient(recipientId: string): InvoiceRow | undefin
 export function upsertPayment(p: Omit<PaymentRow, 'blockTime'>): void {
   getDb()
     .prepare(
-      `INSERT INTO payments (node_idx, invoice_id, recipient_id, requested_raw, received_raw, status, txid, receive_utxo, updated_at)
-       VALUES (@nodeIdx, @invoiceId, @recipientId, @requestedRaw, @receivedRaw, @status, @txid, @receiveUtxo, @updatedAt)
+      `INSERT INTO payments (node_idx, direction, invoice_id, recipient_id, requested_raw, received_raw, status, txid, receive_utxo, updated_at)
+       VALUES (@nodeIdx, @direction, @invoiceId, @recipientId, @requestedRaw, @receivedRaw, @status, @txid, @receiveUtxo, @updatedAt)
        ON CONFLICT(node_idx) DO UPDATE SET
          received_raw = excluded.received_raw,
          status       = excluded.status,
@@ -84,7 +85,7 @@ export function listPayments(): PaymentRow[] {
 }
 
 export function paymentsForInvoice(invoiceId: string): PaymentRow[] {
-  return getDb().prepare(`SELECT ${PAYMENT_COLS} FROM payments WHERE invoice_id = ?`).all(invoiceId) as PaymentRow[]
+  return getDb().prepare(`SELECT ${PAYMENT_COLS} FROM payments WHERE invoice_id = ? AND direction = 'in'`).all(invoiceId) as PaymentRow[]
 }
 
 export function paymentsMissingBlockTime(): PaymentRow[] {

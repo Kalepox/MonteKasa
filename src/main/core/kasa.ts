@@ -63,11 +63,13 @@ export class Kasa extends EventEmitter {
   }
 
   private async tick(): Promise<void> {
-    // 1. copy the node's view into our own DB
-    for (const t of await this.rgb.listIncoming()) {
+    // 1. copy the node's view (received and sent) into our own DB
+    for (const t of await this.rgb.listTransfers()) {
       db.upsertPayment({
         nodeIdx: t.idx,
-        invoiceId: db.getInvoiceByRecipient(t.recipientId)?.id ?? null,
+        direction: t.direction,
+        // only incoming transfers pay our invoices
+        invoiceId: t.direction === 'in' ? (db.getInvoiceByRecipient(t.recipientId)?.id ?? null) : null,
         recipientId: t.recipientId,
         requestedRaw: t.requestedRaw,
         receivedRaw: t.receivedRaw,
