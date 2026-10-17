@@ -51,6 +51,7 @@ const MAX_SEND_RAW = Number(process.env.WALLET_MAX_SEND_RAW ?? 500_000_000) // 5
 
 let wdk = null
 let account = null
+let stopping = false
 const approved = new Set() // sends the merchant approved: `${invoice}|${amountRaw}`
 
 // opens the wallet from its local database only: no network, so unlocking is fast
@@ -112,9 +113,10 @@ let loop = null
 
 async function syncOnce() {
   syncQueued = false
-  if (!account) return
+  if (stopping || !account) return
   try {
     await account.refreshWallet()
+    if (stopping) return
     if (btcDirty || !view || tick % BTC_EVERY_TICKS === 0) {
       const r = await account.registerWallet() // goes online the first time, syncs, returns BTC balance
       view = { address: r.address, btc: r.btcBalance, at: Date.now() }
@@ -136,12 +138,14 @@ let lastActivity = 0
 // queued like any API call, so it never runs at the same time as one; at most one waits in line
 function requestSync({ fromTimer = false } = {}) {
   if (fromTimer && Date.now() - lastActivity < QUIET_AFTER_ACTIVITY_MS) return
-  if (syncQueued || !account) return
+  if (stopping || syncQueued || !account) return
+
   syncQueued = true
   serial(syncOnce)
 }
 
 function startSync() {
+  if (stopping) return
   view = null
   btcDirty = true
   tick = 0
@@ -294,6 +298,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(code, { 'content-type': 'application/json', connection: 'close' })
     res.end(json(body))
   }
+  if (stopping) return reply(503, { error: 'Wallet service is stopping' })
   if (req.method !== 'POST' || req.url !== '/rpc') return reply(404, { error: 'not found' })
   if (!authorized(req.headers.authorization)) return reply(401, { error: 'unauthorized' })
   let body = ''
@@ -308,6 +313,8 @@ const server = http.createServer((req, res) => {
     if (!Object.hasOwn(api, method)) return reply(400, { error: `unknown method ${method}` })
     if (ACTIVITY.has(method)) lastActivity = Date.now()
     const run = async () => {
+      if (stopping) return reply(503, { error: 'Wallet service is stopping' })
+
       try {
         reply(200, { result: await api[method](params ?? {}) })
       } catch (e) {
@@ -321,18 +328,34 @@ const server = http.createServer((req, res) => {
   })
 })
 
-server.listen(0, '127.0.0.1', () => console.log(JSON.stringify({ ready: true, port: server.address().port })))
+         // The IPC channel belongs to Electron. Its closure also covers development
+// restarts and crashes, which can bypass Electron's normal quit events.
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type -- Plain JavaScript service.
 function shutdown() {
-  try { closeWallet() } catch { /* exiting anyway */ }
-  releaseLock()
-  process.exit(0)
+  if (stopping) return
+  stopping = true
+  server.close()
+  stopSync()
+  // Finish the current serialized operation before disposing native state.
+  // A stalled operation must not leave the service running indefinitely.
+  const timeout = setTimeout(() => {
+    releaseLock()
+    process.exit(1)
+  }, 5000)
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type -- Plain JavaScript service.
+  const finish = () => {
+    clearTimeout(timeout)
+    try { closeWallet() } catch { /* exiting anyway */ }
+    releaseLock()
+    process.exit(0)
+  }
+  void queue.then(finish, finish)
 }
 process.on('SIGTERM', shutdown)
 process.on('SIGINT', shutdown)
-// Kasa keeps our stdin open; it closes when Kasa exits for ANY reason (crash, Ctrl+C, dev reload),
-// so an orphaned service can never keep syncing the wallet next to a new one.
-if (process.env.WALLET_PARENT_PIPE === '1') {
-  process.stdin.on('end', shutdown)
-  process.stdin.on('close', shutdown)
-  process.stdin.resume()
-}
+process.once('disconnect', shutdown)
+// The parent may have exited while the native dependencies were loading.
+if (process.connected === false) shutdown()
+else server.listen(0, '127.0.0.1', () => console.log(JSON.stringify({ ready: true, port: server.address().port })))
+
+

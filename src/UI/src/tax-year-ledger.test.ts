@@ -35,6 +35,7 @@ describe('tax-year record review', () => {
     expect(rows[0].client).toBe('Client')
     expect(rows[0].invoiceId).toBe('prior-year')
     expect(rows[0].amount).toBe('125.000000')
+    expect(rows[0].unit).toBe('recorded app units')
   })
   it('does not present cumulative invoice receipts as year receipts', () => {
     const review = taxYearReview(snapshot, 2025)
@@ -42,6 +43,7 @@ describe('tax-year record review', () => {
     expect(review.excludedPayments).toBe(1)
     const rows = taxYearRows(snapshot, review)
     expect(rows[0].amount).toBe('100.000000')
+    expect(rows[0].unit).toBe('USDT')
     expect(rows[0].basis).toContain('receipt totals may span years')
   })
   it('uses Europe/Rome boundaries rather than UTC or the host timezone', () => {
@@ -113,6 +115,73 @@ describe('tax-year record review', () => {
     }
     expect(taxYearRows(records, taxYearReview(records, 2026))).toHaveLength(101)
     expect(taxYearCsv(records, 2026)).toContain('"Payment observation in year","100"')
+  })
+  it('exports legacy payment amounts with an unverified unit rather than assuming USDT', () => {
+    const csv = taxYearCsv(snapshot, 2026)
+    expect(csv).toContain('"Amount","Amount_Unit"')
+    expect(csv).toContain('"125.000000","recorded app units"')
+    expect(csv).not.toContain('USDT')
+  })
+  it('uses saved source precision and raw amounts rather than the current app conversion', () => {
+    const records = {
+      ...snapshot,
+      payments: [
+        {
+          ...payment,
+          receivedRaw: 123456789,
+          source: {
+            id: 'saved-source',
+            label: 'Saved source',
+            backend: 'wdk' as const,
+            asset: {
+              symbol: 'BTC',
+              canonicalId: 'bitcoin',
+              network: 'bitcoin',
+              decimals: 8,
+              environment: 'live' as const
+            }
+          }
+        }
+      ]
+    }
+    const rows = taxYearRows(records, taxYearReview(records, 2026))
+    expect(rows[0]).toMatchObject({ amount: '1.23456789', unit: 'BTC' })
+    expect(taxYearCsv(records, 2026)).toContain('"1.23456789","BTC"')
+    for (const raw of [undefined, NaN, -1, Number.MAX_SAFE_INTEGER + 1]) {
+      const invalid = { ...records, payments: [{ ...records.payments[0], receivedRaw: raw }] }
+      expect(taxYearRows(invalid, taxYearReview(invalid, 2026))[0]).toMatchObject({
+        amount: 'Unavailable',
+        unit: 'BTC'
+      })
+    }
+  })
+  it('does not trust invalid source metadata or infer a payment currency from its linked invoice', () => {
+    const records = {
+      ...snapshot,
+      payments: [
+        {
+          ...payment,
+          receivedRaw: 125000000,
+          source: {
+            id: 'invalid-source',
+            label: 'Unverified source',
+            backend: 'wdk' as const,
+            asset: {
+              symbol: 'BTC',
+              canonicalId: 'bitcoin',
+              network: '',
+              decimals: 8,
+              environment: 'live' as const
+            }
+          }
+        }
+      ]
+    }
+    expect(taxYearRows(records, taxYearReview(records, 2026))[0]).toMatchObject({
+      amount: '125.000000',
+      unit: 'recorded app units'
+    })
+    expect(taxYearCsv(records, 2026)).not.toContain('BTC')
   })
   it('handles empty records and rejects invalid years', () => {
     expect(taxYearReview({ invoices: [], payments: [], proposals: [] }, 2026).payments).toEqual([])

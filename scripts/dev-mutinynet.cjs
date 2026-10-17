@@ -4,8 +4,10 @@
 const { spawn } = require('node:child_process')
 const { resolve } = require('node:path')
 
-if (process.env.RGB_NETWORK && process.env.RGB_NETWORK !== 'SignetCustom') {
-  throw new Error('dev:mutinynet requires RGB_NETWORK=SignetCustom.')
+const backend = process.env.RGB_BACKEND ?? (process.env.RGB_MOCK === '1' ? 'mock' : 'wdk')
+const network = backend === 'wdk' ? 'Signet' : 'SignetCustom'
+if (process.env.RGB_NETWORK && process.env.RGB_NETWORK !== network) {
+  throw new Error(`dev:mutinynet requires RGB_NETWORK=${network} for ${backend}.`)
 }
 const child = spawn(
   process.execPath,
@@ -15,7 +17,7 @@ const child = spawn(
     stdio: 'inherit',
     env: {
       ...process.env,
-      RGB_NETWORK: 'SignetCustom',
+      RGB_NETWORK: network,
       RGB_NODE_CHAIN_API:
         process.env.RGB_NODE_CHAIN_API ?? 'https://esplora.signet.kaleidoswap.com',
       RGB_EXPLORER_API: process.env.RGB_EXPLORER_API ?? 'https://mutinynet.com/api',
