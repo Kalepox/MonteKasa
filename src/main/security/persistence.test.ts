@@ -6,7 +6,7 @@ import { join } from 'node:path'
 vi.mock('electron', () => ({ app: { getPath: () => tmpdir() } }))
 import { migrate } from '../db'
 import { SCHEMA_V1, SCHEMA_V2 } from '../db/schema'
-import { SqliteSecurityStore } from './store'
+import { SECURITY_SCHEMA, SqliteSecurityStore } from './store'
 import type { StoredOperation } from './types'
 const dirs: string[] = []
 afterEach(() => {
@@ -63,9 +63,23 @@ describe('SQLite persistence', () => {
     )
     migrate(db)
     migrate(db)
-    expect(db.pragma('user_version', { simple: true })).toBe(3)
+    expect(db.pragma('user_version', { simple: true })).toBe(4)
     expect(db.prepare('SELECT count(*) AS n FROM invoices').get()).toEqual({ n: 1 })
     expect(db.prepare('SELECT amount_raw FROM proposals').get()).toEqual({ amount_raw: 20 })
+    db.close()
+  })
+  it.each([
+    ['payments.direction', "ALTER TABLE payments ADD COLUMN direction TEXT NOT NULL DEFAULT 'in';"],
+    ['security tables', SECURITY_SCHEMA]
+  ])('upgrades a v3 database that only has %s', (_, v3) => {
+    const db = new Database(':memory:')
+    db.exec(SCHEMA_V1 + SCHEMA_V2 + v3)
+    db.pragma('user_version = 3')
+    migrate(db)
+    expect(db.pragma('user_version', { simple: true })).toBe(4)
+    expect(new SqliteSecurityStore(db).operations()).toEqual([])
+    const cols = db.pragma('table_info(payments)') as { name: string }[]
+    expect(cols.some((c) => c.name === 'direction')).toBe(true)
     db.close()
   })
   it('persists operations across reopen, enforces unique intent and claims once', () => {

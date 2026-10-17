@@ -30,16 +30,21 @@ export function migrate(d: Database.Database): void {
   if (version < 2) {
     d.exec(SCHEMA_V2)
     d.pragma('user_version = 2')
-  if (version < 3)
-    d.transaction(() => {
-      addColumnIfMissing(d, 'payments', 'direction', "TEXT NOT NULL DEFAULT 'in'")
-      d.pragma('user_version = 3')
-    })()
+  }
+  // two branches both shipped a v3 (payments.direction vs security tables), so a v3 db
+  // may have either one; v4 idempotently applies both
   if (version < 4)
     d.transaction(() => {
+      addColumnIfMissing(d, 'payments', 'direction', "TEXT NOT NULL DEFAULT 'in'")
       d.exec(SECURITY_SCHEMA)
       d.pragma('user_version = 4')
     })()
+}
+
+function addColumnIfMissing(d: Database.Database, table: string, column: string, def: string): void {
+  const cols = d.pragma(`table_info(${table})`) as { name: string }[]
+  if (!cols.some((c) => c.name === column)) d.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`)
+}
 
 
 export * from './repo'

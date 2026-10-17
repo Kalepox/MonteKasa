@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { IncomingTransfer, RgbBackend } from '../rgb/types'
+import type { RgbTransfer, RgbBackend } from '../rgb/types'
 vi.mock('electron', () => ({ app: { getPath: () => tmpdir() } }))
 const cleanups: (() => void)[] = []
 afterEach(() => {
@@ -18,7 +18,7 @@ async function fixture() {
   const { Kasa } = await import('../core/kasa')
   const db = await import('../db')
   const { rgbConfig } = await import('../rgb/config')
-  let transfers: IncomingTransfer[] = []
+  let transfers: RgbTransfer[] = []
   let confirmations = 3
   const backend: RgbBackend = {
     status: async () => ({ state: 'online', mock: true, balanceRaw: 100000000, btcSats: 10000 }),
@@ -27,7 +27,7 @@ async function fixture() {
       invoice: `rgb:${raw}`,
       expiresAt
     }),
-    listIncoming: async () => structuredClone(transfers),
+    listTransfers: async () => structuredClone(transfers),
     decodeInvoice: async () => ({
       recipientId: 'refund-recipient',
       assetId: rgbConfig.assetId,
@@ -65,9 +65,10 @@ async function fixture() {
   const payment = (
     idx: number,
     raw: number,
-    status: IncomingTransfer['status'] = 'settled'
-  ): IncomingTransfer => ({
+    status: RgbTransfer['status'] = 'settled'
+  ): RgbTransfer => ({
     idx,
+    direction: 'in',
     recipientId: 'incoming',
     requestedRaw: 10000000,
     receivedRaw: raw,
@@ -81,7 +82,7 @@ async function fixture() {
     invoice,
     backend,
     payment,
-    setTransfers: (t: IncomingTransfer[]): void => {
+    setTransfers: (t: RgbTransfer[]): void => {
       transfers = t
     },
     setConfirmations: (n: number): void => {
