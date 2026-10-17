@@ -61,10 +61,28 @@ async function openWallet(mnemonic) {
   await account.registerWallet()
 }
 
+// Every WDK balance read syncs with the indexer over the internet (seconds each), and calls run one
+// at a time, so polling status() directly queued sync behind sync. status() now answers from the last
+// sync for a few seconds; anything that changes the wallet clears the cache.
+const BALANCE_CACHE_MS = 15_000
+let balances = null // { at, assetId, address, btc, spendable }
+let transfersSeen = '' // idx:status of the last listTransfers, to notice incoming/settled payments
+
+async function syncBalances(assetId) {
+  const r = await unlocked().registerWallet() // syncs and returns the BTC balance
+  let spendable = 0
+  // getTokenBalance returns a plain number (BigInt), not an object
+  try { spendable = Number(await account.getTokenBalance(assetId)) } catch (e) { if (!notFound(e)) throw e }
+  balances = { at: Date.now(), assetId, address: r.address, btc: r.btcBalance, spendable }
+  return balances
+}
+
 function closeWallet() {
   try { wdk?.dispose() } catch { /* wdk-wallet-rgb 2.0.3 throws 'Invalid checksum' on dispose */ }
   wdk = account = null
   approved.clear()
+  balances = null
+  transfersSeen = ''
 }
 
 const unlocked = () => {
@@ -104,11 +122,10 @@ const api = {
   lock: () => (closeWallet(), { ok: true }),
 
   async status({ assetId }) {
-    const r = await unlocked().registerWallet() // also refreshes the BTC balance
-    // getTokenBalance returns a plain number (BigInt), not an object
-    let spendable = 0
-    try { spendable = Number(await account.getTokenBalance(assetId)) } catch (e) { if (!notFound(e)) throw e }
-    return { address: r.address, btc: r.btcBalance, asset: { settled: spendable, spendable } }
+    unlocked()
+    const fresh = balances && balances.assetId === assetId && Date.now() - balances.at < BALANCE_CACHE_MS
+    const b = fresh ? balances : await syncBalances(assetId)
+    return { address: b.address, btc: b.btc, asset: { settled: b.spendable, spendable: b.spendable } }
   },
 
   async address() {
@@ -118,7 +135,9 @@ const api = {
   async createUtxos({ num = 10, size = 3000, feeRate = 2 }) {
     const a = unlocked()
     const psbt = await a.createUtxosBegin({ upTo: true, num, size, feeRate })
-    return { created: await a.createUtxosEnd({ signedPsbt: await a.signPsbt(psbt) }) }
+    const created = await a.createUtxosEnd({ signedPsbt: await a.signPsbt(psbt) })
+    balances = null // BTC moved from vanilla to colored
+    return { created }
   },
 
   async createInvoice({ assetId, amountRaw }) {
@@ -134,7 +153,12 @@ const api = {
   async listTransfers({ assetId }) {
     const a = unlocked()
     await a.refreshWallet()
-    try { return await a.listTransfers(assetId) } catch (e) { if (notFound(e)) return []; throw e }
+    let list = []
+    try { list = await a.listTransfers(assetId) } catch (e) { if (!notFound(e)) throw e }
+    // a new or changed transfer (incoming payment, settlement) means the balances changed too
+    const seen = list.map((t) => `${t.idx}:${t.status}`).join(',')
+    if (seen !== transfersSeen) { transfersSeen = seen; balances = null }
+    return list
   },
 
    async send({ invoice, assetId, amountRaw, feeRate = 2 }) {
@@ -146,6 +170,7 @@ const api = {
       return { txid: r.hash ?? r.txid }
     } finally {
       approved.delete(key)
+      balances = null // funds left (or may have left) the wallet
     }
   },
 
