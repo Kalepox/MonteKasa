@@ -4,7 +4,7 @@ import { KaleidoClient } from 'kaleido-sdk'
 import { AssetFilterIdType, TransferKind, TransferStatus as RlnStatus } from 'kaleido-sdk/rln'
 import type { AssignmentAny, AssignmentFungible, Transfer } from 'kaleido-sdk/rln'
 import { rgbConfig } from './config'
-import type { IncomingTransfer, NodeState, RgbBackend, TransferStatus } from './types'
+import type { RgbTransfer, NodeState, RgbBackend, TransferStatus } from './types'
 type Assignment = Transfer['assignments'][number]
 
 const fungible = (value: number): AssignmentFungible =>
@@ -165,9 +165,10 @@ export function createKaleidoBackend(): RgbBackend {
         expiresAt: res.expiration_timestamp
       }
     },
-
-    async listIncoming() {
+    async listTransfers() {
       await bounded(rln.refreshTransfers({ filter: [], skip_sync: false }))
+
+
       let transfers
       try {
         ;({ transfers } = await bounded(
@@ -179,21 +180,26 @@ export function createKaleidoBackend(): RgbBackend {
         if (unknownAsset(e)) return []
         throw e
       }
+      const incoming = (t: Transfer): boolean =>
+        t.kind === TransferKind.ReceiveBlind || t.kind === TransferKind.ReceiveWitness
       return transfers
-        .filter(
-          (t) => t.kind === TransferKind.ReceiveBlind || t.kind === TransferKind.ReceiveWitness
-        )
+        .filter((t) => incoming(t) || t.kind === TransferKind.Send)
         .filter((t) => t.recipient_id)
-        .map((t): IncomingTransfer => ({
-          idx: t.idx,
-          recipientId: t.recipient_id!,
-          requestedRaw: requested(t.requested_assignment),
-          receivedRaw: sum(t.assignments),
-          status: mapStatus(t.status),
-          txid: t.txid ?? undefined,
-          receiveUtxo: t.receive_utxo ?? undefined,
-          updatedAt: t.updated_at
-        }))
+        .map((t): RgbTransfer => {
+          const isIn = incoming(t)
+          return {
+            idx: t.idx,
+            direction: isIn ? 'in' : 'out',
+            recipientId: t.recipient_id!,
+            requestedRaw: requested(t.requested_assignment),
+            // for a Send, `assignments` is our change coming back; the amount sent is the requested one
+            receivedRaw: isIn ? sum(t.assignments) : (requested(t.requested_assignment) ?? 0),
+            status: mapStatus(t.status),
+            txid: t.txid ?? undefined,
+            receiveUtxo: isIn ? (t.receive_utxo ?? undefined) : undefined,
+            updatedAt: t.updated_at
+          }
+        })
     },
 
     // decode first: /sendrgb wants the recipient id + endpoints, not the whole invoice

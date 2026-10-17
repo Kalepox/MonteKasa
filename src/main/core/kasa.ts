@@ -120,10 +120,11 @@ export class Kasa extends EventEmitter {
   private async tick(): Promise<void> {
     const changedIds = new Set<string>()
     let chainRequests = 0
-    // 1. copy the node's view into our own DB
-    for (const t of await this.rgb.listIncoming()) {
-      const invoice = db.getInvoiceByRecipient(t.recipientId)
-      if (t.status === 'settled') {
+    // 1. copy the node's view (received and sent) into our own DB
+    for (const t of await this.rgb.listTransfers()) {
+      // only incoming transfers pay our invoices
+      const invoice = t.direction === 'in' ? db.getInvoiceByRecipient(t.recipientId) : undefined
+      if (t.direction === 'in' && t.status === 'settled') {
         const previous = db.getPayment(t.idx)
         // Recent settlements get checked again; old settlements still follow node status changes.
         const oldStable =
@@ -184,7 +185,9 @@ export class Kasa extends EventEmitter {
       )
       const changed = db.upsertPayment({
         nodeIdx: t.idx,
+        direction: t.direction,
         invoiceId: invoice?.id ?? null,
+
         recipientId: t.recipientId,
         requestedRaw: t.requestedRaw,
         receivedRaw: t.receivedRaw,

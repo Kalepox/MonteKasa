@@ -30,12 +30,16 @@ export function migrate(d: Database.Database): void {
   if (version < 2) {
     d.exec(SCHEMA_V2)
     d.pragma('user_version = 2')
-  }
   if (version < 3)
     d.transaction(() => {
-      d.exec(SECURITY_SCHEMA)
+      addColumnIfMissing(d, 'payments', 'direction', "TEXT NOT NULL DEFAULT 'in'")
       d.pragma('user_version = 3')
     })()
-}
+  if (version < 4)
+    d.transaction(() => {
+      d.exec(SECURITY_SCHEMA)
+      d.pragma('user_version = 4')
+    })()
+
 
 export * from './repo'
