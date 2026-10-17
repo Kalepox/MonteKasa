@@ -1,8 +1,12 @@
+import type { TaxScopeAPI } from '../shared/tax-scope'
+import type { TaxProfileAPI } from '../shared/tax-profile'
 import type { SecurityAPI } from '../shared/security'
 import type { AgentAPI } from '../shared/agent'
 
 export interface KasaStatus {
-  state: 'online' | 'syncing' | 'locked' | 'offline'
+  state: 'online' | 'syncing' | 'locked' | 'offline' | 'timeout' | 'error'
+  error?: string
+  configurationError?: string
   mock: boolean
   pubkey?: string
   balance: number
@@ -50,6 +54,8 @@ export interface KasaSnapshot {
 
 declare global {
   interface Window {
+    taxScope: TaxScopeAPI
+    taxProfile: TaxProfileAPI
     agent: AgentAPI
     security: SecurityAPI
     kasa: {
@@ -57,13 +63,18 @@ declare global {
       snapshot(): Promise<KasaSnapshot>
       invoicePdf(id: string): Promise<Uint8Array>
       createInvoice(client: string, amount: number | string): Promise<KasaInvoice>
-      receive(fresh?: boolean): Promise<{ invoice: string; expiresAt: number }>
+      receive(
+        fresh?: boolean,
+        amount?: string | number
+      ): Promise<{ invoice: string; expiresAt: number }>
+      emailInvoice(to: string | undefined, subject: string, body: string): Promise<boolean>
       send(invoice: string, amount: number): Promise<{ txid: string }>
       approve(id: string, refundInvoice: string): Promise<void>
       dismiss(id: string): Promise<void>
       mockPay(recipientId: string, amount: number): Promise<void>
       wallet(method: string, params?: Record<string, unknown>): Promise<unknown>
       onChanged(cb: () => void): () => void
+      onPayment(cb: (p: { amount: number; client?: string; invoiceId?: string }) => void): () => void
     }
   }
 }

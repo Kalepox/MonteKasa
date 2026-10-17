@@ -1,4 +1,7 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { TaxScopeStore } from './tax-scope'
+import { recordKeys } from '../shared/tax-scope'
+import { getDb } from './db'
+import { app, shell, BrowserWindow, ipcMain, Notification } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'node:url'
 import type { IpcMainInvokeEvent } from 'electron'
@@ -10,18 +13,19 @@ import { Kasa } from './core/kasa'
 import { toRaw, toUsdt } from './core/units'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { Agent } from './ai/agent'
-import { securityContext } from './ai/security-context'
+import { freshSecurityContext } from './ai/fresh-security-context'
 import type { SecurityTarget } from '../shared/agent'
 import { invoiceDocumentHtml } from '../shared/invoice-document'
+import { TaxProfileStore } from './tax-profile'
 import { guardDisconnectedOutput } from './core/stdio'
 
 guardDisconnectedOutput(process.stdout)
 guardDisconnectedOutput(process.stderr)
 
-let readSecurity: ((target?: SecurityTarget) => string) | undefined
+let readSecurity: ((target?: SecurityTarget, query?: string) => Promise<string>) | undefined
 const agent = new Agent(
   undefined,
-  (target) => readSecurity?.(target) ?? 'Security checks are not initialized.'
+  (target, query) => readSecurity?.(target, query) ?? 'Security checks are not initialized.'
 )
 // A single instance owns the local operation ledger.
 if (!app.requestSingleInstanceLock()) app.exit(0)
@@ -94,6 +98,9 @@ app.whenReady().then(() => {
     writeFileSync(configPath, JSON.stringify({ cacheDirectory: join(directory, 'models') }))
     process.env.QVAC_CONFIG_PATH = configPath
   }
+  const taxProfile = new TaxProfileStore(join(app.getPath('userData'), 'tax-profile.json'))
+  handle('tax-profile:get', () => taxProfile.get())
+  handle('tax-profile:save', (_event, profile: unknown) => taxProfile.save(profile))
   handle('agent:status', () => agent.status())
   handle('agent:prepare', (event) => {
     if (event.senderFrame !== event.sender.mainFrame) throw new Error('Main frame required.')
@@ -129,7 +136,7 @@ app.whenReady().then(() => {
 
   const { backend, pay } = createRgb()
   const kasa = new Kasa(backend)
-    // WDK wallet lifecycle (used from DevTools until the onboarding screens exist)
+  // WDK wallet lifecycle (used from DevTools until the onboarding screens exist)
   const wallet = (backend as { wallet?: import('./rgb/wallet-service').WalletService }).wallet
   if (wallet) {
     app.on('will-quit', () => wallet.stop())
@@ -140,8 +147,17 @@ app.whenReady().then(() => {
     })
   }
 
-  readSecurity = (target) => securityContext(kasa.security.snapshot(), target)
+  readSecurity = (target, query) => freshSecurityContext(kasa.security, target, query)
   kasa.start()
+  const taxScope = new TaxScopeStore(join(app.getPath('userData'), 'tax-scopes.json'), getDb().name)
+  handle('tax-scope:get', () => taxScope.get())
+  handle('tax-scope:change', (_event, command: unknown) =>
+    taxScope.change(
+      command,
+      (command as { kind?: unknown } | null)?.kind === 'taxpayer' ? taxProfile.get() : null,
+      recordKeys(kasa.snapshot())
+    )
+  )
 
   handle('security:review', (_e, intent: PaymentIntent) => kasa.reviewPayment(intent))
   handle('security:execute', (_e, id: unknown, token: unknown, verified: unknown) =>
@@ -184,9 +200,22 @@ app.whenReady().then(() => {
   handle('kasa:createInvoice', (_e, client: string, amount: number) =>
     kasa.createInvoice(client, amount)
   )
-  handle('kasa:receive', (_e, fresh: unknown = false) => {
+  handle('kasa:receive', (_e, fresh: unknown = false, amount: unknown = undefined) => {
     if (typeof fresh !== 'boolean') throw new Error('Invalid receive request.')
-    return kasa.receiveInvoice(fresh)
+    if (amount !== undefined && typeof amount !== 'string' && typeof amount !== 'number')
+      throw new Error('Invalid amount.')
+    return kasa.receiveInvoice(fresh, amount)
+  })
+  // Opens the user's own default mail client with a pre-filled draft (mailto:) — never sends
+  // anything itself. The user reviews and clicks send themselves in their own mail app.
+  handle('kasa:emailInvoice', (_e, to: unknown, subject: unknown, body: unknown) => {
+    if (typeof subject !== 'string' || typeof body !== 'string')
+      throw new Error('Invalid email content.')
+    if (to !== undefined && (typeof to !== 'string' || /[\r\n]/.test(to)))
+      throw new Error('Invalid recipient address.')
+    if (subject.length > 300 || body.length > 4000) throw new Error('Email content too long.')
+    const url = `mailto:${encodeURIComponent(to ?? '')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    return shell.openExternal(url).then(() => true)
   })
   handle('kasa:send', () => kasa.send())
   handle('kasa:approve', () => kasa.approve())
@@ -204,6 +233,14 @@ app.whenReady().then(() => {
   kasa.on('changed', () =>
     BrowserWindow.getAllWindows().forEach((w) => w.webContents.send('kasa:changed'))
   )
+  kasa.on('payment', (p: { amount: number; client?: string; invoiceId?: string }) => {
+    const body = p.client
+      ? `${p.client} paid ${p.amount.toLocaleString('en-US')} USDT.`
+      : `${p.amount.toLocaleString('en-US')} USDT received.`
+    if (Notification.isSupported())
+      new Notification({ title: 'Payment received', body, icon }).show()
+    BrowserWindow.getAllWindows().forEach((w) => w.webContents.send('kasa:payment', p))
+  })
 
   createWindow()
 

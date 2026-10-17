@@ -1,20 +1,18 @@
 import type { PaymentIntent, SecurityOperation } from '../../shared/security'
 import './security.css'
-import type { SecurityTarget } from '../../shared/agent'
-
-const button = document.createElement('button')
-button.id = 'security-toggle'
-button.textContent = 'Security'
-const panel = document.createElement('dialog')
-panel.className = 'security-dialog'
-panel.innerHTML =
-  '<header><h2>Security & payments</h2><button type="button">Close</button></header><p class="security-note">Checks detect specific conditions, not every kind of fraud. Acknowledging a warning does not clear a payment block.</p><div class="security-content"></div>'
-panel.querySelector('button')!.onclick = () => panel.close()
-button.onclick = () => {
-  panel.showModal()
+import { securityNotice } from './security-notice'
+import { visibleSecurityFindings } from './security-filter'
+const panel = document.getElementById('view-security')!
+const count = document.getElementById('security-count')!
+const showResolved = document.getElementById('security-show-resolved') as HTMLInputElement
+const resolvedCount = document.getElementById('security-resolved-count')!
+showResolved.checked = false
+showResolved.addEventListener('change', () => {
   void refreshSecurity()
-}
-document.body.append(button, panel)
+})
+document.getElementById('security-toggle')!.addEventListener('click', () => {
+  void refreshSecurity()
+})
 const text = (tag: string, value: string): HTMLElement => {
   const node = document.createElement(tag)
   node.textContent = value
@@ -29,15 +27,6 @@ const errorText = (e: unknown): string =>
     /^Error invoking remote method '[^']+': (Error: )?/,
     ''
   )
-const explain = (target: SecurityTarget): HTMLButtonElement => {
-  const button = document.createElement('button')
-  button.textContent = 'Explain with AI'
-  button.onclick = () => {
-    panel.close()
-    window.dispatchEvent(new CustomEvent('kasa:explain-security', { detail: target }))
-  }
-  return button
-}
 let loading = false
 async function refreshSecurity(): Promise<void> {
   if (loading || !window.security) return
@@ -45,7 +34,9 @@ async function refreshSecurity(): Promise<void> {
   try {
     const snapshot = await window.security.snapshot()
     const unresolved = snapshot.findings.filter((f) => !f.resolvedAt)
-    button.textContent = `Security${unresolved.length ? ` · ${unresolved.length}` : ''}`
+    count.textContent = unresolved.length ? ` · ${unresolved.length}` : ''
+    count.setAttribute('aria-label', `${unresolved.length} unresolved notices`)
+    resolvedCount.textContent = `(${snapshot.findings.length - unresolved.length})`
     const content = panel.querySelector('.security-content')!
     content.replaceChildren()
     content.append(
@@ -58,50 +49,29 @@ async function refreshSecurity(): Promise<void> {
             : 'Monitoring has not run yet.'
       )
     )
-    content.append(text('h3', 'Findings'))
-    if (!snapshot.findings.length)
-      content.append(text('p', 'No findings recorded. This is not a guarantee of safety.'))
-    for (const finding of snapshot.findings) {
+    content.append(text('h3', 'Security notices'))
+    const findings = visibleSecurityFindings(snapshot.findings, showResolved.checked)
+    if (!findings.length)
+      content.append(
+        text('p', showResolved.checked ? 'No security notices.' : 'No active security notices.')
+      )
+    for (const finding of findings) {
       const row = document.createElement('article')
+      const notice = securityNotice(finding)
       row.append(
-        text('strong', `${finding.resolvedAt ? 'Resolved' : finding.severity} · ${finding.rule}`),
-        text('p', finding.message),
+        text('strong', notice.title),
+        text('p', notice.reason),
         text(
           'small',
-          `Subject: ${finding.subject} · Checked ${new Date(finding.lastSeen * 1000).toLocaleString()}`
+          `Last checked: ${new Date(finding.lastSeen * 1000).toLocaleString()}${finding.resolvedAt ? ` · Resolved: ${new Date(finding.resolvedAt * 1000).toLocaleString()}` : ''}`
         )
       )
-      const evidence = document.createElement('details')
-      evidence.append(text('summary', 'Supporting evidence'))
-      for (const [key, value] of Object.entries(finding.evidence)) {
-        const label =
-          key === 'expectedRaw'
-            ? 'Expected amount'
-            : key === 'receivedRaw'
-              ? 'Received amount'
-              : key
-        evidence.append(
-          text(
-            'p',
-            `${label}: ${key.endsWith('Raw') && typeof value === 'number' ? amount(value) : value}`
-          )
-        )
+      if (notice.evidence.length) {
+        const evidence = document.createElement('details')
+        evidence.append(text('summary', 'Supporting evidence'))
+        for (const line of notice.evidence) evidence.append(text('p', line))
+        row.append(evidence)
       }
-      row.append(evidence, explain({ kind: 'finding', id: finding.id }))
-      if (!finding.acknowledgedAt && !finding.resolvedAt) {
-        const acknowledge = document.createElement('button')
-        acknowledge.textContent = 'Acknowledge — keep checks active'
-        acknowledge.onclick = async () => {
-          try {
-            await window.security.acknowledge(finding.id)
-            await refreshSecurity()
-          } catch (error) {
-            row.append(text('p', errorText(error)))
-          }
-        }
-        row.append(acknowledge)
-      } else if (finding.acknowledgedAt)
-        row.append(text('small', 'Acknowledged; mandatory checks still apply.'))
       content.append(row)
     }
     content.append(text('h3', 'Payment operations (latest 200)'))
@@ -132,11 +102,11 @@ async function refreshSecurity(): Promise<void> {
             `${new Date(entry.at * 1000).toLocaleString()} · ${entry.state}: ${entry.detail}`
           )
         )
-      row.append(history, explain({ kind: 'operation', id: operation.id }))
+      row.append(history)
       content.append(row)
     }
   } catch (error) {
-    button.textContent = 'Security · unavailable'
+    count.textContent = ' · unavailable'
     panel.querySelector('.security-content')!.textContent = errorText(error)
   } finally {
     loading = false

@@ -48,7 +48,7 @@ describe('read-only security context', () => {
     const facts = securityFacts(securityContext(snapshot, { kind: 'finding', id: 'f1' }))
     expect(facts).toContain('12.000000 USDT')
     expect(facts).toContain('No transaction settlement status')
-    expect(facts).toContain('acknowledgment never approves payment')
+    expect(facts).not.toContain('acknowledgment never approves payment')
   })
   it('projects evidence without raw invoices, recipient data or internal object fields', () => {
     const source = structuredClone(snapshot)

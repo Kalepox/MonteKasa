@@ -62,7 +62,10 @@ export function createMockBackend(): {
     },
     async status() {
       const settled = transfers.filter((t) => t.status === 'settled')
-      const balanceRaw = settled.reduce((s, t) => s + (t.direction === 'in' ? t.receivedRaw : -t.receivedRaw), 0)
+      const balanceRaw = settled.reduce(
+        (s, t) => s + (t.direction === 'in' ? t.receivedRaw : -t.receivedRaw),
+        0
+      )
       return { state: 'online', mock: true, pubkey: 'mock-node', balanceRaw, btcSats: 100_000 }
     },
     async createInvoice(amountRaw, expiresAt) {

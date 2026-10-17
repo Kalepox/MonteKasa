@@ -206,7 +206,7 @@ describe('security explanation boundary', () => {
     const calls = sdk.completion.mock.calls as unknown as [
       { history: { role: string; content: string }[]; tools?: unknown }
     ][]
-    expect(read).toHaveBeenNthCalledWith(1, { kind: 'finding', id: 'f1' })
+    expect(read).toHaveBeenNthCalledWith(1, { kind: 'finding', id: 'f1' }, 'Explain warning')
     expect(JSON.stringify(calls[1])).toContain('CURRENT_EVIDENCE_TWO')
     expect(JSON.stringify(calls[1])).not.toContain('CURRENT_EVIDENCE_ONE')
     expect(calls[1][0].tools).toBeUndefined()
@@ -342,4 +342,30 @@ describe('preflight and execution warning explanations', () => {
       expect(sdk.completion).not.toHaveBeenCalled()
     }
   )
+})
+
+it('uses a recorded completed-payment explanation instead of generating an unsupported safety verdict', async () => {
+  const { sdk, loader } = fixture()
+  const evidence = JSON.stringify({
+    observedAt: 100,
+    requiredConfirmations: 3,
+    operations: [
+      {
+        id: 'op',
+        amount: '10.000000 USDT',
+        network: 'SignetCustom',
+        state: 'completed',
+        rgbStatus: 'Settled',
+        confirmations: 4,
+        checkedAt: 100
+      }
+    ],
+    findings: []
+  })
+  const agent = new Agent(loader, async () => evidence)
+  await agent.prepare(vi.fn())
+  const answer = await agent.chat('Were there any threats on my last payment?', vi.fn())
+  expect(answer).toContain('Your payment is complete.')
+  expect(answer).toContain('No active security warnings')
+  expect(sdk.completion).not.toHaveBeenCalled()
 })
