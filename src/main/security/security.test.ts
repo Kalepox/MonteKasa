@@ -129,6 +129,67 @@ function fixture() {
 }
 const intent = { invoice: 'rgb:invoice', amount: '1' }
 
+it('records the values that caused a payment review to fail', async () => {
+  const f = fixture()
+  f.backend.decodeInvoice.mockResolvedValueOnce({ ...decoded, amountRaw: 2000000 })
+  await expect(f.agent.review(intent)).rejects.toThrow('fixed invoice amount')
+  expect(f.agent.snapshot().findings[0].evidence).toEqual({
+    check: 'invoice-amount',
+    requestedRaw: 1000000,
+    invoiceAmountRaw: 2000000
+  })
+  expect(f.backend.send).not.toHaveBeenCalled()
+})
+
+it('records balance and expiry evidence at the time of failure', async () => {
+  const f = fixture()
+  f.backend.networkEvidence.mockResolvedValueOnce({ ...network, balanceRaw: 500000 })
+  await expect(f.agent.review(intent)).rejects.toThrow('spendable')
+  expect(f.agent.snapshot().findings[0].evidence).toMatchObject({
+    check: 'balance',
+    requestedRaw: 1000000,
+    availableRaw: 500000,
+    checkedAt: 1000
+  })
+  f.backend.decodeInvoice.mockResolvedValueOnce({ ...decoded, expiresAt: 999 })
+  await expect(f.agent.review(intent)).rejects.toThrow('expired')
+  expect(f.agent.snapshot().findings[0].evidence).toEqual({
+    check: 'expiry',
+    expiresAt: 999,
+    checkedAt: 1000
+  })
+})
+
+it('shares an in-flight monitor and updates two confirmations to three without resending', async () => {
+  const f = fixture()
+  const review = await f.agent.review(intent)
+  await f.agent.execute(review.operation.id, review.approvalToken, false)
+  f.backend.chainEvidence.mockResolvedValueOnce({
+    confirmed: true,
+    confirmations: 2,
+    inBestChain: true,
+    checkedAt: 1000
+  })
+  await f.agent.monitor()
+  expect(f.agent.snapshot().operations[0].state).toBe('confirming')
+  let finish!: (value: Awaited<ReturnType<typeof f.backend.chainEvidence>>) => void
+  f.backend.chainEvidence.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      })
+  )
+  const first = f.agent.monitor()
+  const second = f.agent.monitor()
+  expect(first).toBe(second)
+  await Promise.resolve()
+  finish({ confirmed: true, confirmations: 3, inBestChain: true, checkedAt: 1000 })
+  await second
+  expect(f.agent.snapshot().operations[0].state).toBe('completed')
+  expect(f.agent.snapshot().operations[0].confirmations).toBe(3)
+  expect(f.backend.send).toHaveBeenCalledOnce()
+})
+
 describe('exact amount parsing', () => {
   it.each(['1', '0.000001', '1.100001', '9007199254.740991'])('parses %s exactly', (value) => {
     const [whole, fraction = ''] = value.split('.')
@@ -480,5 +541,34 @@ describe('freshness and balance execution regressions', () => {
     expect(() => validateNetwork({ ...network, checkedAt: 1006 }, 1000000, policy, 1000)).toThrow(
       'stale'
     )
+  })
+})
+
+describe('read-only recovery and history', () => {
+  it('retries a transient chain read once but preserves a checkpoint mismatch', async () => {
+    const request = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('connection reset'))
+      .mockResolvedValueOnce(new Response('b'.repeat(64)))
+    await expect(
+      new ChainObserver('https://example.com', 1, 'b'.repeat(64), request).identity()
+    ).resolves.toBeUndefined()
+    expect(request).toHaveBeenCalledTimes(2)
+    const wrong = vi.fn().mockResolvedValue(new Response('c'.repeat(64)))
+    await expect(
+      new ChainObserver('https://example.com', 1, 'b'.repeat(64), wrong).identity()
+    ).rejects.toThrow('mismatch')
+    expect(wrong).toHaveBeenCalledTimes(1)
+  })
+  it('retains earlier failure codes when a later blocker replaces a finding', () => {
+    const f = fixture()
+    f.agent.finding('review-failed', 'invoice-hash', 'first', 'block', { check: 'invoice-amount' })
+    f.setTime(1010)
+    f.agent.finding('review-failed', 'invoice-hash', 'second', 'unavailable', {
+      check: 'chain-config'
+    })
+    const finding = f.agent.snapshot().findings[0]
+    expect(finding.history).toEqual([{ at: 1000, check: 'invoice-amount', resolvedAt: undefined }])
+    expect(finding.evidence.check).toBe('chain-config')
   })
 })

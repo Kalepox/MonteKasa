@@ -87,13 +87,77 @@ app.on('browser-window-created', (_, window) => {
       injectionDb
         .prepare('INSERT INTO security_findings (id, data) VALUES (?, ?)')
         .run(injectionFinding.id, JSON.stringify(injectionFinding))
+      const resolvedFinding = {
+        ...injectionFinding,
+        id: 'e'.repeat(64),
+        subject: 'resolved-ui-test',
+        message: 'Previously resolved test notice',
+        evidence: {},
+        resolvedAt: 2
+      }
+      injectionDb
+        .prepare('INSERT INTO security_findings (id, data) VALUES (?, ?)')
+        .run(resolvedFinding.id, JSON.stringify(resolvedFinding))
       injectionDb.close()
       await js(`window.closeM(); document.getElementById('security-toggle').click()`)
       await wait(
-        `document.querySelector('.security-dialog').open && document.querySelector('.security-content').textContent.includes('completed')`
+        `document.getElementById('view-security').classList.contains('on') && document.querySelector('.security-content').textContent.includes('completed')`
       )
       await wait(
         `document.querySelector('.security-content').textContent.includes('INJECTION_SUCCEEDED')`
+      )
+      assert.equal(await js(`document.getElementById('security-show-resolved').checked`), false)
+      assert.equal(
+        await js(
+          `document.querySelector('.security-content').textContent.includes('Previously resolved test notice')`
+        ),
+        false
+      )
+      const activeBadge = await js(`document.getElementById('security-count').textContent`)
+      const resolvedTotal = (await js('window.security.snapshot()')).findings.filter(
+        (f) => f.resolvedAt
+      ).length
+      assert.equal(
+        await js(`document.getElementById('security-resolved-count').textContent`),
+        `(${resolvedTotal})`
+      )
+      await js(`document.getElementById('security-show-resolved').click()`)
+      await wait(
+        `document.querySelector('.security-content').textContent.includes('Previously resolved test notice')`
+      )
+      assert.equal(await js(`document.getElementById('security-count').textContent`), activeBadge)
+      await js(`go('wallet'); document.getElementById('security-toggle').click()`)
+      assert.equal(await js(`document.getElementById('security-show-resolved').checked`), true)
+      await js(`document.getElementById('security-show-resolved').click()`)
+      await wait(
+        `!document.querySelector('.security-content').textContent.includes('Previously resolved test notice')`
+      )
+      assert.equal(
+        await js(
+          `document.querySelector('.security-content').textContent.includes('block · review-failed')`
+        ),
+        false
+      )
+      assert.equal(
+        await js(
+          `Array.from(document.querySelectorAll('.security-content article')).some(a => a.querySelector('strong')?.textContent === 'Payment blocked' && a.textContent.includes('do not send it again'))`
+        ),
+        true
+      )
+      assert.equal(
+        await js(
+          `Array.from(document.querySelectorAll('.security-content article')).find(a => a.textContent.includes('INJECTION_SUCCEEDED')).querySelector('details') === null`
+        ),
+        true
+      )
+      assert.equal(
+        await js(
+          `Array.from(document.querySelectorAll('.security-content article')).some(a => a.textContent.includes('Original payment reference:'))`
+        ),
+        true
+      )
+      console.log(
+        'PASS readable labels, duplicate-payment reason, recorded reference, and no empty evidence'
       )
       assert.equal(await js(`Boolean(window.__injectionExecuted)`), false)
       assert.equal(
@@ -105,6 +169,46 @@ app.on('browser-window-created', (_, window) => {
       assert.equal(
         (await js('window.security.snapshot()')).operations.length,
         snapshot.operations.length
+      )
+      assert.equal(await js(`document.querySelectorAll('.security-content button').length`), 0)
+      assert.equal(
+        await js(`document.querySelectorAll('#view-analytics, #view-risk, #view-fraud').length`),
+        0
+      )
+      assert.equal(
+        await js(`document.querySelector('#security-toggle').closest('nav') !== null`),
+        true
+      )
+      assert.equal(
+        await js(
+          `getComputedStyle(document.getElementById('security-toggle')).position === 'fixed'`
+        ),
+        false
+      )
+      assert.deepEqual(
+        await js(
+          `(() => { const label = [...document.querySelectorAll('nav .nlbl')].find(n => n.textContent === 'Intelligence'); const items = []; for (let n = label.nextElementSibling; n && !n.classList.contains('nlbl'); n = n.nextElementSibling) items.push(n.getAttribute('onclick')); return items })()`
+        ),
+        ["go('security')", "go('tax')"]
+      )
+      const unresolved = (await js('window.security.snapshot()')).findings.filter(
+        (f) => !f.resolvedAt
+      ).length
+      assert.equal(
+        await js(`document.getElementById('security-count').textContent`),
+        unresolved ? ` · ${unresolved}` : ''
+      )
+      await js(`toast('placement-test', '!', 'Test notification', 'Upper-left placement', 'blue')`)
+      await wait(`document.getElementById('t-placement-test').getBoundingClientRect().x === 18`)
+      const toastRect = await js(
+        `(() => { const r = document.getElementById('t-placement-test').getBoundingClientRect(); return { x: r.x, y: r.y, right: r.right, width: innerWidth } })()`
+      )
+      assert.equal(toastRect.x, 18)
+      assert.equal(await js(`document.getElementById('tc').getBoundingClientRect().y`), 58)
+      assert.ok(toastRect.y >= 58)
+      assert.ok(toastRect.right <= toastRect.width)
+      console.log(
+        'PASS Security sidebar, removed buttons and pages, live count, upper-left notification'
       )
       console.log(
         'PASS hostile finding HTML is inert text; no DOM execution or additional payment operation'
@@ -128,6 +232,33 @@ app.on('browser-window-created', (_, window) => {
         'PASS: sandboxed preload, real IPC, review UI, mock warning, approved send, combined settlement, duplicate recipient rejection, warning panel, and untrusted sender rejection.'
       )
       console.log(`Temporary evidence: ${directory}; screenshot: /tmp/kasa-security-smoke.png`)
+      const resolvedDb = new (require('better-sqlite3'))(process.env.KASA_DB)
+      for (const row of resolvedDb.prepare('SELECT id, data FROM security_findings').all()) {
+        const finding = JSON.parse(row.data)
+        finding.resolvedAt = Math.floor(Date.now() / 1000)
+        resolvedDb
+          .prepare('UPDATE security_findings SET data = ? WHERE id = ?')
+          .run(JSON.stringify(finding), row.id)
+      }
+      resolvedDb.close()
+      await wait(
+        `document.querySelector('.security-content').textContent.includes('No active security notices.')`
+      )
+      assert.equal(await js(`document.getElementById('security-count').textContent`), '')
+      assert.equal(
+        await js(`document.querySelector('.security-content').textContent.includes('completed')`),
+        true
+      )
+      await js(`document.getElementById('security-show-resolved').click()`)
+      await wait(
+        `document.querySelector('.security-content').textContent.includes('Previously resolved test notice')`
+      )
+      await window.webContents.reload()
+      await wait(`document.getElementById('security-show-resolved') !== null`)
+      assert.equal(await js(`document.getElementById('security-show-resolved').checked`), false)
+      console.log(
+        'PASS resolved notices hidden by default, toggle and counts, navigation persistence, live resolution, empty state, and reset on reload'
+      )
       clearTimeout(timeout)
       app.quit()
     } catch (error) {

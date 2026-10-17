@@ -1,8 +1,12 @@
+import type { TaxScopeAPI } from '../shared/tax-scope'
+import type { TaxProfileAPI } from '../shared/tax-profile'
 import type { SecurityAPI } from '../shared/security'
 import type { AgentAPI } from '../shared/agent'
 
 export interface KasaStatus {
-  state: 'online' | 'syncing' | 'locked' | 'offline'
+  state: 'online' | 'syncing' | 'locked' | 'offline' | 'timeout' | 'error'
+  error?: string
+  configurationError?: string
   mock: boolean
   pubkey?: string
   balance: number
@@ -50,6 +54,8 @@ export interface KasaSnapshot {
 
 declare global {
   interface Window {
+    taxScope: TaxScopeAPI
+    taxProfile: TaxProfileAPI
     agent: AgentAPI
     security: SecurityAPI
     kasa: {

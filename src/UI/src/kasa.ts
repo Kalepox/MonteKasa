@@ -4,7 +4,7 @@
 import QRCode from 'qrcode'
 import { invoicesCsv } from './invoice-csv'
 import { invoiceDocumentBody } from '../../shared/invoice-document'
-import { searchLedger, taxRecordsCsv } from './ledger'
+import { searchLedger, taxRecordsCsv, taxLedgerSummary } from './ledger'
 import { reviewPayment } from './security'
 import type { KasaInvoice, KasaSnapshot, KasaStatus } from '../../preload/index.d'
 
@@ -221,12 +221,12 @@ function renderInvoices(): void {
 }
 
 function renderWallet(st: KasaStatus): void {
-  walletBalance = st.balance
-  setText('w-balance', `${fmt(st.balance)} USDT`)
-  setText('w-usdt', `${fmt(st.balance)} USDT`)
-  setText('w-btc', `${(st.btcSats / 1e8).toFixed(8)} BTC`)
+  walletBalance = st.state === 'online' ? st.balance : 0
+  setText('w-balance', st.state === 'online' ? `${fmt(st.balance)} USDT` : 'Unavailable')
+  setText('w-usdt', st.state === 'online' ? `${fmt(st.balance)} USDT` : 'Unavailable')
+  setText('w-btc', st.state === 'online' ? `${(st.btcSats / 1e8).toFixed(8)} BTC` : 'Unavailable')
   setText('w-usdt-id', 'rgb:lX~ToKsO…E9PA_h0 · RGB20')
-  setText('send-avail-bal', `${fmt(st.balance)} USDT`)
+  setText('send-avail-bal', st.state === 'online' ? `${fmt(st.balance)} USDT` : 'Unavailable')
 
   const tx = $('w-tx')
   if (!tx) return
@@ -261,9 +261,14 @@ function renderStatus(st: KasaStatus): void {
         online: 'Mutinynet connected',
         syncing: 'Node syncing…',
         locked: 'Node locked',
-        offline: 'Node offline'
+        offline: 'Node unreachable',
+        timeout: 'Node timed out — retry status check',
+        error: 'Node error — inspect diagnostics'
       }[st.state]
-  document.querySelectorAll('.tb-net-pill span:last-child').forEach((e) => (e.textContent = label))
+  document.querySelectorAll('.tb-net-pill span:last-child').forEach((e) => {
+    e.textContent = st.configurationError ? `${label} · payment setup needed` : label
+    e.setAttribute('title', st.configurationError ?? st.error ?? '')
+  })
 }
 
 // Notifies once per transition, comparing against the previous snapshot — never on every poll.
@@ -290,6 +295,21 @@ function notifyNewFlags(previous: KasaSnapshot, current: KasaSnapshot): void {
 }
 
 let refreshing = false
+function renderTaxSummary(): void {
+  const summary = taxLedgerSummary(snap)
+  setText('tax-invoice-count', String(summary.invoiceCount))
+  setText('tax-requested', `${summary.requested} USDT`)
+  setText('tax-received', `${summary.received} USDT`)
+  for (const key of ['underpaid', 'overpaid', 'unsettled', 'unlinked', 'undated'] as const)
+    setText(`tax-${key}`, String(summary[key]))
+  setText(
+    'commercialista-status',
+    snap.invoices.length || snap.payments.length
+      ? 'Showing all recorded dates. Payment observations are listed separately and are not added to invoice totals.'
+      : 'No recorded invoices or payments yet. Empty records do not mean zero tax is due.'
+  )
+}
+
 let firstRefresh = true
 async function refresh(): Promise<void> {
   if (refreshing) return
@@ -303,7 +323,12 @@ async function refresh(): Promise<void> {
     renderStatus(st)
     renderInvoices()
     renderWallet(st)
+    renderTaxSummary()
   } catch (e) {
+    setText(
+      'commercialista-status',
+      'Records could not be refreshed. Any displayed totals may be out of date. Try reopening the app.'
+    )
     console.error('[kasa ui] refresh failed', e)
   } finally {
     refreshing = false

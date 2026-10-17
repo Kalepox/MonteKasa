@@ -56,7 +56,9 @@ app.on('browser-window-created', (_, window) => {
       await js(
         `window.__modelEvents = []; window.agent.onEvent(e => window.__modelEvents.push(e)); undefined`
       )
-      await wait(`document.getElementById('agent-prepare').textContent === 'Start assistant'`)
+      await wait(
+        `!document.getElementById('agent-prepare').disabled && document.getElementById('agent-prepare').textContent === 'Turn on agent'`
+      )
       assert.equal((await js('window.agent.status()')).ready, false)
       await js(`document.getElementById('agent-toggle').click()`)
       const chat = async (label) => {
@@ -76,6 +78,10 @@ app.on('browser-window-created', (_, window) => {
       if (phase === 'security') {
         await js(`document.getElementById('agent-prepare').click()`)
         await wait(`!document.getElementById('agent-send').disabled`)
+        console.log(
+          'REAL MODEL GREETING:',
+          await js(`window.agent.chat('Reply with the single word hello.')`)
+        )
         const invoice = await js(`(async () => {
           const i = await window.kasa.createInvoice('AI explanation test', '10')
           await window.kasa.mockPay(i.recipientId, 12)
@@ -86,10 +92,10 @@ app.on('browser-window-created', (_, window) => {
         )
         await js(`document.getElementById('security-toggle').click()`)
         await wait(
-          `Array.from(document.querySelectorAll('.security-content article')).some(a => a.textContent.includes(${JSON.stringify(invoice.id)}) && a.textContent.includes('Explain with AI'))`
+          `Array.from(document.querySelectorAll('.security-content article')).some(a => a.textContent.includes('Payment amount needs review'))`
         )
         await js(
-          `Array.from(document.querySelectorAll('.security-content article')).find(a => a.textContent.includes(${JSON.stringify(invoice.id)})).querySelector('button').click()`
+          `window.security.snapshot().then(s => { const f = s.findings.find(f => f.subject === ${JSON.stringify(invoice.id)}); window.dispatchEvent(new CustomEvent('kasa:explain-security', { detail: { kind: 'finding', id: f.id } })); })`
         )
         assert.equal(await js(`document.getElementById('agent-chat').hidden`), false)
         const beforeSecurity = await js('window.security.snapshot()')
@@ -104,7 +110,7 @@ app.on('browser-window-created', (_, window) => {
         assert.match(explanation, /USDT/)
         assert.equal(
           await js(
-            `document.getElementById('agent-messages').textContent.includes('Recorded facts · authoritative')`
+            `document.getElementById('agent-messages').textContent.includes('Payment details')`
           ),
           true
         )
@@ -133,17 +139,78 @@ app.on('browser-window-created', (_, window) => {
         console.log(
           'PASS real-model explanation UI and read-only boundary: no operations, acknowledgment, or resolution changes'
         )
+        await js(`document.getElementById('agent-clear').click()`)
+        await js(`(async () => {
+          const target = await window.kasa.receive()
+          const review = await window.security.review({invoice: target.invoice, amount: '10'})
+          await window.security.execute(review.operation.id, review.approvalToken, false)
+        })()`)
+        await wait(
+          `window.security.snapshot().then(s => s.operations.some(o => o.state === 'completed'))`
+        )
+        const beforeAnswer = await js('window.security.snapshot().then(s => s.operations.length)')
+        await js(
+          `document.getElementById('agent-input').value = 'Were there any threats on my last payment of 10 USDT?'; document.getElementById('agent-form').requestSubmit()`
+        )
+        await wait(`document.getElementById('agent-status').textContent.startsWith('Ready ·')`)
+        const paymentAnswer = await js(
+          `document.querySelector('#agent-messages > div:last-child p').textContent`
+        )
+        assert.match(paymentAnswer, /Your payment is complete/)
+        assert.match(paymentAnswer, /No active security warnings/)
+        assert.doesNotMatch(paymentAnswer, /there is no threat/)
+        assert.equal(
+          await js('window.security.snapshot().then(s => s.operations.length)'),
+          beforeAnswer
+        )
+        assert.equal(
+          await js(`Boolean(document.querySelector('#agent-messages details summary'))`),
+          true
+        )
+        await new Promise((resolve) => setTimeout(resolve, 250))
+        fs.writeFileSync(
+          '/tmp/kasa-payment-explanation.png',
+          (await window.webContents.capturePage()).toPNG()
+        )
+        console.log('PAYMENT EXPLANATION:', paymentAnswer)
+        console.log(
+          'PASS completed-payment answer, readable facts, expandable details, and read-only response'
+        )
       } else await chat(phase === 'restart' ? 'after app restart' : 'initial load')
+      const conversation = await js(`document.getElementById('agent-messages').textContent`)
       await js(`document.getElementById('agent-close').click()`)
-      await wait(`!document.getElementById('agent-toggle').disabled`)
       assert.equal(await js(`document.getElementById('agent-chat').hidden`), true)
+      assert.equal((await info()).isLoaded, true)
+      assert.match(await js(`document.getElementById('agent-toggle').textContent`), /On/)
+      await js(`document.getElementById('agent-toggle').click()`)
+      assert.equal(await js(`document.getElementById('agent-messages').textContent`), conversation)
+      assert.equal(await js(`document.getElementById('agent-send').disabled`), false)
+      await js(
+        `document.getElementById('agent-input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`
+      )
+      assert.equal(await js(`document.getElementById('agent-chat').hidden`), true)
+      assert.equal((await info()).isLoaded, true)
+      await js(`document.getElementById('agent-toggle').click()`)
+      await js(`document.getElementById('agent-toggle').click()`)
+      assert.equal(await js(`document.getElementById('agent-chat').hidden`), true)
+      assert.equal((await info()).isLoaded, true)
+      await js(`document.getElementById('agent-toggle').click()`)
+      await js(`document.getElementById('agent-off').click()`)
+      await wait(`document.getElementById('agent-status').textContent.startsWith('Agent is off')`)
+      assert.equal(await js(`document.getElementById('agent-chat').hidden`), false)
       assert.equal((await info()).isLoaded, false)
       assert.equal((await info()).isCached, true)
-      console.log('PASS close button: panel hidden, model unloaded, files retained')
-      if (phase === 'reopen') {
-        await js(`document.getElementById('agent-toggle').click()`)
-        await chat('after assistant reopen')
-      }
+      assert.match(await js(`document.getElementById('agent-toggle').textContent`), /Off/)
+      console.log(
+        'PASS hiding, Escape, and toggling preserve loaded model and conversation; explicit turn off unloads and keeps panel visible'
+      )
+      await js(`document.getElementById('agent-prepare').click()`)
+      await wait(`!document.getElementById('agent-send').disabled`)
+      assert.equal((await info()).isLoaded, true)
+      await js(`document.getElementById('tax-ai-close').click()`)
+      await wait(`document.getElementById('agent-status').textContent.startsWith('Agent is off')`)
+      assert.equal((await info()).isLoaded, false)
+      console.log('PASS turn on again from cache and shared Tax & VAT turn off')
       events.push(...(await js('window.__modelEvents')))
       assert.equal(
         events.some((e) => e.type === 'status' && /Downloading model:/i.test(e.text)),

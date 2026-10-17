@@ -1,4 +1,7 @@
-export type AgentEvent = { type: 'status' | 'token' | 'evidence'; text: string }
+export type AgentEvent = {
+  type: 'status' | 'token' | 'evidence' | 'evidence-details' | 'turn-end'
+  text: string
+}
 
 export type SecurityTarget = { kind: 'finding' | 'operation'; id: string }
 

@@ -404,8 +404,8 @@
     .sgb { padding:13px 16px; display:flex; flex-direction:column; gap:10px; }
 
     /* Toasts */
-    .tc { position:fixed; bottom:18px; right:18px; z-index:999; display:flex; flex-direction:column; gap:6px; }
-    .t { background:var(--c3); border:1px solid var(--borderB); border-radius:var(--r4); padding:10px 13px; display:flex; align-items:center; gap:8px; font-size:12px; animation:tin 0.22s ease; min-width:260px; box-shadow:0 4px 20px rgba(0,0,0,0.4); }
+    .tc { position:fixed; top:58px; left:18px; width:min(380px, calc(100vw - 36px)); pointer-events:none; z-index:999; display:flex; flex-direction:column; gap:6px; }
+    .t { pointer-events:auto; max-width:100%; overflow-wrap:anywhere; background:var(--c3); border:1px solid var(--borderB); border-radius:var(--r4); padding:10px 13px; display:flex; align-items:center; gap:8px; font-size:12px; animation:tin 0.22s ease; min-width:260px; box-shadow:0 4px 20px rgba(0,0,0,0.4); }
     @keyframes tin { from{transform:translateX(14px);opacity:0} to{transform:none;opacity:1} }
     .tttl { font-weight:700; font-size:12px; }
     .tsub { font-size:10.5px; color:var(--t3); }
@@ -781,6 +781,21 @@
       box-shadow: 0 0 6px var(--green);
     }
 
+
+.scope-section { border-top:1px solid var(--border, #ddd); margin-top:24px; padding-top:20px; }
+.scope-section h3 { margin:0 0 10px; scroll-margin-top:20px; }
+.scope-section p { line-height:1.6; max-width:80ch; }
+.scope-section label { display:block; margin:14px 0; }
+.scope-section label[hidden] { display:none; }
+.scope-section summary { cursor:pointer; padding:12px 0; font-weight:600; }
+.scope-section ul { padding-left:22px; overflow-wrap:anywhere; }
+.scope-section li { margin:8px 0; }
+.scope-fields { border:0; padding:0; min-width:0; }
+.scope-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr)); gap:16px; }
+.scope-section button:disabled { opacity:0.5; cursor:not-allowed; }
+.scope-section :focus-visible { outline:2px solid currentColor; outline-offset:3px; }
+#scope-record-preview, #scope-assignment-preview { overflow-wrap:anywhere; }
+</style>
     /* ─── Light mode overrides for interactive elements ─────────── */
     :root[data-theme="light"] .cmd-palette {
       background: rgba(255, 255, 255, 0.98);
@@ -918,9 +933,7 @@
       <div class="ni" onclick="go('bitcoin')"><span class="nic"><svg viewBox="0 0 24 24"><path d="M9 4v2m6-2v2M9 18v2m6-2v2M7 6h6a3 3 0 0 1 3 3 3 3 0 0 1-3 3M7 12h7a3 3 0 0 1 3 3 3 3 0 0 1-3 3H7V6z"/><line x1="7" y1="12" x2="14" y2="12"/></svg></span>Buy Bitcoin</div>
       
       <div class="nlbl">Intelligence</div>
-      <div class="ni" onclick="go('analytics')"><span class="nic"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>Cashflow Analytics</div>
-      <div class="ni" onclick="go('risk')"><span class="nic"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>Risk Management</div>
-      <div class="ni" onclick="go('fraud')"><span class="nic"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><circle cx="12" cy="16" r="1"/></svg></span>Fraud Detection</div>
+      <button type="button" id="security-toggle" class="ni" onclick="go('security')"><span class="nic"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>Security<span id="security-count" aria-live="polite"></span></button>
       <div class="ni" onclick="go('tax')"><span class="nic"><svg viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg></span>Tax &amp; VAT Estimator</div>
       <div class="ni" onclick="go('compliance')"><span class="nic"><svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>Compliance Audit</div>
 
@@ -1422,220 +1435,288 @@
       </div>
     </div>
 
-    <!-- ──────────────── ANALYTICS & TRENDS ──────────────── -->
-    <div id="view-analytics" class="view">
+    <div id="view-security" class="view">
       <div class="topbar">
-        <div style="flex:1"><div class="tb-title">Cashflow Analytics</div><div class="tb-sub">Powered by QVAC Predictive Modeling</div></div>
-        <div class="tb-actions">
-          <button class="cmd-trigger-btn" onclick="openCmdPalette()" title="Spotlight Search (Cmd+K)">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.8;"><circle cx="11" cy="11" r="7.5"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
-            <span>Spotlight</span>
-            <kbd class="apple-kbd-sm">⌘K</kbd>
-          </button>
-        </div>
+        <div style="flex:1"><div class="tb-title">Security</div><div class="tb-sub">Payment checks, supporting evidence and operation history</div></div>
       </div>
-      <div class="vb">
-        
-        <div style="background:var(--c3); border:1px solid var(--border); border-radius:var(--r5); padding:24px; margin-bottom:24px;">
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:20px; border-bottom:1px solid var(--borderB); padding-bottom:12px;">
-            <div style="width:8px; height:8px; background:var(--blue); border-radius:50%; box-shadow:0 0 8px var(--blue);"></div>
-            <div style="font-size:14px; font-weight:700; color:var(--t1);">QVAC Business Insights</div>
-            <div style="font-size:10px; font-family:'JetBrains Mono',monospace; color:var(--t3); margin-left:auto;">Model: qvac-b2b-predictive</div>
-          </div>
-          
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
-            <div style="background:var(--c2); border:1px solid var(--borderB); border-radius:var(--r4); padding:16px;">
-              <div style="font-size:11px; font-weight:700; color:var(--green); text-transform:uppercase; margin-bottom:8px; letter-spacing:0.5px;">Upcoming Cashflow</div>
-              <div style="font-size:12.5px; color:var(--t2); line-height:1.6;">QVAC predicts a <strong style="color:var(--t1);">+1,200 USDT</strong> inflow within 48 hours based on historical payment behavior from <strong style="color:var(--t1);">Arco Holdings</strong>.</div>
-            </div>
-            <div style="background:var(--c2); border:1px solid var(--borderB); border-radius:var(--r4); padding:16px;">
-              <div style="font-size:11px; font-weight:700; color:var(--amber); text-transform:uppercase; margin-bottom:8px; letter-spacing:0.5px;">FX Exposure Warning</div>
-              <div style="font-size:12.5px; color:var(--t2); line-height:1.6;">The EUR/USDT peg is showing slight volatility. Considering you have 4,850 USDT pending conversion, hedging into EURT is recommended today.</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="sh"><span class="sh-t">Client Payment Trends</span></div>
-        <div class="tcard">
-          <table>
-            <thead><tr><th>Client</th><th>Avg. Invoice</th><th>Typical Payment Time</th><th>QVAC Reliability Score</th></tr></thead>
-            <tbody>
-              <tr>
-                <td><div class="cc"><div class="av" style="background:#1a5c43;color:#26a17b;">AH</div><span style="font-weight:600;">Arco Holdings</span></div></td>
-                <td class="mono">2,400 USDT</td>
-                <td class="mono">On Time (+0 days)</td>
-                <td style="font-size:11.5px; color:var(--green); font-weight:600;">Excellent (98%)</td>
-              </tr>
-              <tr>
-                <td><div class="cc"><div class="av" style="background:#1c2d5a;color:#5b8def;">MC</div><span style="font-weight:600;">Meridian Creative</span></div></td>
-                <td class="mono">800 USDT</td>
-                <td class="mono">Late (+4 days)</td>
-                <td style="font-size:11.5px; color:var(--amber); font-weight:600;">Fair (72%)</td>
-              </tr>
-              <tr>
-                <td><div class="cc"><div class="av" style="background:#4a2b18;color:#d97736;">VG</div><span style="font-weight:600;">Vertex Global</span></div></td>
-                <td class="mono">3,500 USDT</td>
-                <td class="mono">Erratic (Overpays)</td>
-                <td style="font-size:11.5px; color:var(--red); font-weight:600;">Review Needed (45%)</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
+      <div class="scroll security-page">
+        <p class="security-note">Checks detect specific conditions, not every kind of fraud.</p>
+        <label class="security-filter"><input id="security-show-resolved" type="checkbox"> Show resolved notices <span id="security-resolved-count" aria-live="polite">(0)</span></label>
+        <div class="security-content"></div>
       </div>
     </div>
 
-    <!-- ──────────────── RISK MANAGEMENT ──────────────── -->
-    <div id="view-risk" class="view">
-      <div class="topbar">
-        <div style="flex:1"><div class="tb-title">Risk Management</div><div class="tb-sub">Counterparty Exposure &amp; Liquidity</div></div>
-        <div class="tb-actions">
-          <button class="cmd-trigger-btn" onclick="openCmdPalette()" title="Spotlight Search (Cmd+K)">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.8;"><circle cx="11" cy="11" r="7.5"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
-            <span>Spotlight</span>
-            <kbd class="apple-kbd-sm">⌘K</kbd>
-          </button>
-        </div>
-      </div>
-      <div class="vb">
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px;">
-          <div style="background:var(--c2); border:1px solid var(--borderB); border-radius:var(--r4); padding:16px;">
-            <div style="font-size:11px; font-weight:700; color:var(--red); text-transform:uppercase; margin-bottom:8px;">High Risk Exposure</div>
-            <div style="font-size:24px; font-weight:700; color:var(--t1); margin-bottom:4px;">12.4%</div>
-            <div style="font-size:12px; color:var(--t3);">Total pending receivables in high-risk counterparties.</div>
-          </div>
-          <div style="background:var(--c2); border:1px solid var(--borderB); border-radius:var(--r4); padding:16px;">
-            <div style="font-size:11px; font-weight:700; color:var(--green); text-transform:uppercase; margin-bottom:8px;">Liquidity Health</div>
-            <div style="font-size:24px; font-weight:700; color:var(--t1); margin-bottom:4px;">Excellent</div>
-            <div style="font-size:12px; color:var(--t3);">30-day cashflow covers all projected liabilities.</div>
-          </div>
-        </div>
-        <div class="sh"><span class="sh-t">Risk Alerts</span></div>
-        <div class="tcard">
-          <table>
-            <thead><tr><th>Client</th><th>Exposure (USDT)</th><th>Risk Level</th><th>QVAC Suggestion</th></tr></thead>
-            <tbody>
-              <tr><td style="font-weight:500;">Vertex Global</td><td class="mono">3,500.00</td><td><span class="badge b-flagged" style="color:var(--red);border-color:var(--red);">High</span></td><td style="font-size:11.5px; color:var(--t2);">Consistent overpayment patterns suggest poor treasury control.</td></tr>
-              <tr><td style="font-weight:500;">Meridian Creative</td><td class="mono">800.00</td><td><span class="badge b-pending" style="color:var(--amber);border-color:var(--amber);">Medium</span></td><td style="font-size:11.5px; color:var(--t2);">Average payment delay is 4 days. Request upfront payment next time.</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- ──────────────── FRAUD DETECTION ──────────────── -->
-    <div id="view-fraud" class="view">
-      <div class="topbar">
-        <div style="flex:1"><div class="tb-title">Fraud Detection</div><div class="tb-sub">Cryptographic Tampering &amp; Invoice Integrity</div></div>
-        <div class="tb-actions">
-          <button class="cmd-trigger-btn" onclick="openCmdPalette()" title="Spotlight Search (Cmd+K)">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.8;"><circle cx="11" cy="11" r="7.5"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
-            <span>Spotlight</span>
-            <kbd class="apple-kbd-sm">⌘K</kbd>
-          </button>
-        </div>
-      </div>
-      <div class="vb">
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px;">
-          <div style="background:var(--c2); border:1px solid var(--borderB); border-radius:var(--r4); padding:16px;">
-            <div style="font-size:11px; font-weight:700; color:var(--blue); text-transform:uppercase; margin-bottom:8px;">Semantic Hashes Scanned</div>
-            <div style="font-size:24px; font-weight:700; color:var(--t1); margin-bottom:4px;">4,281</div>
-            <div style="font-size:12px; color:var(--t3);">Invoices validated against RGB on-chain state.</div>
-          </div>
-          <div style="background:var(--c2); border:1px solid var(--borderB); border-radius:var(--r4); padding:16px;">
-            <div style="font-size:11px; font-weight:700; color:var(--amber); text-transform:uppercase; margin-bottom:8px;">Anomalies Detected</div>
-            <div style="font-size:24px; font-weight:700; color:var(--t1); margin-bottom:4px;">1</div>
-            <div style="font-size:12px; color:var(--t3);">Tampering attempt quarantined automatically.</div>
-          </div>
-        </div>
-        <div class="sh"><span class="sh-t">Fraud Logs</span></div>
-        <div class="tcard">
-          <table>
-            <thead><tr><th>Invoice ID</th><th>Tamper Type</th><th>Severity</th><th>Action Taken</th></tr></thead>
-            <tbody>
-              <tr><td class="mono">INV-0007</td><td style="font-weight:500;">Bank Details Altered</td><td><span class="badge b-flagged" style="color:var(--red);border-color:var(--red);">CRITICAL</span></td><td style="font-size:11.5px; color:var(--t2);">Payment blocked. Sent alert to Nova Works.</td></tr>
-              <tr><td class="mono">INV-0002</td><td style="font-weight:500;">Date Backdated</td><td><span class="badge b-pending" style="color:var(--amber);border-color:var(--amber);">WARNING</span></td><td style="font-size:11.5px; color:var(--t2);">Manually reviewed and approved on Sep 12.</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- ──────────────── TAX & VAT ESTIMATOR ──────────────── -->
+    <!-- Commercialista: recorded ledger overview; AI controls follow separately. -->
     <div id="view-tax" class="view">
       <div class="topbar">
-        <div style="flex:1"><div class="tb-title">Tax &amp; VAT Estimator</div><div class="tb-sub">Real-time Tax Liability &amp; Reporting</div></div>
-        <div style="display:flex; gap:10px; align-items:center;">
-          <button class="cmd-trigger-btn" onclick="openCmdPalette()" title="Spotlight Search (Cmd+K)">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.8;"><circle cx="11" cy="11" r="7.5"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
-            <span>Spotlight</span>
-            <kbd class="apple-kbd-sm">⌘K</kbd>
-          </button>
-          <select style="background:var(--bg); color:var(--t1); border:1px solid var(--border); border-radius:var(--r3); padding:6px 12px; outline:none; font-family:inherit; font-size:13px;">
-            <option>Q3 2026 (Current)</option>
-            <option>Q2 2026</option>
-            <option>Q1 2026</option>
-          </select>
-          <button class="btn btn-s sm" onclick="exportTaxCSV()">Export Tax CSV</button>
-          <button class="btn btn-s sm" onclick="exportTaxXML()">Export Tax XML (F24/SDI)</button>
-          <button class="btn btn-p" onclick="toast('tax-api','&#x260E;','Tax Authority API','Connecting to local tax authority (e.g. VIES/Agenzia delle Entrate)...','green')">Connect API</button>
-        </div>
+        <div style="flex:1"><div class="tb-title">Commercialista · Tax &amp; VAT</div><div class="tb-sub">Review your records and prepare for tax estimates</div></div>
+        <span>All recorded dates · USDT</span>
+        <button class="btn btn-s sm" onclick="exportTaxCSV()">Export records CSV</button>
       </div>
       <div class="vb">
-        <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:16px; margin-bottom:24px;">
-          <div style="background:var(--c2); border:1px solid var(--borderB); border-radius:var(--r4); padding:16px;">
-            <div style="font-size:11px; font-weight:700; color:var(--t2); text-transform:uppercase; margin-bottom:8px;">Gross Revenue</div>
-            <div style="font-size:20px; font-weight:700; color:var(--t1); margin-bottom:4px;" class="mono">63,900.00 EURT</div>
-            <div style="font-size:11px; color:var(--green);">+14% vs Q2</div>
-          </div>
-          <div style="background:var(--c2); border:1px solid var(--borderB); border-radius:var(--r4); padding:16px;">
-            <div style="font-size:11px; font-weight:700; color:var(--t2); text-transform:uppercase; margin-bottom:8px;">Deductible Expenses</div>
-            <div style="font-size:20px; font-weight:700; color:var(--t1); margin-bottom:4px;" class="mono">-4,250.00 EURT</div>
-            <div style="font-size:11px; color:var(--blue);">Auto-categorized by QVAC</div>
-          </div>
-          <div style="background:var(--c2); border:1px solid var(--borderB); border-radius:var(--r4); padding:16px;">
-            <div style="font-size:11px; font-weight:700; color:var(--t3); text-transform:uppercase; margin-bottom:8px;">Est. Income Tax (24%)</div>
-            <div style="font-size:20px; font-weight:700; color:var(--t1); margin-bottom:4px;" class="mono">14,316.00 EURT</div>
-            <div style="font-size:11px; color:var(--t3);">Pending end-of-year filing</div>
-          </div>
-          <div style="background:var(--c2); border:1px solid var(--borderB); border-radius:var(--r4); padding:16px; display:flex; flex-direction:column; justify-content:space-between;">
-            <div>
-              <div style="font-size:11px; font-weight:700; color:var(--t3); text-transform:uppercase; margin-bottom:8px;">Net VAT Payable</div>
-              <div style="font-size:20px; font-weight:700; color:var(--t1); margin-bottom:4px;" class="mono">1,420.50 EURT</div>
-            </div>
-            <button class="btn btn-p" style="padding:8px 12px; font-size:12px; margin-top:8px; width:100%; justify-content:center;" onclick="go('tax-pay')">Pay Now</button>
+        <section class="tcard" style="padding:24px; margin-bottom:20px;" aria-labelledby="tax-setup-title">
+          <h2 id="tax-setup-title">Your tax profiles</h2>
+          <p>Keep personal and business activity separate. Each profile represents one taxpayer and tax year. Creating a profile does not connect a wallet or assign records.</p>
+          <ul id="tax-profile-existing"></ul>
+          <button id="tax-profile-new" class="btn btn-p" type="button" disabled>Create a new profile</button>
+          <button id="tax-profile-legacy" class="btn btn-s" type="button" hidden>Use previous setup as a starting point</button>
+          <form id="tax-profile-form" novalidate style="margin-top:20px;" hidden>
+            <fieldset id="tax-profile-fields" disabled style="border:0; padding:0;">
+              <p id="tax-profile-progress" aria-live="polite"></p>
+              <h3 id="tax-profile-step-title" tabindex="-1"></h3>
+              <fieldset id="tax-profile-step-0" style="border:0; padding:0;">
+                <legend>Who is this tax profile for?</legend>
+                <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; margin:16px 0;">
+                  <label class="tcard" style="padding:18px; cursor:pointer;"><input type="radio" name="tax-profile-type" value="personal" required /> <strong>Personal</strong><br />Crypto held or used outside a business.</label>
+                  <label class="tcard" style="padding:18px; cursor:pointer;"><input type="radio" name="tax-profile-type" value="business" required /> <strong>Business or professional activity</strong><br />Crypto received, held or spent through your business or professional work.</label>
+                </div>
+                <p>If you have both kinds of activity, create a separate profile for each.</p>
+              </fieldset>
+              <fieldset id="tax-profile-step-1" hidden disabled style="border:0; padding:0;">
+                <legend>A few details about this profile</legend>
+                <label class="fl">Profile name<input class="fi" id="tax-profile-name" required maxlength="200" aria-describedby="tax-profile-name-help" /></label>
+                <p id="tax-profile-name-help">Choose a name you will recognise, such as “My personal taxes” or your business name. No tax identification number is needed here.</p>
+                <label class="fl"><span id="tax-profile-country-label">Country of tax residence</span><select class="fi" id="tax-profile-country" required aria-describedby="tax-profile-country-help"><option value="">Choose a country</option><option value="IT">Italy</option><option value="other">Another country</option></select></label>
+                <p id="tax-profile-country-help">Use tax residence, not citizenship or the location of an exchange. If unsure, confirm with your adviser before continuing.</p>
+                <p id="tax-profile-country-warning" role="status" hidden>Italian taxpayer review is currently supported. You can organise a profile for another country, but Italian calculations will not apply.</p>
+                <label class="fl">Tax year to review<select class="fi" id="tax-profile-year" required></select></label>
+                <p>Choose the year whose activity you want to review. This does not change transaction dates or establish a business’s fiscal-year boundaries.</p>
+                <div id="tax-profile-personal-field" hidden>
+                  <label class="fl">How are your crypto taxes handled?<select class="fi" id="tax-profile-personal"><option value="unknown">I’m not sure</option><option value="dichiarativo">I report them in my tax return</option><option value="amministrato">My intermediary handles them under an Italian administered arrangement</option></select></label>
+                  <p>An exchange account alone does not establish an administered arrangement. Treatment may differ between accounts; this answer needs confirmation.</p>
+                </div>
+                <div id="tax-profile-business-field" hidden>
+                  <label class="fl">What type of business is this?<select class="fi" id="tax-profile-business"><option value="unknown">I’m not sure</option><option value="company">Company (for example, S.r.l. or S.p.A.)</option><option value="partnership">Partnership</option><option value="sole-trader">Sole trader — business run in your own name</option><option value="professional">Professional — independent professional activity</option></select></label>
+                  <p>Use the legal form of the activity. Choose “I’m not sure” if you need to check.</p>
+                </div>
+                <div id="tax-profile-regime-field" hidden>
+                  <label class="fl">Which tax regime applies?<select class="fi" id="tax-profile-regime"><option value="unknown">I’m not sure</option><option value="ordinary">Ordinary</option><option value="forfettario">Forfettario</option></select></label>
+                  <p>Forfettario is shown only for sole traders and professionals. Selecting it does not verify eligibility. Your accountant can confirm the applicable regime.</p>
+                </div>
+              </fieldset>
+              <fieldset id="tax-profile-step-2" hidden disabled style="border:0; padding:0;">
+                <legend>Review before creating</legend>
+                <dl id="tax-profile-summary"></dl>
+                <button id="tax-profile-edit-type" class="btn btn-s" type="button">Edit personal/business choice</button>
+                <button id="tax-profile-edit-details" class="btn btn-s" type="button">Edit details</button>
+                <p>This creates a local taxpayer profile for organising records. It does not submit a tax return, verify your tax status, calculate tax or assign existing records. Existing profiles are kept.</p>
+                <p>Unknown answers remain on your checklist. Record history starts unconfirmed unless you explicitly reuse a previous setup.</p>
+              </fieldset>
+              <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:20px;">
+                <button id="tax-profile-back" class="btn btn-s" type="button">Back</button>
+                <button id="tax-profile-next" class="btn btn-p" type="submit">Continue</button>
+                <button id="tax-profile-cancel" class="btn btn-s" type="button">Cancel setup</button>
+              </div>
+            </fieldset>
+          </form>
+          <p id="tax-profile-status" role="status" aria-live="polite">Loading saved profiles…</p>
+          <button id="tax-profile-retry" class="btn btn-s" type="button" hidden>Retry loading profiles</button>
+          <ul id="tax-profile-notes"></ul>
+        </section>
+        <section class="tcard" style="padding:18px; margin-bottom:20px;" aria-label="Tax scope and completeness">
+          <strong>Accounts, assets and records</strong>
+          <p>Select a profile created above, then declare its accounts and assets. These are local declarations, not wallet connections or verified ownership. No wallet data is fetched by these controls.</p>
+          <p>Each taxpayer keeps its own saved profile snapshot. Creating another profile does not change existing taxpayers or reassign records. Create a new taxpayer review for a different profile or year.</p>
+          <p id="tax-scope-status" role="status">Loading local scope…</p>
+          <button id="tax-scope-refresh" type="button" class="btn btn-s">Reload scope</button>
+          <fieldset id="tax-scope-fields" disabled style="border:0; padding:0;">
+            <label>Selected tax profile<select id="scope-taxpayer" class="fi"></select></label>
+            <p id="scope-profile"></p>
+            <section id="scope-overview" class="scope-section" aria-labelledby="scope-overview-title">
+              <h3 id="scope-overview-title">Your profile at a glance</h3>
+              <p id="scope-overview-status" role="status"></p>
+              <div id="scope-overview-totals" class="scope-grid"></div>
+              <p>Counts cover all dates assigned to this profile, including earlier history needed for review. Invoice requests and payment observations may describe the same funds. These are record counts, not taxable amounts.</p>
+              <p id="scope-overview-unassigned"></p>
+              <h4>What to do next</h4>
+              <ul id="scope-next-steps"></ul>
+              <form id="scope-history-form">
+                <label>Have you included all relevant accounts and records, including earlier acquisitions?<select id="scope-history" class="fi" aria-describedby="scope-history-help"><option value="unknown">I’m not sure</option><option value="incomplete">Some are missing</option><option value="complete">Yes, I have included them</option></select></label>
+                <p id="scope-history-help">This covers the selected profile only. “Yes” is your declaration; records must still be reconciled with supporting statements. It does not certify completeness or mean no tax is due.</p>
+                <p id="scope-history-saved" role="status"></p>
+                <button id="scope-history-save" class="btn btn-s" type="submit">Save history answer</button>
+              </form>
+            </section>
+            <section class="scope-section" aria-labelledby="scope-accounts-title">
+              <h3 id="scope-accounts-title">1. Add your accounts</h3>
+              <p>An account is a label for a wallet or exchange account belonging to this profile. Adding it here does not connect to a wallet or import transactions. Never enter a seed phrase or private key.</p>
+              <ul id="scope-account-list"></ul>
+              <details id="scope-account-panel"><summary>Add an account · optional for now</summary>
+                <form id="scope-account-form">
+                  <fieldset id="scope-account-fields" class="scope-fields">
+                    <label>Account name<input id="scope-account-label" class="fi" required maxlength="200" placeholder="My exchange account / Business wallet" /></label>
+                    <label>Where is this account held?<select id="scope-account-kind" class="fi"><option value="unknown">I’m not sure</option><option value="self-custody">Self-custody wallet — you control the keys</option><option value="provider">Exchange or custodian — a provider holds the assets</option></select></label>
+                    <label>How much belongs to this taxpayer?<select id="scope-account-ownership" class="fi"><option value="unknown">I’m not sure</option><option value="full">All of it</option><option value="partial">Part of it</option></select></label>
+                    <label id="scope-account-share-field" hidden>Ownership percentage<input id="scope-account-share" class="fi" type="number" min="0.01" max="99.99" step="0.01" disabled /></label>
+                    <p>Unsure is saved as unknown, never as zero or full ownership. You can organise records now; calculations still need confirmed ownership.</p>
+                    <button class="btn btn-p" type="submit">Save account</button>
+                    <button class="btn btn-s" type="button" id="scope-account-later">Do this later</button>
+                  </fieldset>
+                </form>
+              </details>
+            </section>
+            <section class="scope-section" aria-labelledby="scope-assets-title">
+              <h3 id="scope-assets-title">2. Identify the assets</h3>
+              <p>Choose from saved assets when assigning a record below. A ticker such as USDT is not enough to identify a token: its network and contract matter. Saved asset definitions are shared across profiles; this does not share record ownership.</p>
+              <ul id="scope-asset-list"></ul>
+              <details id="scope-asset-panel"><summary>Add an asset · only when you know its identity</summary>
+                <form id="scope-asset-form">
+                  <label>Asset name or symbol<input id="scope-asset-symbol" class="fi" required maxlength="200" placeholder="Bitcoin / BTC / USDT" /></label>
+                  <label>Network<input id="scope-asset-network" class="fi" required maxlength="200" placeholder="The network shown in your supporting records" /></label>
+                  <label>Is this real or test activity?<select id="scope-asset-environment" class="fi"><option value="unknown">I’m not sure</option><option value="test">Test network / test assets</option><option value="live">Real economic activity</option></select></label>
+                  <p>Test assets are excluded from monetary tax estimates. Choosing real activity is a declaration, not verification.</p>
+                  <details id="scope-asset-technical"><summary>Asset identification details · required to save</summary>
+                    <label>Contract or native asset identifier<input id="scope-asset-canonical" class="fi" required maxlength="200" aria-describedby="scope-asset-id-help" /></label>
+                    <p id="scope-asset-id-help">Copy the exact asset identifier from trustworthy documentation or your provider’s records. For a native coin, use its native asset identifier. Do not enter a wallet address or guess from the ticker.</p>
+                    <label>Decimal places<input id="scope-asset-decimals" class="fi" type="number" min="0" max="18" step="1" required aria-describedby="scope-asset-precision-help" /></label>
+                    <p id="scope-asset-precision-help">The asset’s number of decimal places, used to interpret its smallest units. Confirm this from its documentation; it is not the number of digits you want displayed.</p>
+                  </details>
+                  <p>Not sure? Leave this for later. No asset or assignment is created until you save; the record can stay unassigned.</p>
+                  <button class="btn btn-p" type="submit">Save asset</button>
+                  <button class="btn btn-s" type="button" id="scope-asset-later">Do this later</button>
+                </form>
+              </details>
+            </section>
+            <section class="scope-section" aria-labelledby="scope-records-title">
+              <h3 id="scope-records-title">3. Assign existing records</h3>
+              <p>These records come from this app’s local database. An invoice is a request for payment; a payment observation records activity. They may describe the same funds and are not automatically combined.</p>
+              <form id="scope-assignment-form">
+                <label>Record to organise<select id="scope-record" class="fi" required></select></label>
+                <p id="scope-record-preview" role="status"></p>
+                <p id="scope-assignment-owner"></p>
+                <div class="scope-grid">
+                  <label>Which account does it belong to?<select id="scope-assign-account" class="fi" required></select></label>
+                  <label>Which asset does it represent?<select id="scope-assign-asset" class="fi" required></select></label>
+                </div>
+                <p id="scope-assignment-preview" role="status"></p>
+                <label id="scope-replace-field" hidden><input id="scope-replace-confirm" type="checkbox" /> I understand that replacing or removing this assignment clears its saved tax details and related links.</label>
+                <p>Assignment does not verify ownership or settlement. Related invoices and payments are not assigned automatically. If identity is uncertain, leave the record unassigned.</p>
+                <button class="btn btn-p" id="scope-assign-save" type="submit">Save record assignment</button>
+                <button class="btn btn-s" id="scope-unassign" type="button">Remove assignment</button>
+              </form>
+            </section>
+            <section class="scope-section" aria-labelledby="scope-review-title">
+              <h3 id="scope-review-title">Review this profile’s records</h3>
+              <p>These filters only change the tax details and completeness report below. They never assign or move records.</p>
+              <div class="scope-grid">
+                <label>Show account<select id="scope-account" class="fi"></select></label>
+                <label>Show asset<select id="scope-asset" class="fi"></select></label>
+              </div>
+            </section>
+          </fieldset>
+          <form id="enrichment-form" class="scope-section" style="margin:18px 0;" aria-labelledby="enrichment-title">
+            <h3 id="enrichment-title">Explain a record</h3>
+            <p>Choose an assigned record from the profile and review filters above. Tell us what happened, then add only the details you know. You can save incomplete information.</p>
+            <label>Which record would you like to explain?<select id="enrichment-record" class="fi"></select></label>
+            <p id="enrichment-record-context" role="status"></p>
+            <fieldset id="enrichment-fields" class="scope-fields" disabled hidden>
+              <label>What happened?<select id="enrichment-classification" class="fi" aria-describedby="enrichment-explanation">
+                <option value="unknown">I’m not sure yet</option><option value="purchase">I bought crypto</option><option value="sale">I sold crypto</option><option value="own-transfer">I moved assets between my own accounts</option><option value="goods-services">A payment for goods or services</option><option value="income">I received income</option><option value="refund">A refund was made</option>
+              </select></label>
+              <p id="enrichment-explanation"></p>
+              <div id="enrichment-related-section" hidden>
+                <label><span id="enrichment-related-label">Related record</span><select id="enrichment-related" class="fi"></select></label>
+                <p id="enrichment-related-help"></p>
+              </div>
+              <details id="enrichment-value-section">
+                <summary>EUR value · add what you know</summary>
+                <label><span id="enrichment-value-question">Total value in euros</span><input id="enrichment-eur" class="fi" maxlength="500" inputmode="decimal" aria-describedby="enrichment-value-help" /></label>
+                <p id="enrichment-value-help">Enter the total value, not the price of one coin. Blank means unknown; enter zero only if you mean zero. Fees are recorded separately below.</p>
+                <details id="enrichment-evidence-section">
+                  <summary>How did you determine this value?</summary>
+                  <label>Valuation date<input id="enrichment-date" class="fi" type="date" /></label>
+                  <p>The date used for the valuation. It does not establish when income is taxable.</p>
+                  <label>Exchange-rate or valuation source<input id="enrichment-source" class="fi" maxlength="500" placeholder="Provider statement or historical rate source" /></label>
+                  <label>Supporting reference<input id="enrichment-evidence" class="fi" maxlength="500" placeholder="Document name, statement ID or location" /></label>
+                  <p>References are saved as text. No documents are uploaded, opened or verified.</p>
+                </details>
+              </details>
+              <details id="enrichment-fee-section">
+                <summary>Fees · separate from the transaction value</summary>
+                <label>Was a fee paid?<select id="enrichment-fee-status" class="fi"><option value="unknown">I’m not sure</option><option value="none">No fee was paid</option><option value="recorded">Yes — record the fee</option></select></label>
+                <fieldset id="enrichment-fee-details" class="scope-fields" hidden disabled>
+                  <div class="scope-grid">
+                    <label>Fee amount<input id="enrichment-fee-amount" class="fi" inputmode="decimal" maxlength="50" /></label>
+                    <label>Asset used to pay the fee<select id="enrichment-fee-asset" class="fi"></select></label>
+                  </div>
+                  <p>A recorded fee needs an amount and an identified asset. If either is unknown, choose “I’m not sure” for now.</p>
+                  <label>What was the fee for?<input id="enrichment-fee-purpose" class="fi" maxlength="500" placeholder="Network fee / provider fee" /></label>
+                  <label>Fee receipt or supporting reference<input id="enrichment-fee-reference" class="fi" maxlength="500" /></label>
+                  <details id="enrichment-fee-value-section">
+                    <summary>Fee value in euros · if known</summary>
+                    <label>Total fee value in euros<input id="enrichment-fee-eur" class="fi" maxlength="500" inputmode="decimal" /></label>
+                    <label>Fee valuation date<input id="enrichment-fee-date" class="fi" type="date" /></label>
+                    <label>Fee valuation source<input id="enrichment-fee-source" class="fi" maxlength="500" /></label>
+                    <label>Fee valuation supporting reference<input id="enrichment-fee-evidence" class="fi" maxlength="500" /></label>
+                  </details>
+                </fieldset>
+                <p>Recording a fee does not make it tax-deductible. “No fee” is your declaration, not a verified result.</p>
+              </details>
+              <p id="enrichment-change-warning" role="status"></p>
+              <p>Your answers supplement the original ledger record. They do not confirm settlement or calculate tax. Save or discard edits before switching records or filters.</p>
+              <div style="display:flex; flex-wrap:wrap; gap:10px; margin:16px 0;">
+                <button type="submit" class="btn btn-p">Save record details</button>
+                <button type="button" id="enrichment-discard" class="btn btn-s">Discard edits</button>
+              </div>
+              <details id="enrichment-remove-section">
+                <summary>Remove saved details</summary>
+                <p>This removes only the supplementary tax details. The original record and its account/asset assignment remain.</p>
+                <label><input id="enrichment-clear-confirm" type="checkbox" /> Remove this record’s saved tax details</label>
+                <button type="button" id="enrichment-clear" class="btn btn-s" disabled>Remove saved details</button>
+              </details>
+            </fieldset>
+            <p id="enrichment-status" role="status" aria-live="polite">Select a profile and an assigned record.</p>
+          </form>
+          <p id="scope-record-counts"></p>
+          <section class="scope-section" aria-labelledby="scope-checklist-title">
+            <h3 id="scope-checklist-title">What is needed before calculating?</h3>
+            <p>This detailed checklist follows the account and asset review filters. Saved entries are user declarations; supporting references have not been verified. There is no “tax ready” score.</p>
+            <div id="scope-completeness"></div>
+          </section>
+          <p>Completeness describes missing inputs, not compliance certification. No tax amount is calculated. Other ledger summaries and exports below remain unscoped database views.</p>
+        </section>
+        <div class="tcard" style="padding:18px; margin-bottom:20px;" aria-label="Shared local AI">
+          <strong>Local AI</strong>
+          <p id="tax-ai-status" role="status">Checking local AI…</p>
+          <button id="tax-ai-prepare" class="btn btn-p" type="button" disabled>Checking…</button>
+          <button id="tax-ai-close" class="btn btn-s" type="button" disabled>Turn off agent</button>
+          <p>Uses the same model as Kasa Assistant. Closing AI switches it off for both sections; downloaded files stay on this device.</p>
+          <p>Tax questions and explanations are not available yet. Ledger summaries and CSV export work without AI.</p>
+        </div>
+        <p id="commercialista-status" role="status">Loading recorded invoices and payments…</p>
+        <p>These summaries work without AI. Recorded receipts are not taxable revenue. Invoice and payment records may describe the same funds.</p>
+        <div class="tcard" style="margin:20px 0;">
+          <table aria-label="Recorded ledger summary">
+            <thead><tr><th>Summary</th><th>All recorded dates</th></tr></thead>
+            <tbody>
+              <tr><td>Invoices</td><td id="tax-invoice-count">—</td></tr>
+              <tr><td>Requested on invoices</td><td id="tax-requested">—</td></tr>
+              <tr><td>Recorded received against invoices</td><td id="tax-received">—</td></tr>
+              <tr><td>Invoices marked underpaid</td><td id="tax-underpaid">—</td></tr>
+              <tr><td>Invoices marked overpaid</td><td id="tax-overpaid">—</td></tr>
+              <tr><td>Payment observations not marked settled</td><td id="tax-unsettled">—</td></tr>
+              <tr><td>Payment observations without a matching invoice</td><td id="tax-unlinked">—</td></tr>
+              <tr><td>Payment observations without a date</td><td id="tax-undated">—</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="tcard" style="padding:18px; margin-bottom:20px;">
+          <strong>Saved tax-year record review · unscoped database</strong>
+          <p>Invoices are selected by issue date; payments by recorded block date. These dates do not determine when income is taxable. Pending and failed observations retain their recorded status. Undated records are shown separately without assigning a year.</p>
+          <p>Invoice amounts are requested amounts; payment amounts are observations. They may describe the same funds and must not be added together. Dates below are UTC; year boundaries use Europe/Rome.</p>
+          <p id="tax-year-status" role="status">Loading tax-year records…</p>
+          <button id="tax-year-refresh" class="btn btn-s" type="button">Refresh year review</button>
+          <button id="tax-year-export" class="btn btn-s" type="button" disabled>Export year review + undated CSV</button>
+          <div style="overflow-x:auto; margin-top:14px;">
+            <table aria-label="Saved tax-year records"><thead><tr><th>Record</th><th>ID</th><th>Invoice ID</th><th>Client</th><th>Direction</th><th>Amount</th><th>Status</th><th>Date (UTC)</th></tr></thead><tbody id="tax-year-rows"></tbody></table>
           </div>
         </div>
-
-        <div style="display:grid; grid-template-columns:2fr 1fr; gap:20px;">
-          <div>
-            <div class="sh"><span class="sh-t">QVAC Auto-Deductions</span></div>
-            <div class="tcard">
-              <table>
-                <thead><tr><th>Expense</th><th>Category</th><th>Amount</th><th>Deductible %</th></tr></thead>
-                <tbody>
-                  <tr><td style="font-weight:500;">AWS Hosting</td><td>Software / Cloud</td><td class="mono">450.00 EURT</td><td><span class="badge b-paid" style="color:var(--green);border-color:var(--green);">100%</span></td></tr>
-                  <tr><td style="font-weight:500;">WeWork Milan</td><td>Office / Rent</td><td class="mono">1,200.00 EURT</td><td><span class="badge b-paid" style="color:var(--green);border-color:var(--green);">100%</span></td></tr>
-                  <tr><td style="font-weight:500;">Client Dinner (Osteria)</td><td>Meals &amp; Ent.</td><td class="mono">180.00 EURT</td><td><span class="badge b-pending" style="color:var(--amber);border-color:var(--amber);">50%</span></td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <div>
-            <div class="sh"><span class="sh-t">VAT Jurisdiction</span></div>
-            <div class="tcard">
-              <table>
-                <thead><tr><th>Region</th><th>Ruleset</th><th>Status</th></tr></thead>
-                <tbody>
-                  <tr><td style="font-weight:500;">Italy (IT)</td><td>Local (22%)</td><td><span class="badge b-pending" style="color:var(--amber);border-color:var(--amber);">Payable</span></td></tr>
-                  <tr><td style="font-weight:500;">Germany (DE)</td><td>EU Rev. Charge</td><td><span class="badge b-paid" style="color:var(--green);border-color:var(--green);">Exempt</span></td></tr>
-                  <tr><td style="font-weight:500;">USA (NY)</td><td>Export (0%)</td><td><span class="badge b-paid" style="color:var(--green);border-color:var(--green);">Exempt</span></td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
+        <section class="tcard" style="padding:18px;" aria-label="Tax estimate availability">
+          <h3>Why is there no tax estimate yet?</h3>
+          <p id="tax-profile-missing">Select a profile to see its next steps above.</p>
+          <p>Organising records is the first step. Tax calculations are not implemented yet. Acquisition history, supporting evidence and applicable tax treatment still need review, even when all visible fields are filled in.</p>
+          <p>No tax liability has been calculated. The records CSV is an unscoped database export, not a tax return or an audited report.</p>
+        </section>
       </div>
     </div>
     <!-- ──────────────── TAX SETTLEMENT (PAY NOW DETAILS) ──────────────── -->
@@ -1931,6 +2012,9 @@
             <div class="sg">
               <div class="sgh">Appearance</div>
               <div class="sgb">
+                <div class="fg"><label class="fl">Model</label><input class="fi" value="Qwen3.5 2B (on-device)" readonly/></div>
+                <div class="fg"><label class="fl">Memory used</label><input class="fi" value="Not measured" readonly/></div>
+                <div class="reason-bar rb-ok" style="margin-top:0;"><span class="rb-ic">&#x2713;</span><span>Open the assistant to check whether the local model is running</span></div>
                 <div class="fg">
                   <label class="fl">Theme</label>
                   <div style="display:flex; gap:8px;">
@@ -2545,8 +2629,26 @@
     document.getElementById('sidebar-name').textContent = name;
     document.getElementById('sidebar-co').textContent = co;
     
+    const profile = {};
+    document.querySelectorAll('input[id^="prof-"]').forEach(input => { profile[input.id] = input.value; });
+    try { localStorage.setItem('kasa-business-profile', JSON.stringify(profile)); }
+    catch { toast('profile', '!', 'Profile not saved', 'Local storage is unavailable.', 'red'); return; }
     toast('profile', '✓', 'Profile Saved', 'Identity and business details updated.', 'green');
   }
+  document.addEventListener('DOMContentLoaded', () => {
+    try {
+      const profile = JSON.parse(localStorage.getItem('kasa-business-profile') || '{}');
+      document.querySelectorAll('input[id^="prof-"]').forEach(input => {
+        if (typeof profile[input.id] === 'string') input.value = profile[input.id].slice(0, 2000);
+      });
+      if (typeof profile['prof-name'] === 'string') {
+        updateProfilePreview();
+        document.getElementById('sidebar-name').textContent = profile['prof-name'];
+        document.getElementById('sidebar-co').textContent = typeof profile['prof-co'] === 'string' ? profile['prof-co'] : '';
+        document.getElementById('sidebar-av').textContent = profile['prof-name'].split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+      }
+    } catch { /* Ignore malformed stored presentation data. */ }
+  });
   function ft(el) {
     el.closest('.fbr').querySelectorAll('.ft').forEach(t => t.classList.remove('on'));
     el.classList.add('on');
@@ -2589,146 +2691,167 @@
     }
   }
 
-  function simulateExtractWithScan() {
-    const scanner = document.getElementById('qvac-scanner');
-    const status = document.getElementById('qvac-status');
-    const btn = document.getElementById('qvac-btn');
-    
-    btn.style.display = 'none';
-    scanner.style.display = 'block';
-    scanner.style.animation = 'scanLine 1.5s infinite linear alternate';
-    status.innerHTML = 'QVAC is parsing document structure...';
-    
-    setTimeout(() => { status.innerHTML = 'Extracting invoice line items...'; }, 1000);
-    setTimeout(() => { status.innerHTML = 'Validating VAT &amp; IBAN against databases...'; }, 2200);
-    setTimeout(() => {
-      document.getElementById('step-preview').style.display = 'none';
-      status.innerHTML = 'Ready for AI extraction';
-      btn.style.display = 'inline-flex';
-      scanner.style.display = 'none';
-      scanner.style.animation = 'none';
-      document.getElementById('file-input').value = '';
-      
-      // proceed to existing loading flow
-      simulateExtract(); 
-    }, 3500);
+function simulateExtractWithScan() {
+  return simulateExtract();
+}
+
+/* LINE ITEMS (shared by AI extraction & manual entry) */
+let lineItems = [];
+
+function escHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[c]));
+}
+
+function renderLineItems() {
+  const tbody = document.getElementById('li-rows');
+  if (!tbody) return;
+
+  tbody.innerHTML = lineItems.map((it, i) => {
+    const lineTotal =
+      (parseFloat(it.qty) || 0) * (parseFloat(it.unit) || 0);
+
+    return '<tr>'
+      + '<td style="padding:6px 12px;">'
+      + '<input class="fi" style="padding:5px 7px; font-size:11.5px;"'
+      + ' value="' + escHtml(it.desc) + '" placeholder="Description"'
+      + ' oninput="updateLineItem(' + i + ',\'desc\',this.value)"/>'
+      + '</td>'
+      + '<td style="padding:6px 12px;">'
+      + '<input class="fi" style="padding:5px 7px; font-size:11.5px;"'
+      + ' type="number" min="0" value="' + escHtml(it.qty) + '"'
+      + ' oninput="updateLineItem(' + i + ',\'qty\',this.value)"/>'
+      + '</td>'
+      + '<td style="padding:6px 12px;">'
+      + '<input class="fi" style="padding:5px 7px; font-size:11.5px;"'
+      + ' type="number" min="0" step="0.01" value="' + escHtml(it.unit) + '"'
+      + ' oninput="updateLineItem(' + i + ',\'unit\',this.value)"/>'
+      + '</td>'
+      + '<td id="li-total-' + i + '"'
+      + ' style="padding:8px 12px; text-align:right;" class="mono">'
+      + lineTotal.toFixed(2) + ' USDT</td>'
+      + '<td style="padding:8px 6px; text-align:center;">'
+      + '<span onclick="removeLineItem(' + i + ')"'
+      + ' style="cursor:pointer; color:var(--t3); font-size:12px;">'
+      + '&#x2715;</span></td>'
+      + '</tr>';
+  }).join('') ||
+    '<tr><td colspan="5"'
+    + ' style="padding:14px;text-align:center;color:var(--t3);">'
+    + 'No line items yet</td></tr>';
+
+  updateTotalFromLineItems();
+}
+
+function addLineItem() {
+  lineItems.push({ desc: '', qty: 1, unit: 0 });
+  renderLineItems();
+}
+
+// Update computed cells without replacing inputs, preserving focus and cursor.
+function updateLineItem(i, field, value) {
+  if (!lineItems[i]) return;
+  if (!['desc', 'qty', 'unit'].includes(field)) return;
+
+  lineItems[i][field] = value;
+
+  const lineTotal =
+    (parseFloat(lineItems[i].qty) || 0)
+    * (parseFloat(lineItems[i].unit) || 0);
+
+  const cell = document.getElementById('li-total-' + i);
+  if (cell) cell.textContent = lineTotal.toFixed(2) + ' USDT';
+
+  updateTotalFromLineItems();
+}
+
+function removeLineItem(i) {
+  lineItems.splice(i, 1);
+  renderLineItems();
+}
+
+function updateTotalFromLineItems() {
+  const lineTotals = lineItems.map(it =>
+    (parseFloat(it.qty) || 0) * (parseFloat(it.unit) || 0)
+  );
+
+  const sum = lineTotals.reduce((a, b) => a + b, 0);
+  const totalInput = document.getElementById('rv-total');
+  if (totalInput) totalInput.value = sum.toFixed(2);
+
+  const detail = document.getElementById('li-sum-detail');
+  if (detail) {
+    detail.textContent = lineTotals.length
+      ? lineTotals.map(n => n.toFixed(2)).join(' + ')
+        + ' = ' + sum.toFixed(2)
+      : '';
+  }
+}
+
+// Direct total edits apply only when there are zero or one line items.
+function onTotalInput(value) {
+  if (lineItems.length > 1) {
+    updateTotalFromLineItems();
+    return;
   }
 
-  /* \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 LINE ITEMS (shared by AI extraction & manual entry) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
-  let lineItems = [];
-  function escHtml(s) {
-    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  }
-  function renderLineItems() {
-    const tbody = document.getElementById('li-rows');
-    if (!tbody) return;
-    tbody.innerHTML = lineItems.map((it, i) => {
-      const lineTotal = (parseFloat(it.qty) || 0) * (parseFloat(it.unit) || 0);
-      return '<tr>'
-        + '<td style="padding:6px 12px;"><input class="fi" style="padding:5px 7px; font-size:11.5px;" value="' + escHtml(it.desc) + '" placeholder="Description" oninput="updateLineItem(' + i + ',\'desc\',this.value)"/></td>'
-        + '<td style="padding:6px 12px;"><input class="fi" style="padding:5px 7px; font-size:11.5px;" type="number" min="0" value="' + it.qty + '" oninput="updateLineItem(' + i + ',\'qty\',this.value)"/></td>'
-        + '<td style="padding:6px 12px;"><input class="fi" style="padding:5px 7px; font-size:11.5px;" type="number" min="0" step="0.01" value="' + it.unit + '" oninput="updateLineItem(' + i + ',\'unit\',this.value)"/></td>'
-        + '<td id="li-total-' + i + '" style="padding:8px 12px; text-align:right;" class="mono">' + lineTotal.toFixed(2) + ' USDT</td>'
-        + '<td style="padding:8px 6px; text-align:center;"><span onclick="removeLineItem(' + i + ')" style="cursor:pointer; color:var(--t3); font-size:12px;">&#x2715;</span></td>'
-        + '</tr>';
-    }).join('') || '<tr><td colspan="5" style="padding:14px;text-align:center;color:var(--t3);">No line items yet</td></tr>';
-    updateTotalFromLineItems();
-  }
-  function addLineItem() {
+  const amount = parseFloat(value) || 0;
+
+  if (!lineItems.length) {
     lineItems.push({ desc: '', qty: 1, unit: 0 });
-    renderLineItems();
-  }
-  // Updates the data model and only the computed (read-only) total cells —
-  // never re-renders the input rows themselves, so focus/cursor position survives each keystroke.
-  function updateLineItem(i, field, value) {
-    if (!lineItems[i]) return;
-    lineItems[i][field] = value;
-    const lineTotal = (parseFloat(lineItems[i].qty) || 0) * (parseFloat(lineItems[i].unit) || 0);
-    const cell = document.getElementById('li-total-' + i);
-    if (cell) cell.textContent = lineTotal.toFixed(2) + ' USDT';
-    updateTotalFromLineItems();
-  }
-  function removeLineItem(i) {
-    lineItems.splice(i, 1);
-    renderLineItems();
-  }
-  function updateTotalFromLineItems() {
-    const lineTotals = lineItems.map(it => (parseFloat(it.qty) || 0) * (parseFloat(it.unit) || 0));
-    const sum = lineTotals.reduce((a, b) => a + b, 0);
-    const totalInput = document.getElementById('rv-total');
-    if (totalInput) totalInput.value = sum.toFixed(2);
-    const detail = document.getElementById('li-sum-detail');
-    if (detail) detail.textContent = lineTotals.length ? lineTotals.map(n => n.toFixed(2)).join(' + ') + ' = ' + sum.toFixed(2) : '';
-  }
-  // Typing straight into Total only makes sense with 0 or 1 line items (no sum to preserve);
-  // it just sets that single item's amount. With several items the field snaps back to the
-  // computed sum, since editing an aggregate of several lines would be ambiguous.
-  function onTotalInput(value) {
-    if (lineItems.length > 1) { updateTotalFromLineItems(); return; }
-    const amount = parseFloat(value) || 0;
-    if (!lineItems.length) lineItems.push({ desc: '', qty: 1, unit: 0 });
-    lineItems[0].desc = lineItems[0].desc || 'Services';
-    lineItems[0].qty = 1;
-    lineItems[0].unit = amount;
-    renderLineItems();
-    const totalInput = document.getElementById('rv-total');
-    if (totalInput) { totalInput.value = value; totalInput.focus(); }
   }
 
-  function startManualInvoice() {
-    document.getElementById('step-upload').style.display = 'none';
-    document.getElementById('step-preview').style.display = 'none';
+  lineItems[0].desc = lineItems[0].desc || 'Services';
+  lineItems[0].qty = 1;
+  lineItems[0].unit = amount;
 
-    document.getElementById('review-wrap').classList.remove('qvac-hook');
-    document.getElementById('review-ai-label').style.display = 'none';
-    document.getElementById('review-confidence').style.display = 'none';
-    document.getElementById('review-title').textContent = 'Manual Invoice';
+  renderLineItems();
 
-    document.getElementById('rv-client').value = '';
-    document.getElementById('rv-country').value = '';
-    const nextNum = 'INV-' + String(Math.floor(1000 + Math.random() * 9000));
-    document.getElementById('rv-invno').value = nextNum;
-    const today = new Date();
-    const due = new Date(today.getTime() + 7 * 86400000);
-    document.getElementById('rv-issue').value = today.toISOString().slice(0, 10);
-    document.getElementById('rv-due').value = due.toISOString().slice(0, 10);
-
-    lineItems = [{ desc: '', qty: 1, unit: 0 }];
-    renderLineItems();
-
-    document.getElementById('step-review').classList.add('on');
-    document.getElementById('s1').className = 'si done';
-    document.getElementById('s1').querySelector('.sn').textContent = '\u2713';
-    document.getElementById('s2').className = 'si on';
+  const totalInput = document.getElementById('rv-total');
+  if (totalInput) {
+    totalInput.value = value;
+    totalInput.focus();
   }
+}
+
+function startManualInvoice() {
+  document.getElementById('step-upload').style.display = 'none';
+  document.getElementById('step-preview').style.display = 'none';
+
+  document.getElementById('review-wrap').classList.remove('qvac-hook');
+  document.getElementById('review-ai-label').style.display = 'none';
+  document.getElementById('review-confidence').style.display = 'none';
+  document.getElementById('review-title').textContent = 'Manual Invoice';
+
+  document.getElementById('rv-client').value = '';
+  document.getElementById('rv-country').value = '';
+
+  const nextNum = 'INV-' + String(Math.floor(1000 + Math.random() * 9000));
+  document.getElementById('rv-invno').value = nextNum;
+
+  const today = new Date();
+  const due = new Date(today.getTime() + 7 * 86400000);
+  document.getElementById('rv-issue').value = today.toISOString().slice(0, 10);
+  document.getElementById('rv-due').value = due.toISOString().slice(0, 10);
+
+  lineItems = [{ desc: '', qty: 1, unit: 0 }];
+  renderLineItems();
+
+  document.getElementById('step-review').classList.add('on');
+  document.getElementById('s1').className = 'si done';
+  document.getElementById('s1').querySelector('.sn').textContent = '\u2713';
+  document.getElementById('s2').className = 'si on';
+}
 
   async function simulateExtract() {
-    document.getElementById('step-upload').style.display = 'none';
-    document.getElementById('step-loading').classList.add('on');
-    if (window.electronAPI) await window.electronAPI.extractInvoice();
-    else await new Promise(r => setTimeout(r, 1500));
     document.getElementById('step-loading').classList.remove('on');
-
-    document.getElementById('review-wrap').classList.add('qvac-hook');
-    document.getElementById('review-ai-label').style.display = 'block';
-    document.getElementById('review-confidence').style.display = 'inline';
-    document.getElementById('review-title').textContent = 'Invoice Draft';
-    document.getElementById('rv-client').value = 'Meridian Creative LLC';
-    document.getElementById('rv-country').value = 'United States';
-    document.getElementById('rv-invno').value = 'INV-0010';
-    document.getElementById('rv-issue').value = '2026-10-01';
-    document.getElementById('rv-due').value = '2026-10-08';
-    lineItems = [
-      { desc: 'UI Design \u2013 Brand Identity', qty: 1, unit: 600 },
-      { desc: 'Revision rounds', qty: 3, unit: 50 }
-    ];
-    renderLineItems();
-
-    document.getElementById('step-review').classList.add('on');
-    document.getElementById('s1').className = 'si done';
-    document.getElementById('s1').querySelector('.sn').textContent = '\u2713';
-    document.getElementById('s2').className = 'si on';
-    toast('ext', '&#x2713;', 'Extraction complete', 'Parsed via Local AI (QVAC)', 'green');
+    document.getElementById('step-review').classList.remove('on');
+    toast('ext', '!', 'Extraction unavailable', 'Document extraction is not connected. Create the invoice manually; no document has been parsed or verified.', 'red');
   }
   // Pure step-transition UI (no data writes): the real kasa.ts flow sets done-text/QR and
   // refreshes the Invoices table itself, then calls this as its final animation step. When no
@@ -2881,8 +3004,15 @@
   /* ════ 1. SEMANTIC SPOTLIGHT SEARCH (QVAC EMBEDDINGS) ════ */
   const cmdPaletteItems = [
     {
-      title: 'Wallet & Treasury', category: 'Navigation', badge: 'Wallet',
-      sub: 'Studio Mancini · Real-time balance & node overview',
+      title: 'Security', category: 'Navigation', badge: 'Payment checks',
+      sub: 'Recorded findings, supporting evidence and payment history',
+      icon: '<svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+      action: () => go('security'),
+      tags: ['security', 'checks', 'warnings', 'payments', 'findings']
+    },
+    {
+      title: 'Dashboard & Treasury', category: 'Navigation', badge: 'Overview',
+      sub: 'Studio Mancini · Real-time financial & node overview',
       icon: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>',
       action: () => go('dashboard'),
       tags: ['home', 'overview', 'treasury', 'balance', 'metrics', 'stats', 'health', 'main', 'summary']
@@ -2965,7 +3095,7 @@
     'unpaid': ['overdue', 'pending', 'debt', 'receivable', 'inv-0010', 'collect', 'due', 'pay me', 'late', 'meridian'],
     'tax': ['vat', 'f24', 'agenzia', 'commercialista', 'revenue', 'withholding', 'compliance', 'set aside', 'q3', 'kdv', 'vergi'],
     'crypto': ['bitcoin', 'btc', 'usdt', 'tether', 'trade', 'swap', 'convert', 'rate', 'fx', 'exchange', 'wallet', 'rgb', 'seal'],
-    'fraud': ['tamper', 'risk', 'quarantine', 'anomaly', 'hash', 'flagged', 'mismatch', 'security', 'alert', 'inv-0007', 'fake'],
+    'security': ['tamper', 'risk', 'quarantine', 'anomaly', 'hash', 'flagged', 'mismatch', 'security', 'alert', 'inv-0007', 'fake'],
     'client': ['meridian', 'arco', 'vertex', 'nova', 'customer', 'crm', 'score', 'credit', 'rating', 'counterparty'],
     'send': ['transfer', 'pay', 'withdraw', 'dispatch', 'broadcast', 'payout', 'spend', 'tx'],
     'receive': ['deposit', 'qr', 'invoice', 'blinded', 'seal', 'collect', 'inbound'],
@@ -3992,5 +4122,8 @@
 
 <script type="module" src="/src/kasa.ts"></script>
 <script type="module" src="/src/agent.ts"></script>
+<script type="module" src="/src/tax-profile.ts"></script>
+<script type="module" src="/src/tax-year.ts"></script>
+<script type="module" src="/src/tax-scope.ts"></script>
 </body>
 </html>

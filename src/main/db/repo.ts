@@ -98,7 +98,9 @@ export function listPayments(): PaymentRow[] {
 }
 
 export function paymentsForInvoice(invoiceId: string): PaymentRow[] {
-  return getDb().prepare(`SELECT ${PAYMENT_COLS} FROM payments WHERE invoice_id = ? AND direction = 'in'`).all(invoiceId) as PaymentRow[]
+  return getDb()
+    .prepare(`SELECT ${PAYMENT_COLS} FROM payments WHERE invoice_id = ? AND direction = 'in'`)
+    .all(invoiceId) as PaymentRow[]
 }
 
 export function paymentsMissingBlockTime(): PaymentRow[] {

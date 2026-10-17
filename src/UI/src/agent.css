@@ -113,3 +113,29 @@
   color: var(--t3);
   font-size: 11px;
 }
+
+#agent-messages .agent-facts {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--c3);
+}
+#agent-messages p {
+  line-height: 1.55;
+}
+#agent-messages details {
+  margin: 0 0 16px;
+  color: var(--t3);
+}
+#agent-messages summary {
+  cursor: pointer;
+}
+#agent-messages pre {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+#agent-off {
+  margin-right: auto;
+}

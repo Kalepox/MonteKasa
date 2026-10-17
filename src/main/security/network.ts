@@ -33,10 +33,21 @@ export class ChainObserver {
       'Chain API must use HTTPS or loopback HTTP.',
       'unavailable'
     )
-    const response = await this.request(`${this.base.replace(/\/$/, '')}${path}`, {
-      signal: AbortSignal.timeout(8000),
-      redirect: 'error'
-    })
+    // Retry only read-only transport/server failures, never payment submission.
+    let response: Response | undefined
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        response = await this.request(`${this.base.replace(/\/$/, '')}${path}`, {
+          signal: AbortSignal.timeout(4000),
+          redirect: 'error'
+        })
+        if (response.ok || response.status < 500 || attempt === 1) break
+        await response.body?.cancel()
+      } catch (error) {
+        if (attempt === 1) throw error
+      }
+    }
+    requireCheck(response, 'chain-api', 'Chain service could not be reached.', 'unavailable')
     requireCheck(
       response.ok,
       'chain-api',

@@ -31,7 +31,7 @@ const publicOperation = (o: StoredOperation): SecurityOperation => {
 
 export class SecurityCoordinator {
   private busy = false
-  private monitoring = false
+  private monitoring?: Promise<void>
   private monitorState: SecuritySnapshot['monitoring'] = {}
   constructor(
     private backend: SecurityBackend,
@@ -75,6 +75,20 @@ export class SecurityCoordinator {
       severity,
       message,
       evidence,
+      history: same
+        ? old?.history
+        : [
+            ...(old?.history ?? []),
+            ...(old
+              ? [
+                  {
+                    at: old.lastSeen,
+                    check: typeof old.evidence.check === 'string' ? old.evidence.check : undefined,
+                    resolvedAt: old.resolvedAt
+                  }
+                ]
+              : [])
+          ].slice(-50),
       firstSeen: old?.firstSeen ?? this.now(),
       lastSeen: this.now(),
       acknowledgedAt: same ? old.acknowledgedAt : undefined
@@ -94,6 +108,7 @@ export class SecurityCoordinator {
   }
   snapshot(): SecuritySnapshot {
     return {
+      requiredConfirmations: this.policy.confirmations,
       operations: this.store.operations(200).map(publicOperation),
       findings: this.store.findings(200),
       monitoring: this.monitorState
@@ -179,7 +194,12 @@ export class SecurityCoordinator {
         requireCheck(
           matching.length <= 1 && matching.every((o) => o.state === 'review'),
           'duplicate',
-          'This recipient or refund already has a submitted operation. Review its status; do not resend.'
+          'This recipient or refund already has a submitted operation. Review its status; do not resend.',
+          'block',
+          {
+            relatedOperationId:
+              (matching.find((o) => o.state !== 'review') ?? matching[0])?.id ?? ''
+          }
         )
         const existing = matching[0]
         const token = randomUUID()
@@ -221,7 +241,10 @@ export class SecurityCoordinator {
           subject,
           error instanceof Error ? error.message : String(error),
           error instanceof SecurityViolation ? error.severity : 'unavailable',
-          { check: error instanceof SecurityViolation ? error.rule : 'backend' }
+          {
+            ...(error instanceof SecurityViolation ? error.evidence : {}),
+            check: error instanceof SecurityViolation ? error.rule : 'backend'
+          }
         )
         throw error
       }
@@ -290,7 +313,10 @@ export class SecurityCoordinator {
           o.id,
           String((error as Error).message ?? error),
           error instanceof SecurityViolation ? error.severity : 'unavailable',
-          { check: error instanceof SecurityViolation ? error.rule : 'backend' }
+          {
+            ...(error instanceof SecurityViolation ? error.evidence : {}),
+            check: error instanceof SecurityViolation ? error.rule : 'backend'
+          }
         )
         throw error
       }
@@ -327,9 +353,16 @@ export class SecurityCoordinator {
       return publicOperation(o)
     })
   }
-  async monitor(): Promise<void> {
-    if (this.monitoring || this.busy) return
-    this.monitoring = true
+  monitor(): Promise<void> {
+    if (this.monitoring) return this.monitoring
+    if (this.busy) return Promise.reject(new Error('Payment review or submission is in progress.'))
+    this.monitoring = this.runMonitor().finally(() => {
+      this.monitoring = undefined
+    })
+    return this.monitoring
+  }
+
+  private async runMonitor(): Promise<void> {
     try {
       const operations = this.store.pending(this.now())
       if (!operations.length) {
@@ -418,7 +451,13 @@ export class SecurityCoordinator {
               'settlement-regression',
               o.id,
               'Previously completed payment no longer meets settlement policy. Review possible reorganization or RGB status change.',
-              'review'
+              'review',
+              {
+                confirmations: o.confirmations,
+                requiredConfirmations: this.policy.confirmations,
+                rgbStatus: transfer.status,
+                checkedAt: chain.checkedAt
+              }
             )
           this.transition(
             o,
@@ -455,7 +494,6 @@ export class SecurityCoordinator {
         'unavailable'
       )
     } finally {
-      this.monitoring = false
       this.changed()
     }
   }

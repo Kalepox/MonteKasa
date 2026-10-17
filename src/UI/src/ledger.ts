@@ -9,6 +9,32 @@ const total = (values: number[]): string => {
   return `${sum / 1000000n}.${(sum % 1000000n).toString().padStart(6, '0')}`
 }
 
+// Invoice receipts and payment observations overlap. Never sum both collections.
+export function taxLedgerSummary(snapshot: KasaSnapshot): {
+  invoiceCount: number
+  requested: string
+  received: string
+  underpaid: number
+  overpaid: number
+  unsettled: number
+  unlinked: number
+  undated: number
+} {
+  const invoiceIds = new Set(snapshot.invoices.map((invoice) => invoice.id))
+  return {
+    invoiceCount: snapshot.invoices.length,
+    requested: total(snapshot.invoices.map((invoice) => invoice.amount)),
+    received: total(snapshot.invoices.map((invoice) => invoice.received)),
+    underpaid: snapshot.invoices.filter((invoice) => invoice.state === 'Underpaid').length,
+    overpaid: snapshot.invoices.filter((invoice) => invoice.state === 'Overpaid').length,
+    unsettled: snapshot.payments.filter((payment) => payment.status !== 'settled').length,
+    unlinked: snapshot.payments.filter(
+      (payment) => !payment.invoiceId || !invoiceIds.has(payment.invoiceId)
+    ).length,
+    undated: snapshot.payments.filter((payment) => payment.blockTime === null).length
+  }
+}
+
 export function searchLedger(snapshot: KasaSnapshot, query: string): string {
   const terms = query.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean)
   if (!terms.length)

@@ -27,7 +27,10 @@ async function fetchBlockTime(txid: string): Promise<number | null> {
 export class Kasa extends EventEmitter {
   private busy = false
   private refreshing?: Promise<void>
-  private chainCache = new Map<string, { checkedAt: number; valid: boolean }>()
+  private chainCache = new Map<
+    string,
+    { checkedAt: number; valid: boolean; confirmations?: number }
+  >()
   readonly security: SecurityCoordinator
 
   constructor(private rgb: RgbBackend) {
@@ -152,6 +155,7 @@ export class Kasa extends EventEmitter {
                 const evidence = await this.rgb.chainEvidence(t.txid!)
                 observation = {
                   checkedAt: now(),
+                  confirmations: evidence.confirmations,
                   valid:
                     evidence.confirmed &&
                     evidence.inBestChain &&
@@ -174,7 +178,14 @@ export class Kasa extends EventEmitter {
               'incoming-confirmations',
               invoice?.id ?? String(t.idx),
               'Incoming payment is not yet verified against the Bitcoin confirmation policy. No refund is available.',
-              'unavailable'
+              'unavailable',
+              {
+                requiredConfirmations: rgbConfig.confirmations,
+                ...(Number.isSafeInteger(observation.confirmations) &&
+                observation.confirmations! >= 0
+                  ? { confirmations: observation.confirmations! }
+                  : {})
+              }
             )
           } else this.security.resolve('incoming-confirmations', invoice?.id ?? String(t.idx))
         }
