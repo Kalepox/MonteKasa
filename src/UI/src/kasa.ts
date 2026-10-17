@@ -289,40 +289,43 @@ w.setSendMax = (): void => {
 }
 
 w.executeSend = async (): Promise<void> => {
-    const amtInput = $('send-amt-input') as HTMLInputElement | null
-    const addrInput = $('send-addr-input') as HTMLInputElement | null
-    const amount = amtInput?.value.trim() ?? ''
-    const invoice = addrInput?.value.trim() ?? ''
+  const amtInput = $('send-amt-input') as HTMLInputElement | null
+  const addrInput = $('send-addr-input') as HTMLInputElement | null
+  const amount = amtInput?.value.trim() ?? ''
+  const invoice = addrInput?.value.trim() ?? ''
 
-    if (amtInput) amtInput.style.borderBottomColor = 'var(--borderB)'
-    if (addrInput) addrInput.style.borderColor = 'var(--borderB)'
-    const badAmount = !(parseFloat(amount) > 0)
-    const badInvoice = !invoice.startsWith('rgb:')
-    if (badAmount || badInvoice) {
-      if (badAmount && amtInput) amtInput.style.borderBottomColor = 'var(--red)'
-      if (badInvoice && addrInput) addrInput.style.borderColor = 'var(--red)'
-
+  if (amtInput) amtInput.style.borderBottomColor = 'var(--borderB)'
+  if (addrInput) addrInput.style.borderColor = 'var(--borderB)'
+  const badAmount = !(parseFloat(amount) > 0)
+  const badInvoice = !invoice.startsWith('rgb:')
+  if (badAmount || badInvoice) {
+    if (badAmount && amtInput) amtInput.style.borderBottomColor = 'var(--red)'
+    if (badInvoice && addrInput) addrInput.style.borderColor = 'var(--red)'
     return w.toast('snd', '!', 'Check the form', 'Amount and an rgb: invoice are required', 'red')
   }
 
   const btn = $('btn-confirm-send') as HTMLButtonElement | null
+  const resetBtn = (): void => {
+    if (!btn) return
+    btn.innerHTML = '&#x2191; Sign &amp; Send RGB Transfer'
+    btn.style.pointerEvents = 'auto'
+  }
   if (btn) {
     btn.innerHTML =
-      '<span class="spinner" style="width:14px;height:14px;border-top-color:#fff;margin:0 8px 0 0;display:inline-block;"></span> Signing…'
+      '<span class="spinner" style="width:14px;height:14px;border-top-color:#fff;margin:0 8px 0 0;display:inline-block;"></span> Reviewing…'
     btn.style.pointerEvents = 'none'
   }
 
   try {
-    const r = await window.kasa.send(invoice, amount)
-    if (btn) {
-      btn.innerHTML = '&#x2191; Sign &amp; Send RGB Transfer'
-      btn.style.pointerEvents = 'auto'
-    }
+    // every send goes through the security review gate; the main process refuses direct sends
+    const r = await reviewPayment({ invoice, amount })
+    resetBtn()
+    if (!r) return
 
     w.saveRecentRecipient?.(invoice)
 
     // Switch the Send modal over to the success confirmation view
-    setText('send-success-amt', `${fmt(amount)} USDT`)
+    setText('send-success-amt', `${fmt(parseFloat(amount))} USDT`)
     setText('send-success-to', invoice.length > 26 ? `${invoice.slice(0, 14)}…${invoice.slice(-9)}` : invoice)
     setText('send-success-fee', $('send-fee-summary')?.textContent ?? '—')
     setText('send-success-txid', r.txid ? `${r.txid.slice(0, 10)}…${r.txid.slice(-6)}` : '—')
@@ -336,17 +339,16 @@ w.executeSend = async (): Promise<void> => {
 
     w.toast(
       'snd',
-      '&#x2713;',
-      `Sent ${fmt(amount)} USDT`,
-      `tx ${r.txid.slice(0, 10)}… · waiting for the receiver`,
+      '&#x2191;',
+      `Payment ${r.state}`,
+      r.txid
+        ? `tx ${r.txid.slice(0, 10)}… · settlement not yet verified`
+        : 'Outcome unknown. Check Security; do not resend.',
       'green'
     )
     void refresh()
   } catch (e) {
-    if (btn) {
-      btn.innerHTML = '&#x2191; Sign &amp; Send RGB Transfer'
-      btn.style.pointerEvents = 'auto'
-    }
+    resetBtn()
     toastErr('Send refused', e, () => void w.executeSend())
   }
 }
@@ -355,8 +357,10 @@ w.executeSend = async (): Promise<void> => {
 let receiveGeneration = 0
 let receiveInvoice: { invoice: string; expiresAt: number } | undefined
 const receiveButtons = (copy: boolean, fresh: boolean): void => {
-  ;($('rcv-copy') as HTMLButtonElement).disabled = !copy
-  ;($('rcv-fresh') as HTMLButtonElement).disabled = !fresh
+  const copyBtn = $('rcv-copy') as HTMLButtonElement | null
+  const freshBtn = $('rcv-fresh') as HTMLButtonElement | null
+  if (copyBtn) copyBtn.disabled = !copy
+  if (freshBtn) freshBtn.disabled = !fresh
 }
 async function fillReceive(fresh = false): Promise<void> {
   const generation = ++receiveGeneration
@@ -380,11 +384,10 @@ async function fillReceive(fresh = false): Promise<void> {
       `Blinded UTXO · valid until ${new Date(r.expiresAt * 1000).toLocaleTimeString()}`
     )
   } catch (e) {
-   if (generation !== receiveGeneration) return
+    if (generation !== receiveGeneration) return
     setText('rcv-seal-info', 'Unable to generate invoice. Try again.')
     receiveButtons(false, true)
     toastErr('No receive invoice', e, () => void fillReceive())
-
   }
 }
 w.setReceiveAsset = (asset: string): void => {
@@ -517,9 +520,14 @@ w.openInvoice = async (id: string): Promise<void> => {
           })
           if (!result) return
           w.closeM()
-          if (after?.status === 'executed')
-            w.toast('ref', '&#x2191;', 'Refund sent', `${fmt(p.amount)} USDT · waiting for the client`, 'green')
-          else toastErr('Refund failed', after?.error ?? 'unknown error', () => void approveRefund())
+          // don't offer a retry here: the refund may already be submitted, and resending could pay twice
+          w.toast(
+            'ref',
+            '&#x2191;',
+            `Refund ${result.state}`,
+            'Check Security for settlement progress. Do not resend.',
+            'green'
+          )
         } catch (e) {
           toastErr('Refund failed', e, () => void approveRefund())
         }

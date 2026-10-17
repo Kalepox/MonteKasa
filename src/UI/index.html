@@ -3876,10 +3876,10 @@
 
       <!-- Action buttons -->
       <div style="display:flex; gap:10px;">
-        <button class="btn btn-p" style="flex:1; justify-content:center; padding:11px; font-size:12px; font-weight:700;" onclick="copyReceiveAddress()">
+        <button id="rcv-copy" disabled class="btn btn-p" style="flex:1; justify-content:center; padding:11px; font-size:12px; font-weight:700;" onclick="copyReceiveAddress()">
           Copy Address
         </button>
-        <button class="btn btn-s" style="padding:11px 14px; font-size:12px;" onclick="generateFreshSeal()" title="Generate new blinded seal">
+        <button id="rcv-fresh" class="btn btn-s" style="padding:11px 14px; font-size:12px;" onclick="generateFreshSeal()" title="Generate new blinded seal">
           New Blind Seal
         </button>
       </div>
