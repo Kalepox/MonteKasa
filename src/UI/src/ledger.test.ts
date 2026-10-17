@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { searchLedger, taxRecordsCsv } from './ledger'
+import { searchLedger, taxRecordsCsv, taxLedgerSummary } from './ledger'
 import type { KasaSnapshot } from '../../preload/index.d'
 
 const snapshot: KasaSnapshot = {
@@ -20,6 +20,7 @@ const snapshot: KasaSnapshot = {
   payments: [
     {
       nodeIdx: 7,
+      direction: 'in',
       invoiceId: 'abc123-full',
       received: 2.000001,
       status: 'settled',
@@ -28,6 +29,63 @@ const snapshot: KasaSnapshot = {
     }
   ]
 }
+describe('Commercialista ledger summary', () => {
+  it('counts invoice receipts once, independently of payment observations', () => {
+    const summary = taxLedgerSummary({
+      ...snapshot,
+      payments: [...snapshot.payments, ...snapshot.payments]
+    })
+    expect(summary).toEqual({
+      invoiceCount: 1,
+      requested: '12.345678',
+      received: '2.000001',
+      underpaid: 1,
+      overpaid: 0,
+      unsettled: 0,
+      unlinked: 0,
+      undated: 0
+    })
+  })
+  it('keeps failed, pending, orphaned and undated observations visible', () => {
+    const summary = taxLedgerSummary({
+      ...snapshot,
+      payments: [
+        { ...snapshot.payments[0], status: 'pending', invoiceId: null, blockTime: null },
+        { ...snapshot.payments[0], status: 'failed', invoiceId: 'missing' }
+      ]
+    })
+    expect(summary.unsettled).toBe(2)
+    expect(summary.unlinked).toBe(2)
+    expect(summary.undated).toBe(1)
+    expect(summary.received).toBe('2.000001')
+  })
+  it('preserves decimal precision and reports overpaid invoice states', () => {
+    const summary = taxLedgerSummary({
+      ...snapshot,
+      invoices: [0.1, 0.2].map((amount) => ({
+        ...snapshot.invoices[0],
+        amount,
+        received: amount,
+        state: 'Overpaid'
+      }))
+    })
+    expect(summary.requested).toBe('0.300000')
+    expect(summary.received).toBe('0.300000')
+    expect(summary.overpaid).toBe(2)
+  })
+  it('returns an empty ledger without fabricating tax estimates', () => {
+    expect(taxLedgerSummary({ invoices: [], payments: [], proposals: [] })).toEqual({
+      invoiceCount: 0,
+      requested: '0.000000',
+      received: '0.000000',
+      underpaid: 0,
+      overpaid: 0,
+      unsettled: 0,
+      unlinked: 0,
+      undated: 0
+    })
+  })
+})
 describe('recorded ledger search', () => {
   it.each(['acme studio', 'INV-ABC123', '12.345678', '1970-01-01', 'Underpaid'])(
     'finds invoice by %s',

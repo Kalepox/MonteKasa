@@ -1,13 +1,38 @@
 #security-toggle {
-  position: fixed;
-  right: 130px;
-  bottom: 20px;
-  z-index: 1000;
-  padding: 8px 12px;
-  background: #333;
-  color: #fff;
-  border: 1px solid #777;
-  border-radius: 8px;
+  width: 100%;
+  text-align: left;
+  font-size: 12.5px;
+  font-weight: 500;
+  border: 0;
+}
+.security-page {
+  overflow-y: auto;
+  padding: 24px;
+}
+.security-page article {
+  background: var(--c3);
+  border: 1px solid var(--border);
+  border-radius: var(--r4);
+  padding: 16px;
+  margin: 12px 0;
+  overflow-wrap: anywhere;
+}
+.security-page p,
+.security-page h3 {
+  margin: 12px 0;
+}
+.security-page small {
+  color: var(--t3);
+}
+.security-page summary {
+  cursor: pointer;
+}
+.security-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0;
+  cursor: pointer;
 }
 .security-dialog {
   margin: auto;

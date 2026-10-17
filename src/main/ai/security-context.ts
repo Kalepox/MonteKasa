@@ -36,6 +36,7 @@ const CHECKS = [
   'recipient',
   'expiry',
   'invoice-amount',
+  'invoice-format',
   'transport',
   'node-unavailable',
   'chain-identity',
@@ -53,7 +54,19 @@ const CHECKS = [
   'approval-change',
   'submission-result',
   'stale-chain',
-  'backend'
+  'backend',
+  'chain-config',
+  'chain-url',
+  'chain-api',
+  'chain-checkpoint',
+  'chain-height',
+  'chain-response',
+  'txid',
+  'assignment',
+  'busy',
+  'client',
+  'incoming-txid',
+  'payment-amount'
 ]
 const INVOICE_STATES = ['Issued', 'Pending', 'Paid', 'Underpaid', 'Overpaid', 'Expired', 'Flagged']
 const member = (value: unknown, allowed: readonly string[], fallback = 'unknown'): string =>
@@ -85,6 +98,43 @@ const evidenceFields = (e: Record<string, unknown>): Record<string, string> => {
 // Policy descriptions are application-owned constants, never supplied by an invoice.
 export function ruleGuidance(rule: string, check?: unknown): string | undefined {
   const validationFailure = rule === 'review-failed' || rule === 'execution-blocked'
+  const recovery: Record<string, string> = {
+    'chain-config':
+      'Chain verification is not configured. Select the correct network profile and provide its node indexer and trusted checkpoint, then review again.',
+    'chain-url': 'The chain service address is invalid. Use HTTPS or a local loopback service.',
+    'chain-api':
+      'The chain service is unavailable. Check its connection and refresh before reviewing again.',
+    'chain-checkpoint':
+      'The chain checkpoint does not match. Verify the configured network and trusted checkpoint; do not bypass this check.',
+    'chain-height':
+      'The chain service returned inconsistent height information. Refresh and check node synchronization.',
+    'chain-response':
+      'The chain service returned invalid verification data. Check the service before reviewing again.',
+    'chain-sync':
+      'The node and reference heights disagree. Allow synchronization and obtain fresh evidence before reviewing again.',
+    'chain-identity':
+      'The node and reference chain could not be matched. Verify the network and indexer configuration.',
+    'node-unavailable':
+      'The node is not ready. Check whether it is locked, syncing, or unreachable before reviewing again.',
+    'invoice-amount':
+      'The amount differs from the fixed invoice amount. Pay the requested amount or ask for a new invoice. Open-amount invoices accept any positive amount.',
+    asset:
+      'The invoice requests a different asset. Ask for an invoice for the configured asset on the same network.',
+    transport:
+      'The invoice uses an unsupported or unapproved delivery proxy. Verify the proxy with the recipient before changing configuration.',
+    'approval-expiry':
+      'Your approval expired. Start a fresh review and confirm the displayed details again.',
+    amount: 'Enter a positive amount with no more than six decimal places.',
+    approval: 'The approval does not match the reviewed details. Start a fresh review.',
+    'fee-cap': 'The configured fee rate exceeds the limit. Inspect the fee configuration.',
+    'fee-change': 'The fee policy changed. Start a fresh review.',
+    'approval-change': 'Payment details changed. Start a fresh review.',
+    busy: 'Another review or submission is running. Inspect its status before starting another.',
+    backend:
+      'A wallet service check failed. Inspect the technical details and obtain fresh evidence. This alone does not establish fraud.'
+  }
+  if (validationFailure && typeof check === 'string' && Object.hasOwn(recovery, check))
+    return `Payment is BLOCKED: ${recovery[check]} No new payment is authorized by this explanation.`
   if (validationFailure && check === 'expiry')
     return 'Payment is BLOCKED: the invoice has expired or its expiry timestamp is invalid. Ask the payee for a new valid invoice and start a fresh review. Do not edit the expiry, change the device clock, or reuse an old approval to bypass the check. This does not establish fraud or a failed on-chain transaction.'
   if (validationFailure && check === 'balance')
@@ -104,7 +154,11 @@ export function ruleGuidance(rule: string, check?: unknown): string | undefined 
 
 // Explicit projection: never pass invoices, approval tokens, wallet keys, or arbitrary
 // object fields to the model. Even projected strings are untrusted evidence.
-export function securityContext(snapshot: SecuritySnapshot, target?: SecurityTarget): string {
+export function securityContext(
+  snapshot: SecuritySnapshot,
+  target?: SecurityTarget,
+  query?: string
+): string {
   if (
     target &&
     (!['finding', 'operation'].includes(target.kind) ||
@@ -112,21 +166,60 @@ export function securityContext(snapshot: SecuritySnapshot, target?: SecurityTar
       target.id.length > 100)
   )
     throw new Error('Invalid security explanation target.')
+  if (!target && query && /\b(last|latest|payment|transaction)\b/i.test(query)) {
+    const amountMatch = query.match(/\b(\d+(?:\.\d{1,6})?)\s*(?:test\s+)?usdt\b/i)
+    const candidates = snapshot.operations
+      .filter(
+        (o) =>
+          !/\b(last|latest)\b/i.test(query) || /\battempt\b/i.test(query) || o.state !== 'review'
+      )
+      .filter(
+        (o) =>
+          !amountMatch ||
+          BigInt(o.amountRaw) ===
+            BigInt(amountMatch[1].split('.')[0]) * 1000000n +
+              BigInt((amountMatch[1].split('.')[1] ?? '').padEnd(6, '0'))
+      )
+      .sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id))
+    if (!candidates.length)
+      throw new Error(
+        'No matching outgoing payment is recorded. Select a payment from the Security panel to inspect it.'
+      )
+    if (candidates.length > 1 && !/\b(last|latest)\b/i.test(query))
+      throw new Error(
+        'More than one payment matches. Select the payment you mean in the Security panel, or ask about the latest payment.'
+      )
+    target = { kind: 'operation', id: candidates[0].id }
+  }
   const selectedFinding =
     target?.kind === 'finding' ? snapshot.findings.find((f) => f.id === target.id) : undefined
   const selectedOperation =
     target?.kind === 'operation' ? snapshot.operations.find((o) => o.id === target.id) : undefined
   if (target && !selectedFinding && !selectedOperation)
     throw new Error('This security record is no longer available. Refresh the Security panel.')
+  const includeResolved = /\b(history|historical|resolved|earlier|past threats)\b/i.test(
+    query ?? ''
+  )
   const findings = selectedFinding
     ? [selectedFinding]
     : snapshot.findings
-        .filter((f) => (selectedOperation ? f.subject === selectedOperation.id : !f.resolvedAt))
+        .filter((f) =>
+          selectedOperation
+            ? f.subject === selectedOperation.id ||
+              f.subject === createHash('sha256').update(selectedOperation.invoice).digest('hex')
+            : !f.resolvedAt || includeResolved
+        )
+        .sort((a, b) => Number(Boolean(a.resolvedAt)) - Number(Boolean(b.resolvedAt)))
         .slice(0, 6)
   const operations = selectedOperation
     ? [selectedOperation]
     : snapshot.operations
-        .filter((o) => (selectedFinding ? o.id === selectedFinding.subject : true))
+        .filter((o) =>
+          selectedFinding
+            ? o.id === selectedFinding.subject ||
+              createHash('sha256').update(o.invoice).digest('hex') === selectedFinding.subject
+            : true
+        )
         .slice(0, 2)
   return JSON.stringify({
     observedAt: Math.floor(Date.now() / 1000),
@@ -139,6 +232,8 @@ export function securityContext(snapshot: SecuritySnapshot, target?: SecurityTar
     selected: target ? { kind: target.kind, id: recordId(target.id) } : undefined,
     omittedFindings: snapshot.findings.length - findings.length,
     sourceTextExcluded: true,
+    requiredConfirmations: snapshot.requiredConfirmations,
+    includeResolved,
     findings: findings.map((f) => {
       const rule = Object.hasOwn(DESCRIPTIONS, f.rule) ? f.rule : 'unknown'
       const evidence = evidenceFields(f.evidence)
@@ -153,7 +248,12 @@ export function securityContext(snapshot: SecuritySnapshot, target?: SecurityTar
         lastSeen: timestamp(f.lastSeen),
         resolvedAt: timestamp(f.resolvedAt),
         acknowledgedAt: timestamp(f.acknowledgedAt),
-        evidence
+        evidence,
+        history: (f.history ?? []).slice(-10).map((h) => ({
+          at: timestamp(h.at),
+          check: member(h.check, CHECKS),
+          resolvedAt: timestamp(h.resolvedAt)
+        }))
       }
     }),
     operations: operations.map((o) => ({
@@ -189,13 +289,15 @@ export function securityContext(snapshot: SecuritySnapshot, target?: SecurityTar
         'Failed',
         'not-submitted'
       ]),
-      checkedAt: timestamp(o.checkedAt)
+      checkedAt: timestamp(o.checkedAt),
+      createdAt: timestamp(o.createdAt),
+      completedAt: timestamp(o.completedAt)
     }))
   })
 }
 
 // Displayed separately from generated prose; the model cannot edit these facts.
-export function securityFacts(context: string): string {
+export function securityTechnicalDetails(context: string): string {
   const data = JSON.parse(context) as {
     findings: {
       id: string
@@ -206,6 +308,7 @@ export function securityFacts(context: string): string {
       message: string
       evidence: Record<string, unknown>
       lastSeen: number
+      history?: { at?: number; check?: string; resolvedAt?: number }[]
     }[]
     operations: { id: string; state: string; rgbStatus: string; confirmations: number }[]
   }
@@ -218,6 +321,10 @@ export function securityFacts(context: string): string {
     )
     if (f.ruleGuidance) lines.push(f.ruleGuidance)
     for (const [key, value] of Object.entries(f.evidence)) lines.push(`${key}: ${value}`)
+    for (const past of f.history ?? [])
+      lines.push(
+        `Earlier check: ${past.check ?? 'unknown'}; recorded ${past.at ? new Date(past.at * 1000).toISOString() : 'time unavailable'}.`
+      )
     lines.push(
       `Last recorded: ${f.lastSeen === undefined ? 'unavailable' : new Date(f.lastSeen * 1000).toISOString()}`
     )
@@ -243,6 +350,12 @@ export function criticalSecurityExplanation(context: string): string | undefined
   for (const f of data.findings) {
     const guidance = ruleGuidance(f.rule, f.evidence.check)
     if (!guidance) continue
+    if (f.resolvedAt) {
+      paragraphs.push(
+        'An earlier payment check was marked resolved. It is not a current block and does not authorize another payment. See the recorded details for the original check.'
+      )
+      continue
+    }
     paragraphs.push(
       `Recorded finding ${f.id} (${f.rule}${f.evidence.check ? ` / ${f.evidence.check}` : ''})${f.resolvedAt ? ' — historical, marked resolved; this does not authorize another payment' : ''}:\n${guidance}`
     )
@@ -258,3 +371,5 @@ export function criticalSecurityExplanation(context: string): string | undefined
     'I cannot send funds, bypass checks, acknowledge or resolve findings, or change policy. Use the normal app review flow; all mandatory checks still apply. Acknowledging a notice only marks it seen and never authorizes a payment.'
   ].join('\n\n')
 }
+
+export { paymentFacts as securityFacts } from './payment-presentation'

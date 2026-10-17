@@ -6,16 +6,16 @@ root.id = 'agent-panel'
 root.innerHTML = `
   <button id="agent-toggle" aria-expanded="false" aria-controls="agent-chat">✦ Ask AI</button>
   <section id="agent-chat" aria-label="Kasa Assistant" hidden>
-    <header><div><strong>Kasa Assistant</strong><small>Qwen3.5 2B · local AI</small></div>
+    <header><div><strong>Kasa Assistant</strong><small>Qwen3.5 2B · <span id="agent-power-state">Checking…</span></small></div>
       <button id="agent-clear" type="button">New chat</button>
-      <button id="agent-close" type="button" aria-label="Close assistant">Close assistant</button></header>
-    <p class="agent-security-note">AI explanations can be wrong. Recorded checks remain authoritative. AI cannot approve payments or override warnings.</p>
+      <button id="agent-close" type="button" aria-label="Hide agent">Hide agent</button></header>
+    <p class="agent-security-note">Payment summaries use recorded checks. AI explanations may be imperfect. Sending funds always requires your confirmation.</p>
     <div id="agent-messages" role="log" aria-label="Conversation"></div>
     <p id="agent-status" role="status">Checking the assistant connection…</p>
     <button id="agent-prepare" type="button" disabled>Prepare AI model · 1.28 GB</button>
     <form id="agent-form"><label for="agent-input">Message</label>
       <textarea id="agent-input" rows="2" maxlength="4000" placeholder="Prepare the model to start chatting" disabled required></textarea>
-      <div><button id="agent-stop" type="button" disabled>Stop</button><button id="agent-send" type="submit" disabled>Send</button></div>
+      <div><button id="agent-off" type="button" disabled>Turn off agent</button><button id="agent-stop" type="button" disabled>Stop</button><button id="agent-send" type="submit" disabled>Send</button></div>
     </form>
   </section>`
 document.body.append(root)
@@ -26,8 +26,18 @@ const input = element<HTMLTextAreaElement>('agent-input')
 const send = element<HTMLButtonElement>('agent-send')
 const prepare = element<HTMLButtonElement>('agent-prepare')
 let securityTarget: SecurityTarget | undefined
+let finishEvents: (() => void) | undefined
 let modelReady = false
 let installed = false
+let checking = true
+let setupError = false
+let preparing = false
+const taxStatus = document.getElementById('tax-ai-status')!
+const taxPrepare = document.getElementById('tax-ai-prepare') as HTMLButtonElement
+const taxClose = document.getElementById('tax-ai-close') as HTMLButtonElement
+const available = ['status', 'prepare', 'close'].every(
+  (method) => typeof window.agent?.[method as 'status' | 'prepare' | 'close'] === 'function'
+)
 let closing = false
 const stop = element<HTMLButtonElement>('agent-stop')
 const clear = element<HTMLButtonElement>('agent-clear')
@@ -40,16 +50,18 @@ const show = (open: boolean): void => {
   toggle.setAttribute('aria-expanded', String(open))
   if (open) (modelReady ? input : prepare).focus()
 }
-const close = async (): Promise<void> => {
-  if (closing) return
+const turnOff = async (): Promise<void> => {
+  if (closing || checking || !available) return
   closing = true
-  toggle.disabled = true
-  show(false)
+  updateControls()
+  status.textContent = 'Turning off agent…'
   try {
     await window.agent.close()
     modelReady = false
-    status.textContent = 'Assistant closed. Downloaded model files remain on this device.'
+    setupError = false
+    status.textContent = 'Agent is off. Downloaded model files remain on this device.'
   } catch (error) {
+    setupError = true
     status.textContent = errorText(error)
     show(true)
   } finally {
@@ -61,15 +73,20 @@ const close = async (): Promise<void> => {
 }
 toggle.onclick = () => {
   if (panel.hidden) show(true)
-  else void close()
+  else show(false)
 }
 element('agent-close').onclick = () => {
-  void close()
+  show(false)
+  toggle.focus()
+}
+element('agent-off').onclick = () => {
+  void turnOff()
 }
 root.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && !panel.hidden) {
     event.preventDefault()
-    void close()
+    show(false)
+    toggle.focus()
   }
 })
 const add = (role: string, text: string): HTMLElement => {
@@ -90,13 +107,61 @@ const errorText = (error: unknown): string => {
   return message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 }
 const updateControls = (): void => {
-  send.disabled = input.disabled = busy || closing || !modelReady
-  clear.disabled = busy || closing || !modelReady
-  prepare.disabled = busy || closing
-  prepare.hidden = modelReady
-  prepare.textContent = installed ? 'Start assistant' : 'Download AI model · 1.28 GB'
+  send.disabled = input.disabled = busy || closing || checking || setupError || !modelReady
+  clear.disabled = busy || closing || checking || setupError || !modelReady
+  prepare.disabled = busy || closing || checking || !available
+  prepare.hidden = modelReady && !setupError
+  prepare.textContent = !available
+    ? 'AI unavailable'
+    : checking
+      ? 'Checking…'
+      : setupError
+        ? 'Retry AI status'
+        : installed
+          ? 'Turn on agent'
+          : 'Download AI model · 1.28 GB'
+  toggle.disabled = false
+  element<HTMLButtonElement>('agent-close').disabled = false
+  const power = !available
+    ? 'Unavailable'
+    : checking
+      ? 'Checking…'
+      : closing
+        ? 'Turning off…'
+        : setupError
+          ? 'Check status'
+          : preparing
+            ? 'Starting…'
+            : modelReady
+              ? 'On'
+              : 'Off'
+  element('agent-power-state').textContent = power
+  toggle.textContent = `✦ Ask AI · ${power}`
+  element<HTMLButtonElement>('agent-off').disabled =
+    checking || closing || preparing || !available || (!modelReady && !busy)
+  taxPrepare.hidden = prepare.hidden
+  taxPrepare.disabled = prepare.disabled
+  taxPrepare.textContent = prepare.textContent
+  taxClose.disabled = checking || closing || preparing || !available || (!modelReady && !busy)
+  taxStatus.textContent = !available
+    ? 'Local AI is unavailable. Open or restart the desktop app.'
+    : checking
+      ? 'Checking local AI…'
+      : closing
+        ? 'Turning off AI for both sections…'
+        : setupError
+          ? status.textContent
+          : preparing
+            ? status.textContent
+            : busy
+              ? 'AI is answering a question in Kasa Assistant.'
+              : modelReady
+                ? 'Local AI is running. Commercialista tax chat is not available yet.'
+                : installed
+                  ? 'AI is installed on this device. Turn it on to use Kasa Assistant.'
+                  : 'Download the model once to use local AI. Automatic summaries remain available.'
   stop.disabled = !busy
-  if (modelReady) input.placeholder = 'How can I help?'
+  input.placeholder = modelReady ? 'How can I help?' : 'Turn on the agent to start chatting'
 }
 window.addEventListener('kasa:explain-security', ((event: CustomEvent<SecurityTarget>) => {
   if (busy || closing) {
@@ -110,33 +175,45 @@ window.addEventListener('kasa:explain-security', ((event: CustomEvent<SecurityTa
     ? 'Selected security record. Send to explain using current recorded evidence.'
     : 'Start the assistant, then send to explain this security record.'
 }) as EventListener)
-clear.disabled = true
-if (!window.agent) {
-  status.textContent = 'Open the desktop app to use the local assistant.'
-  send.disabled = true
-} else if (!window.agent.status || !window.agent.prepare) {
-  status.textContent =
-    'Restart the desktop app with npm run dev from the repository root to load the updated assistant.'
-} else {
-  void window.agent
-    .status()
-    .then((state) => {
-      modelReady = state.ready
-      installed = state.installed
-      updateControls()
-      status.textContent = modelReady
-        ? 'Model ready. Ask anything.'
-        : installed
-          ? 'Model saved on this device. Start the assistant to chat.'
-          : 'Download the model once to chat locally. Files are kept when you close the assistant or app.'
-    })
-    .catch((error) => {
-      status.textContent = errorText(error)
-    })
-  prepare.onclick = async () => {
-    busy = true
+const checkStatus = async (): Promise<void> => {
+  if (!available || busy || closing) return
+  checking = true
+  updateControls()
+  try {
+    const state = await window.agent.status()
+    modelReady = state.ready
+    installed = state.installed
+    setupError = false
+    status.textContent = modelReady
+      ? 'Model ready.'
+      : installed
+        ? 'Model saved on this device. Turn on agent to chat.'
+        : 'Download the model once. Files are kept when you turn off the agent or quit the app.'
+  } catch (error) {
+    setupError = true
+    status.textContent = errorText(error)
+  } finally {
+    checking = false
     updateControls()
-    status.textContent = 'Preparing model…'
+  }
+}
+clear.disabled = true
+updateControls()
+if (!available) {
+  status.textContent = 'Local AI is unavailable. Open or restart the desktop app.'
+} else {
+  void checkStatus()
+  prepare.onclick = async () => {
+    if (busy || closing || checking) return
+    if (setupError) {
+      await checkStatus()
+      return
+    }
+    busy = true
+    preparing = true
+    updateControls()
+    status.textContent = installed ? 'Loading model from this device…' : 'Preparing model download…'
+    updateControls()
     try {
       await window.agent.prepare()
       modelReady = true
@@ -144,20 +221,37 @@ if (!window.agent) {
       status.textContent = 'Model ready. You can start chatting.'
     } catch (error) {
       status.textContent = errorText(error)
-      prepare.textContent = 'Retry model setup'
+      setupError = true
     } finally {
+      preparing = false
       busy = false
       updateControls()
       if (modelReady && !panel.hidden) input.focus()
     }
   }
   const unsubscribe = window.agent.onEvent((event) => {
+    if (event.type === 'turn-end') {
+      finishEvents?.()
+      return
+    }
     if (!busy) return
     if (event.type === 'evidence') {
-      const facts = add('Recorded facts · authoritative', event.text)
+      const facts = add('Payment details', event.text)
+      facts.parentElement?.classList.add('agent-facts')
       if (reply) messages.insertBefore(facts.parentElement!, reply.parentElement!)
-    } else if (event.type === 'status') status.textContent = event.text
-    else if (reply) {
+    } else if (event.type === 'evidence-details') {
+      const details = document.createElement('details')
+      const summary = document.createElement('summary')
+      summary.textContent = 'Technical details and evidence scope'
+      const body = document.createElement('pre')
+      body.style.whiteSpace = 'pre-wrap'
+      body.textContent = event.text
+      details.append(summary, body)
+      messages.insertBefore(details, reply?.parentElement ?? null)
+    } else if (event.type === 'status') {
+      status.textContent = event.text
+      updateControls()
+    } else if (reply) {
       reply.textContent += event.text
       status.textContent = 'Replying…'
       messages.scrollTop = messages.scrollHeight
@@ -191,15 +285,20 @@ if (!window.agent) {
   element<HTMLFormElement>('agent-form').onsubmit = async (event) => {
     event.preventDefault()
     const text = input.value.trim()
-    if (!text || busy || closing || !modelReady) return
+    if (!text || busy || closing || checking || setupError || !modelReady) return
     busy = true
     updateControls()
     add('You', text)
-    reply = add('AI explanation · may be wrong', '')
+    reply = add('Explanation', '')
     input.value = ''
     status.textContent = 'Starting…'
     try {
-      reply.textContent = await window.agent.chat(text, securityTarget)
+      const eventsDone = new Promise<void>((resolve) => {
+        finishEvents = resolve
+      })
+      const answer = await window.agent.chat(text, securityTarget)
+      await eventsDone
+      reply.textContent = answer
       status.textContent = 'Ready · replies stay on this device.'
     } catch (error) {
       status.textContent = errorText(error)
@@ -209,7 +308,14 @@ if (!window.agent) {
       busy = false
       updateControls()
       reply = undefined
+      finishEvents = undefined
       if (!panel.hidden) input.focus()
     }
   }
+}
+
+// Both surfaces use the same handlers and lifecycle state; no second model is loaded.
+taxPrepare.onclick = () => prepare.click()
+taxClose.onclick = () => {
+  void turnOff()
 }

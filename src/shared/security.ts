@@ -47,12 +47,14 @@ export interface SecurityFinding {
   severity: 'block' | 'review' | 'unavailable'
   message: string
   evidence: Record<string, string | number | boolean>
+  history?: { at: number; check?: string; resolvedAt?: number }[]
   firstSeen: number
   lastSeen: number
   resolvedAt?: number
   acknowledgedAt?: number
 }
 export interface SecuritySnapshot {
+  requiredConfirmations?: number
   operations: SecurityOperation[]
   findings: SecurityFinding[]
   monitoring: { lastSuccess?: number; error?: string }

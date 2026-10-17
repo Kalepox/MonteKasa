@@ -4,7 +4,8 @@ export class SecurityViolation extends Error {
   constructor(
     public rule: string,
     message: string,
-    public severity: 'block' | 'unavailable' = 'block'
+    public severity: 'block' | 'unavailable' = 'block',
+    public evidence: Record<string, string | number | boolean> = {}
   ) {
     super(message)
   }
@@ -13,9 +14,10 @@ export function requireCheck(
   condition: unknown,
   rule: string,
   message: string,
-  severity: 'block' | 'unavailable' = 'block'
+  severity: 'block' | 'unavailable' = 'block',
+  evidence: Record<string, string | number | boolean> = {}
 ): asserts condition {
-  if (!condition) throw new SecurityViolation(rule, message, severity)
+  if (!condition) throw new SecurityViolation(rule, message, severity, evidence)
 }
 export function validateInvoice(
   d: DecodedInvoice,
@@ -27,7 +29,9 @@ export function validateInvoice(
   requireCheck(
     d.network === p.network,
     'network',
-    'Invoice network does not match the configured network.'
+    'Invoice network does not match the configured network.',
+    'block',
+    { invoiceNetwork: d.network, configuredNetwork: p.network }
   )
   requireCheck(
     d.assetId === null || d.assetId === p.assetId,
@@ -42,12 +46,16 @@ export function validateInvoice(
   requireCheck(
     d.expiresAt === null || (Number.isSafeInteger(d.expiresAt) && d.expiresAt > now),
     'expiry',
-    'Invoice has expired or has an invalid expiry.'
+    'Invoice has expired or has an invalid expiry.',
+    'block',
+    { expiresAt: d.expiresAt ?? 0, checkedAt: now }
   )
   requireCheck(
     d.amountRaw === null || d.amountRaw === raw,
     'invoice-amount',
-    'Amount does not match the fixed invoice amount.'
+    'Amount does not match the fixed invoice amount.',
+    'block',
+    { requestedRaw: raw, invoiceAmountRaw: d.amountRaw ?? 0 }
   )
   requireCheck(
     d.endpoints.length > 0,
@@ -115,17 +123,23 @@ export function validateNetwork(
   requireCheck(
     Number.isSafeInteger(n.balanceRaw) && n.balanceRaw >= raw,
     'balance',
-    'Insufficient verified spendable asset balance.'
+    'Insufficient verified spendable asset balance.',
+    'block',
+    { requestedRaw: raw, availableRaw: n.balanceRaw, checkedAt: n.checkedAt }
   )
   requireCheck(
     Number.isSafeInteger(n.btcSats) && n.btcSats >= p.minBtcSats,
     'btc-reserve',
-    'Insufficient BTC fee reserve.'
+    'Insufficient BTC fee reserve.',
+    'block',
+    { availableSats: n.btcSats, requiredSats: p.minBtcSats, checkedAt: n.checkedAt }
   )
   requireCheck(
     Number.isFinite(p.feeRate) && p.feeRate > 0 && p.feeRate <= p.maxFeeRate,
     'fee-cap',
-    'Configured fee rate exceeds policy.'
+    'Configured fee rate exceeds policy.',
+    'block',
+    { feeRate: p.feeRate, maxFeeRate: p.maxFeeRate }
   )
   return n.recommendedFeeRate && p.feeRate < n.recommendedFeeRate
     ? ['The configured fee rate is below the reference estimate; confirmation may be delayed.']

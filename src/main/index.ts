@@ -1,3 +1,6 @@
+import { TaxScopeStore } from './tax-scope'
+import { recordKeys } from '../shared/tax-scope'
+import { getDb } from './db'
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'node:url'
@@ -10,18 +13,19 @@ import { Kasa } from './core/kasa'
 import { toRaw, toUsdt } from './core/units'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { Agent } from './ai/agent'
-import { securityContext } from './ai/security-context'
+import { freshSecurityContext } from './ai/fresh-security-context'
 import type { SecurityTarget } from '../shared/agent'
 import { invoiceDocumentHtml } from '../shared/invoice-document'
+import { TaxProfileStore } from './tax-profile'
 import { guardDisconnectedOutput } from './core/stdio'
 
 guardDisconnectedOutput(process.stdout)
 guardDisconnectedOutput(process.stderr)
 
-let readSecurity: ((target?: SecurityTarget) => string) | undefined
+let readSecurity: ((target?: SecurityTarget, query?: string) => Promise<string>) | undefined
 const agent = new Agent(
   undefined,
-  (target) => readSecurity?.(target) ?? 'Security checks are not initialized.'
+  (target, query) => readSecurity?.(target, query) ?? 'Security checks are not initialized.'
 )
 // A single instance owns the local operation ledger.
 if (!app.requestSingleInstanceLock()) app.exit(0)
@@ -94,6 +98,9 @@ app.whenReady().then(() => {
     writeFileSync(configPath, JSON.stringify({ cacheDirectory: join(directory, 'models') }))
     process.env.QVAC_CONFIG_PATH = configPath
   }
+  const taxProfile = new TaxProfileStore(join(app.getPath('userData'), 'tax-profile.json'))
+  handle('tax-profile:get', () => taxProfile.get())
+  handle('tax-profile:save', (_event, profile: unknown) => taxProfile.save(profile))
   handle('agent:status', () => agent.status())
   handle('agent:prepare', (event) => {
     if (event.senderFrame !== event.sender.mainFrame) throw new Error('Main frame required.')
@@ -129,8 +136,17 @@ app.whenReady().then(() => {
 
   const { backend, pay } = createRgb()
   const kasa = new Kasa(backend)
-  readSecurity = (target) => securityContext(kasa.security.snapshot(), target)
+  readSecurity = (target, query) => freshSecurityContext(kasa.security, target, query)
   kasa.start()
+  const taxScope = new TaxScopeStore(join(app.getPath('userData'), 'tax-scopes.json'), getDb().name)
+  handle('tax-scope:get', () => taxScope.get())
+  handle('tax-scope:change', (_event, command: unknown) =>
+    taxScope.change(
+      command,
+      (command as { kind?: unknown } | null)?.kind === 'taxpayer' ? taxProfile.get() : null,
+      recordKeys(kasa.snapshot())
+    )
+  )
 
   handle('security:review', (_e, intent: PaymentIntent) => kasa.reviewPayment(intent))
   handle('security:execute', (_e, id: unknown, token: unknown, verified: unknown) =>

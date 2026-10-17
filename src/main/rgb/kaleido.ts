@@ -3,8 +3,9 @@ import { requireCheck } from '../security/rules'
 import { KaleidoClient } from 'kaleido-sdk'
 import { AssetFilterIdType, TransferKind, TransferStatus as RlnStatus } from 'kaleido-sdk/rln'
 import type { AssignmentAny, AssignmentFungible, Transfer } from 'kaleido-sdk/rln'
-import { rgbConfig } from './config'
+import { rgbConfig, paymentConfigurationError } from './config'
 import type { RgbTransfer, NodeState, RgbBackend, TransferStatus } from './types'
+import { invoiceDecodeError } from './invoice-error'
 type Assignment = Transfer['assignments'][number]
 
 const fungible = (value: number): AssignmentFungible =>
@@ -33,12 +34,34 @@ function stateFromError(e: unknown): NodeState {
   const msg = errText(e).toLowerCase()
   if (msg.includes('changing state')) return 'syncing'
   if (msg.includes('locked')) return 'locked'
-  return 'offline'
+  if (/timeout|timed out/.test(msg)) return 'timeout'
+  if (/fetch failed|econnrefused|enotfound|network/.test(msg)) return 'offline'
+  return 'error'
 }
 
 export function createKaleidoBackend(): RgbBackend {
   const rln = KaleidoClient.create({ nodeUrl: rgbConfig.nodeUrl }).rln
   const assetId = rgbConfig.assetId
+  const decode = async (invoice: string): ReturnType<typeof rln.decodeRgbInvoice> => {
+    try {
+      return await bounded(rln.decodeRgbInvoice({ invoice }))
+    } catch (error) {
+      throw invoiceDecodeError(invoice, error)
+    }
+  }
+  let refreshing: Promise<unknown> | undefined
+  const refresh = (): Promise<unknown> => {
+    if (!refreshing) {
+      const work = rln.refreshTransfers({ filter: [], skip_sync: false })
+      refreshing = work
+      void work
+        .finally(() => {
+          if (refreshing === work) refreshing = undefined
+        })
+        .catch(() => {})
+    }
+    return bounded(refreshing)
+  }
   const reference = new ChainObserver(
     rgbConfig.explorerApi,
     rgbConfig.checkpointHeight,
@@ -52,7 +75,7 @@ export function createKaleidoBackend(): RgbBackend {
 
   return {
     async decodeInvoice(invoice) {
-      const d = await bounded(rln.decodeRgbInvoice({ invoice }))
+      const d = await decode(invoice)
       requireCheck(
         d.assignment.type === 'Any' || d.assignment.type === 'Fungible',
         'assignment',
@@ -62,7 +85,7 @@ export function createKaleidoBackend(): RgbBackend {
         recipientId: d.recipient_id,
         assetId: d.asset_id ?? null,
         network: d.network,
-        amountRaw: d.assignment.type === 'Fungible' ? d.assignment.value : null,
+        amountRaw: requested(d.assignment),
         expiresAt: d.expiration_timestamp ?? null,
         endpoints: d.transport_endpoints
       }
@@ -75,7 +98,7 @@ export function createKaleidoBackend(): RgbBackend {
         'unavailable'
       )
       await Promise.all([reference.identity(), nodeChain.identity()])
-      await bounded(rln.refreshTransfers({ filter: [], skip_sync: false }))
+      await refresh()
       const [network, refHeight, nodeHeight, balance, btc] = await Promise.all([
         bounded(rln.getNetworkInfo()),
         reference.height(true),
@@ -104,7 +127,7 @@ export function createKaleidoBackend(): RgbBackend {
       }
     },
     async outgoingTransfers() {
-      await bounded(rln.refreshTransfers({ filter: [], skip_sync: false }))
+      await refresh()
       const { transfers } = await bounded(
         rln.listTransfers({ asset_filter: { type: AssetFilterIdType.Id, value: assetId } })
       )
@@ -112,7 +135,7 @@ export function createKaleidoBackend(): RgbBackend {
         .filter((t) => t.kind === TransferKind.Send && t.recipient_id)
         .map((t) => ({
           recipientId: t.recipient_id!,
-          amountRaw: sum(t.assignments),
+          amountRaw: requested(t.requested_assignment) ?? 0,
           txid: t.txid ?? undefined,
           status: t.status
         }))
@@ -130,13 +153,14 @@ export function createKaleidoBackend(): RgbBackend {
         }
         return {
           state: 'online',
+          configurationError: paymentConfigurationError(),
           mock: false,
           pubkey: info.pubkey,
           balanceRaw,
           btcSats: btc.vanilla.spendable
         }
       } catch (e) {
-        return { state: stateFromError(e), mock: false }
+        return { state: stateFromError(e), mock: false, error: errText(e) }
       }
     },
 
@@ -166,8 +190,7 @@ export function createKaleidoBackend(): RgbBackend {
       }
     },
     async listTransfers() {
-      await bounded(rln.refreshTransfers({ filter: [], skip_sync: false }))
-
+      await refresh()
 
       let transfers
       try {
@@ -204,7 +227,7 @@ export function createKaleidoBackend(): RgbBackend {
 
     // decode first: /sendrgb wants the recipient id + endpoints, not the whole invoice
     async send(recipientInvoice, amountRaw) {
-      const d = await bounded(rln.decodeRgbInvoice({ invoice: recipientInvoice }))
+      const d = await decode(recipientInvoice)
 
       if (d.asset_id && d.asset_id !== assetId)
         throw new Error(`Invoice is for another asset (${d.asset_id})`)

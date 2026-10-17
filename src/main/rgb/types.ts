@@ -1,8 +1,10 @@
 import type { SecurityBackend } from '../security/types'
-export type NodeState = 'online' | 'syncing' | 'locked' | 'offline'
+export type NodeState = 'online' | 'syncing' | 'locked' | 'offline' | 'timeout' | 'error'
 
 export interface NodeStatus {
   state: NodeState
+  configurationError?: string
+  error?: string
   mock: boolean
   pubkey?: string
   balanceRaw?: number // spendable

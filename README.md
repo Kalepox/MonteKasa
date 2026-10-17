@@ -189,3 +189,26 @@ small Bitcoin outputs (**UTXOs**). An **invoice** is an `rgb:…` string; a paym
   `listProposals`) from the main process – read-only. Amounts are raw units (`toUsdt()` in `core/units.ts`).
 - **Database file:** `<app data>/kasa.db` (`kasa-mock.db` in mock mode) – macOS
   `~/Library/Application Support/<app>/`, Windows `%APPDATA%\<app>\`, Linux `~/.config/<app>/`.
+
+## Payment checks and assistant explanations
+
+The default `SignetCustom` configuration uses the verified Mutinynet profile for both
+`npm run dev` and packaged launches: node indexer
+`https://esplora.signet.kaleidoswap.com`, reference `https://mutinynet.com/api`, and
+checkpoint height `100000` with hash
+`00000166f046342c6b499798686eb13cd2b4c6e5fd4189157922dca54705eb71`.
+These are test-network settings. Explicit environment overrides remain supported;
+other networks require their own trusted indexer/checkpoint configuration. Invalid
+configuration is shown in the node status tooltip and still blocks payment review.
+
+The assistant shows payment details separately from expandable technical evidence.
+Questions such as “Were there warnings on my last payment of 10 USDT?” select the
+latest matching outgoing submission; ambiguous requests ask you to select a record.
+Payment conclusions come from recorded checks, not model-generated safety verdicts.
+A settled transfer does not establish recipient identity or absence of fraud.
+Evidence timestamps and resolved notices remain visible. Earlier overwritten
+findings cannot be reconstructed; new changes preserve a bounded check history.
+
+Open-amount RGB invoices accept positive amounts; fixed invoices still require an
+exact match. Every submission still requires review and confirmation. Unknown
+submission outcomes and duplicate recipients remain blocked against blind retries.

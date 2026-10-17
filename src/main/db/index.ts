@@ -41,10 +41,15 @@ export function migrate(d: Database.Database): void {
     })()
 }
 
-function addColumnIfMissing(d: Database.Database, table: string, column: string, def: string): void {
+function addColumnIfMissing(
+  d: Database.Database,
+  table: string,
+  column: string,
+  def: string
+): void {
   const cols = d.pragma(`table_info(${table})`) as { name: string }[]
-  if (!cols.some((c) => c.name === column)) d.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`)
+  if (!cols.some((c) => c.name === column))
+    d.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`)
 }
-
 
 export * from './repo'

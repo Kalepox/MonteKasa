@@ -1,5 +1,8 @@
 import process from 'process'
 
+// Verified Mutinynet profile shared by development and packaged launches.
+const mutinynet = (process.env.RGB_NETWORK ?? 'SignetCustom') === 'SignetCustom'
+
 export const rgbConfig = {
   mock: process.env.RGB_MOCK === '1',
   nodeUrl: process.env.RLN_NODE_URL ?? 'http://localhost:3001',
@@ -9,11 +12,37 @@ export const rgbConfig = {
   invoiceTtlSec: 3600,
   feeRate: Number(process.env.RGB_FEE_RATE ?? 2),
   network: process.env.RGB_NETWORK ?? 'SignetCustom',
-  nodeChainApi: process.env.RGB_NODE_CHAIN_API ?? '',
-  checkpointHeight: Number(process.env.RGB_CHAIN_CHECKPOINT_HEIGHT ?? 0),
-  checkpointHash: process.env.RGB_CHAIN_CHECKPOINT_HASH ?? '',
+  nodeChainApi:
+    process.env.RGB_NODE_CHAIN_API ?? (mutinynet ? 'https://esplora.signet.kaleidoswap.com' : ''),
+  checkpointHeight: Number(process.env.RGB_CHAIN_CHECKPOINT_HEIGHT ?? (mutinynet ? 100000 : 0)),
+  checkpointHash:
+    process.env.RGB_CHAIN_CHECKPOINT_HASH ??
+    (mutinynet ? '00000166f046342c6b499798686eb13cd2b4c6e5fd4189157922dca54705eb71' : ''),
   maxFeeRate: 20,
   minBtcSats: 1000,
   confirmations: 3,
   explorerApi: process.env.RGB_EXPLORER_API ?? 'https://mutinynet.com/api'
+}
+
+export function paymentConfigurationError(): string | undefined {
+  if (
+    !rgbConfig.nodeChainApi ||
+    !Number.isSafeInteger(rgbConfig.checkpointHeight) ||
+    rgbConfig.checkpointHeight <= 0 ||
+    !/^[a-f0-9]{64}$/.test(rgbConfig.checkpointHash)
+  )
+    return 'Payment verification needs a node chain API and a trusted checkpoint for the selected network. Configure RGB_NODE_CHAIN_API, RGB_CHAIN_CHECKPOINT_HEIGHT and RGB_CHAIN_CHECKPOINT_HASH, then restart.'
+  for (const base of [rgbConfig.nodeChainApi, rgbConfig.explorerApi]) {
+    try {
+      const url = new URL(base)
+      if (
+        url.protocol !== 'https:' &&
+        !(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))
+      )
+        return 'Chain services must use HTTPS or loopback HTTP.'
+    } catch {
+      return 'A configured chain service URL is invalid.'
+    }
+  }
+  return undefined
 }
