@@ -129,6 +129,17 @@ app.whenReady().then(() => {
 
   const { backend, pay } = createRgb()
   const kasa = new Kasa(backend)
+    // WDK wallet lifecycle (used from DevTools until the onboarding screens exist)
+  const wallet = (backend as { wallet?: import('./rgb/wallet-service').WalletService }).wallet
+  if (wallet) {
+    app.on('will-quit', () => wallet.stop())
+    handle('wallet:call', (_e, method: unknown, params: unknown) => {
+      const allowed = ['state', 'create', 'restore', 'unlock', 'lock', 'address', 'createUtxos']
+      if (typeof method !== 'string' || !allowed.includes(method)) throw new Error('Not allowed')
+      return wallet.call(method, (params ?? {}) as Record<string, unknown>)
+    })
+  }
+
   readSecurity = (target) => securityContext(kasa.security.snapshot(), target)
   kasa.start()
 

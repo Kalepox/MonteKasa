@@ -20,6 +20,7 @@ const snapshot: KasaSnapshot = {
   payments: [
     {
       nodeIdx: 7,
+      direction: 'in',
       invoiceId: 'abc123-full',
       received: 2.000001,
       status: 'settled',

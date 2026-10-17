@@ -38,6 +38,7 @@ const kasa = {
   dismiss: (id: string) => ipcRenderer.invoke('kasa:dismiss', id),
   mockPay: (recipientId: string, amount: number) =>
     ipcRenderer.invoke('kasa:mockPay', recipientId, amount),
+  wallet: (method: string, params?: unknown) => ipcRenderer.invoke('wallet:call', method, params),
   onChanged: (cb: () => void) => {
     const l = (): void => cb()
     ipcRenderer.on('kasa:changed', l)
