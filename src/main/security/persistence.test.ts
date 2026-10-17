@@ -63,7 +63,7 @@ describe('SQLite persistence', () => {
     )
     migrate(db)
     migrate(db)
-    expect(db.pragma('user_version', { simple: true })).toBe(5)
+    expect(db.pragma('user_version', { simple: true })).toBe(4)
     expect(db.prepare('SELECT count(*) AS n FROM invoices').get()).toEqual({ n: 1 })
     expect(db.prepare('SELECT amount_raw FROM proposals').get()).toEqual({ amount_raw: 20 })
     db.close()
@@ -76,7 +76,7 @@ describe('SQLite persistence', () => {
     db.exec(SCHEMA_V1 + SCHEMA_V2 + v3)
     db.pragma('user_version = 3')
     migrate(db)
-    expect(db.pragma('user_version', { simple: true })).toBe(5)
+    expect(db.pragma('user_version', { simple: true })).toBe(4)
     expect(new SqliteSecurityStore(db).operations()).toEqual([])
     const cols = db.pragma('table_info(payments)') as { name: string }[]
     expect(cols.some((c) => c.name === 'direction')).toBe(true)

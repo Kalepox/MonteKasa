@@ -7,7 +7,6 @@ import {
   recordKeys,
   scopedRecords,
   type TaxScope,
-  type TaxActivitySnapshot,
   type ScopeCommand
 } from '../../shared/tax-scope'
 import type { TaxAccount, TaxAsset } from '../../shared/tax-scope'
@@ -40,8 +39,8 @@ function report(): void {
   const taxpayerId = value('scope-taxpayer')
   const taxpayer = state.taxpayers.find((t) => t.id === taxpayerId)
   element('scope-profile').textContent = taxpayer
-    ? `${taxpayer.profile.userType === 'personal' ? 'Personal' : 'Business / professional'} · ${taxpayer.profile.country === 'IT' ? 'Italy' : 'Other country'} · ${taxpayer.profile.taxYear}`
-    : 'Choose a saved profile, or add one in Profile.'
+    ? `${taxpayer.label} · ${taxpayer.profile.userType === 'personal' ? 'Personal' : 'Business / professional'} · ${taxpayer.profile.country === 'IT' ? 'Italy' : 'Other country'} · Tax year ${taxpayer.profile.taxYear}. Saved declarations, not verified tax status.`
+    : 'Select a taxpayer. Existing records start unassigned.'
   const selected = scopedRecords(
     state,
     snapshot,
@@ -171,11 +170,8 @@ function render(): void {
   accounts()
 }
 async function load(command?: ScopeCommand): Promise<void> {
-  if (busy || enrichmentDirty || element('view-tax').dataset.activityEditing === 'true') return
+  if (busy || enrichmentDirty) return
   busy = fields.disabled = true
-  element('view-tax').dataset.scopeBusy = 'true'
-  window.dispatchEvent(new Event('kasa:tax-scope-busy'))
-  select('scope-taxpayer').disabled = true
   ;(element('enrichment-fields') as HTMLFieldSetElement).disabled = true
   select('enrichment-record').disabled = true
   element('tax-scope-status').textContent = command
@@ -213,7 +209,6 @@ async function load(command?: ScopeCommand): Promise<void> {
                 : 'Saved information loaded from this device. No wallet connection was made.'
     fields.disabled = false
     select('enrichment-record').disabled = false
-    window.dispatchEvent(new CustomEvent('kasa:tax-scope-updated', { detail: { scope: state } }))
   } catch (error) {
     element('tax-scope-status').textContent =
       `Could not complete this action: ${String(error instanceof Error ? error.message : error)}. Your form entries are retained; correct them or reload to retry.`
@@ -224,9 +219,7 @@ async function load(command?: ScopeCommand): Promise<void> {
     }
   } finally {
     busy = false
-    element('view-tax').dataset.scopeBusy = 'false'
     if (state) lockRecordNavigation()
-    window.dispatchEvent(new Event('kasa:tax-scope-idle'))
   }
 }
 function submit(id: string, command: () => ScopeCommand): void {
@@ -283,43 +276,15 @@ element('tax-scope-refresh').onclick = () => {
   void load()
 }
 select('scope-taxpayer').onchange = async () => {
-  if (busy || enrichmentDirty) {
-    select('scope-taxpayer').value = state?.activeTaxpayerId ?? ''
-    return
-  }
   if (!value('scope-taxpayer')) {
-    select('scope-taxpayer').value = state?.activeTaxpayerId ?? ''
+    accounts()
     return
   }
   await load({ kind: 'select-taxpayer', taxpayerId: value('scope-taxpayer') })
-  // A failed selection must not leave the screen on a different profile from the saved one.
-  select('scope-taxpayer').value = state?.activeTaxpayerId ?? ''
-  accounts()
   window.dispatchEvent(new Event('kasa:tax-profile-saved'))
 }
 window.addEventListener('kasa:tax-profile-created', () => {
   void load()
-})
-window.addEventListener('kasa:tax-activity-updated', (event) => {
-  if (busy || enrichmentDirty) return
-  const next = (event as CustomEvent<TaxActivitySnapshot>).detail
-  if (state && next.scope.databaseId !== state.databaseId) return
-  const previousProfile = state?.taxpayers.find((t) => t.id === state?.activeTaxpayerId)
-  const historyAnswer = select('scope-history').value
-  const unsavedHistory =
-    previousProfile && historyAnswer !== previousProfile.profile.recordsCoverage
-  state = next.scope
-  snapshot = next.snapshot
-  render()
-  if (unsavedHistory && previousProfile.id === state.activeTaxpayerId) {
-    select('scope-history').value = historyAnswer
-    element('scope-history-saved').textContent =
-      'Unsaved answer. Choose Save history answer to apply it.'
-  }
-  lockRecordNavigation()
-})
-window.addEventListener('kasa:tax-activity-editing', () => {
-  if (state) lockRecordNavigation()
 })
 select('scope-account').onchange = report
 select('scope-asset').onchange = report
@@ -460,18 +425,9 @@ function changeWarning(): void {
   element('enrichment-change-warning').textContent = messages.join(' ')
 }
 function lockRecordNavigation(): void {
-  const activityEditing = element('view-tax').dataset.activityEditing === 'true'
-  const locked = busy || enrichmentDirty || activityEditing
-  fields.disabled = locked
-  select('scope-taxpayer').disabled = locked
-  select('enrichment-record').disabled = locked
-  ;(element('enrichment-fields') as HTMLFieldSetElement).disabled =
-    busy || activityEditing || !value('enrichment-record')
-  ;(element('tax-scope-refresh') as HTMLButtonElement).disabled = locked
-  element('view-tax').dataset.enrichmentDirty = String(enrichmentDirty)
-  window.dispatchEvent(
-    new CustomEvent('kasa:tax-enrichment-dirty', { detail: { dirty: enrichmentDirty } })
-  )
+  fields.disabled = busy || enrichmentDirty
+  select('enrichment-record').disabled = busy || enrichmentDirty
+  ;(element('tax-scope-refresh') as HTMLButtonElement).disabled = busy || enrichmentDirty
 }
 function markEnrichmentDirty(): void {
   if (!value('enrichment-record') || busy) return
@@ -700,7 +656,6 @@ function renderOverview(): void {
           restoreEnrichment()
         }
         const destination = element(target)
-        window.dispatchEvent(new CustomEvent('kasa:tax-navigate', { detail: { target } }))
         if (destination.tagName === 'DETAILS') (destination as HTMLDetailsElement).open = true
         destination.tabIndex = -1
         destination.scrollIntoView({ block: 'start' })
@@ -711,19 +666,16 @@ function renderOverview(): void {
     next.append(li)
   }
   if (!overview.accounts)
-    add(
-      'Review saved app activity and confirm any recognised source belonging to this profile.',
-      'tax-activity-title'
-    )
+    add('Add an account to describe where this taxpayer’s records belong.', 'scope-account-panel')
   if (!overview.invoices && !overview.payments)
     add(
       'No records are assigned to this profile. An empty review does not mean zero tax is due.',
-      'tax-activity-title'
+      'scope-records-title'
     )
   if (overview.unassigned)
     add(
       `Review ${overview.unassigned} unassigned database record(s); assign only those belonging to this profile.`,
-      'tax-activity-title'
+      'scope-records-title'
     )
   if (overview.unknownOwnership)
     add(

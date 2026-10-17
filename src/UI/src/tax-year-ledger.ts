@@ -1,5 +1,4 @@
 import type { KasaSnapshot, KasaInvoice, KasaPayment } from '../../preload/index.d'
-import { readLedgerSource } from '../../shared/ledger-source'
 import { csvCell } from './invoice-csv'
 
 const yearFormat = new Intl.DateTimeFormat('en', { year: 'numeric', timeZone: 'Europe/Rome' })
@@ -44,28 +43,9 @@ export type TaxYearRow = {
   client: string
   direction: string
   amount: string
-  unit: string
   status: string
   date: string
   basis: string
-}
-
-function paymentAmount(payment: KasaPayment): Pick<TaxYearRow, 'amount' | 'unit'> {
-  const source = readLedgerSource(payment.source)
-  if (!source)
-    return {
-      amount: Number.isFinite(payment.received) ? payment.received.toFixed(6) : 'Unavailable',
-      unit: 'recorded app units'
-    }
-  const raw = payment.receivedRaw
-  const { decimals, symbol: unit } = source.asset
-  if (typeof raw !== 'number' || !Number.isSafeInteger(raw) || raw < 0)
-    return { amount: 'Unavailable', unit }
-  const digits = String(raw).padStart(decimals + 1, '0')
-  const amount = decimals
-    ? `${digits.slice(0, -decimals)}.${digits.slice(-decimals)}`.replace(/\.?0+$/, '')
-    : digits
-  return { amount, unit }
 }
 
 export function taxYearRows(snapshot: KasaSnapshot, review: TaxYearReview): TaxYearRow[] {
@@ -77,7 +57,6 @@ export function taxYearRows(snapshot: KasaSnapshot, review: TaxYearReview): TaxY
     client: i.client,
     direction: '',
     amount: i.amount.toFixed(6),
-    unit: 'USDT',
     status: i.state,
     date: undated ? '' : new Date(i.createdAt * 1000).toISOString(),
     basis:
@@ -89,7 +68,7 @@ export function taxYearRows(snapshot: KasaSnapshot, review: TaxYearReview): TaxY
     invoiceId: p.invoiceId ?? '',
     client: invoices.get(p.invoiceId ?? '')?.client ?? '',
     direction: p.direction,
-    ...paymentAmount(p),
+    amount: p.received.toFixed(6),
     status: p.status,
     date: undated ? '' : new Date(p.blockTime! * 1000).toISOString(),
     basis:
@@ -112,15 +91,13 @@ export function taxYearCsv(snapshot: KasaSnapshot, year: number): string {
       'Invoice_ID',
       'Client',
       'Direction',
-      'Amount',
-      'Amount_Unit',
+      'Amount_USDT',
       'Status',
       'Date_UTC',
       'Notes'
     ],
     [
       'Scope',
-      '',
       '',
       '',
       '',
@@ -139,7 +116,6 @@ export function taxYearCsv(snapshot: KasaSnapshot, year: number): string {
       '',
       '',
       '',
-      '',
       `Other-year records excluded: ${review.excludedInvoices} invoices, ${review.excludedPayments} payments. No EUR conversion or tax liability calculated. Invoice and payment rows can describe the same funds; do not sum them.`
     ],
     ...taxYearRows(snapshot, review).map((r) => [
@@ -149,7 +125,6 @@ export function taxYearCsv(snapshot: KasaSnapshot, year: number): string {
       r.client,
       r.direction,
       r.amount,
-      r.unit,
       r.status,
       r.date,
       r.basis

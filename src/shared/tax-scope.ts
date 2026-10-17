@@ -9,7 +9,6 @@ export type TaxAccount = {
   label: string
   ownershipBps: number | null
   kind: 'self-custody' | 'provider' | 'unknown'
-  sourceId?: string
 }
 export type TaxAsset = {
   id: string
@@ -29,7 +28,6 @@ export type TaxScope = {
   assets: TaxAsset[]
   enrichments?: TaxEnrichment[]
   assignments: TaxAssignment[]
-  autoAssignmentExclusions?: string[]
 }
 export type ScopeCommand =
   | { kind: 'taxpayer'; label: string }
@@ -51,23 +49,11 @@ export type ScopeCommand =
       decimals: number
       environment: TaxAsset['environment']
     }
-  | {
-      kind: 'bind-source'
-      sourceId: string
-      taxpayerId: string
-      accountId?: string
-      label?: string
-      ownershipBps?: number
-      accountKind?: TaxAccount['kind']
-    }
-  | { kind: 'unbind-source'; accountId: string }
   | { kind: 'assign'; recordKey: string; accountId: string; assetId: string }
   | { kind: 'unassign'; recordKey: string }
   | { kind: 'enrich'; enrichment: TaxEnrichment }
   | { kind: 'clear-enrichment'; recordKey: string }
-export type TaxActivitySnapshot = { scope: TaxScope; snapshot: KasaSnapshot }
 export interface TaxScopeAPI {
-  organise(): Promise<TaxActivitySnapshot>
   get(): Promise<TaxScope>
   change(command: ScopeCommand): Promise<TaxScope>
 }
@@ -141,10 +127,6 @@ export function changeTaxScope(
         c.ownershipBps === null ? null : integer(c.ownershipBps, 1, 10000, 'ownership share'),
       kind: choice(c.accountKind, ['self-custody', 'provider', 'unknown'], 'account type')
     })
-  } else if (c.kind === 'unbind-source') {
-    const account = next.accounts.find((a) => a.id === c.accountId)
-    if (!account) throw new Error('Select an existing account.')
-    delete account.sourceId
   } else if (c.kind === 'asset') {
     const asset: TaxAsset = {
       id,
@@ -192,14 +174,6 @@ export function changeTaxScope(
         .filter((e) => e.recordKey !== c.recordKey)
         .map((e) => (e.relatedRecordKey === c.recordKey ? { ...e, relatedRecordKey: '' } : e))
     }
-    if (c.kind === 'unassign')
-      next.autoAssignmentExclusions = [
-        ...new Set([...(next.autoAssignmentExclusions ?? []), String(c.recordKey)])
-      ]
-    else if (next.autoAssignmentExclusions)
-      next.autoAssignmentExclusions = next.autoAssignmentExclusions.filter(
-        (key) => key !== c.recordKey
-      )
     next.assignments = next.assignments.filter((a) => a.recordKey !== c.recordKey)
     if (c.kind === 'assign')
       next.assignments.push({
@@ -400,8 +374,7 @@ export function validateTaxScope(input: unknown, databaseId: string): TaxScope {
       new Set(),
       id(t.id)
     )
-  const sourceIds = new Set<string>()
-  for (const a of source.accounts) {
+  for (const a of source.accounts)
     state = changeTaxScope(
       state,
       {
@@ -415,19 +388,6 @@ export function validateTaxScope(input: unknown, databaseId: string): TaxScope {
       new Set(),
       id(a.id)
     )
-    if (a.sourceId !== undefined) {
-      if (
-        typeof a.sourceId !== 'string' ||
-        !a.sourceId.trim() ||
-        a.sourceId.length > 2048 ||
-        sourceIds.has(a.sourceId)
-      )
-        throw new Error('Invalid or duplicate source binding.')
-      if (a.ownershipBps === null) throw new Error('Source binding requires confirmed ownership.')
-      sourceIds.add(a.sourceId)
-      state.accounts[state.accounts.length - 1].sourceId = a.sourceId
-    }
-  }
   for (const a of source.assets)
     state = changeTaxScope(state, { ...a, kind: 'asset' }, null, new Set(), id(a.id))
   const records = new Set<string>()
@@ -446,22 +406,6 @@ export function validateTaxScope(input: unknown, databaseId: string): TaxScope {
     if (enriched.has(valid.recordKey)) throw new Error('Duplicate enrichment.')
     enriched.add(valid.recordKey)
     state.enrichments = [...(state.enrichments ?? []), valid]
-  }
-  if (source.autoAssignmentExclusions !== undefined) {
-    if (!Array.isArray(source.autoAssignmentExclusions))
-      throw new Error('Invalid assignment exclusions.')
-    const excluded = new Set<string>()
-    for (const key of source.autoAssignmentExclusions) {
-      if (
-        typeof key !== 'string' ||
-        !/^(invoice|payment):.+/.test(key) ||
-        key.length > 200 ||
-        excluded.has(key)
-      )
-        throw new Error('Invalid or duplicate assignment exclusion.')
-      excluded.add(key)
-    }
-    state.autoAssignmentExclusions = [...excluded]
   }
   if (source.activeTaxpayerId !== undefined) {
     if (!state.taxpayers.some((t) => t.id === source.activeTaxpayerId))
