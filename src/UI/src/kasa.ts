@@ -103,6 +103,17 @@ function clientCell(i: KasaInvoice): string {
   return `<div class="cc"><div class="av">${esc(initials(i.client))}</div><span style="font-weight:500;">${esc(i.client)}</span></div>`
 }
 
+// Once money has actually arrived, show what was received (not just what was asked for),
+// so the number in the list visibly moves when a payment lands — not only the status badge.
+function amountCell(i: KasaInvoice): string {
+  if (i.received <= 0) return `${fmt(i.amount)} USDT`
+  const sub =
+    i.received !== i.amount
+      ? `<div style="font-size:10px;font-weight:400;color:var(--t3);">of ${fmt(i.amount)} requested</div>`
+      : ''
+  return `${fmt(i.received)} USDT${sub}`
+}
+
 function renderInvoices(): void {
   const empty = (cols: number): string =>
     `<tr><td colspan="${cols}" style="color:var(--t3);text-align:center;padding:18px;">No invoices yet</td></tr>`
@@ -116,7 +127,7 @@ function renderInvoices(): void {
           (
             i
           ) => `<tr onclick="openInvoice('${i.id}')"><td class="mono">${shortId(i)}</td><td>${clientCell(i)}</td>
-       <td class="mono" style="color:var(--t1);font-weight:600;">${fmt(i.amount)} USDT</td>
+       <td class="mono" style="color:var(--t1);font-weight:600;">${amountCell(i)}</td>
        <td class="mono" style="color:var(--t3);">${day(i.expiresAt)}</td><td>${badge(i)}</td>
        <td style="font-size:11px;color:var(--t3);">${reason(i)}</td></tr>`
         )
@@ -130,7 +141,7 @@ function renderInvoices(): void {
           (
             i
           ) => `<tr onclick="openInvoice('${i.id}')"><td class="mono">${shortId(i)}</td><td>${clientCell(i)}</td>
-       <td class="mono" style="color:var(--t1);font-weight:600;">${fmt(i.amount)} USDT</td>
+       <td class="mono" style="color:var(--t1);font-weight:600;">${amountCell(i)}</td>
        <td class="mono" style="color:var(--t3);">${day(i.createdAt)}</td>
        <td class="mono" style="color:var(--t3);">${day(i.expiresAt)}</td><td>${badge(i)}</td>
        <td class="mono" style="font-size:9.5px;color:var(--t3);">${esc(i.recipientId.slice(-8))}</td></tr>`
@@ -146,6 +157,15 @@ function renderInvoices(): void {
   setText('stat-paid', String(snap.invoices.filter((i) => i.state === 'Paid').length))
   setText('stat-awaiting', String(awaiting.length))
   setText('stat-review', String(snap.proposals.filter((p) => p.status === 'open').length))
+
+  const needsAttention = snap.invoices.filter((i) =>
+    ['Underpaid', 'Overpaid', 'Flagged'].includes(i.state)
+  ).length
+  const navBadge = $('nav-inv-badge')
+  if (navBadge) {
+    navBadge.textContent = String(needsAttention)
+    navBadge.style.display = needsAttention ? 'inline' : 'none'
+  }
 
   // Invoices page: summary cards, record count, and per-status filter tab counts
   setText('inv-record-count', `${snap.invoices.length} Records`)
@@ -163,6 +183,31 @@ function renderInvoices(): void {
       ? `${(settlementDays.reduce((a, b) => a + b, 0) / settlementDays.length).toFixed(1)} Days`
       : '—'
   )
+
+  const upcoming = $('upcoming-due')
+  if (upcoming) {
+    const dueSoon = awaiting
+      .slice()
+      .sort((a, b) => a.expiresAt - b.expiresAt)
+      .slice(0, 5)
+    upcoming.innerHTML = dueSoon.length
+      ? dueSoon
+          .map((i, idx) => {
+            const daysLeft = Math.max(0, Math.ceil((i.expiresAt - Date.now() / 1000) / 86400))
+            const overdue = i.expiresAt * 1000 <= Date.now()
+            const border = idx < dueSoon.length - 1 ? 'border-bottom:1px solid var(--border);' : ''
+            return `<div onclick="openInvoice('${i.id}')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;${border}">
+              <div class="av">${esc(initials(i.client))}</div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:12px;font-weight:600;color:var(--t1);">${esc(i.client)}</div>
+                <div style="font-size:10px;color:var(--t3);">${shortId(i)} &middot; ${fmt(i.amount)} USDT</div>
+              </div>
+              <span class="badge ${overdue ? 'b-flagged' : 'b-issued'}" style="font-size:9px;">${overdue ? 'Expired' : `Due in ${daysLeft}d`}</span>
+            </div>`
+          })
+          .join('')
+      : '<div style="padding:14px;text-align:center;color:var(--t3);font-size:12px;">No invoices awaiting payment</div>'
+  }
 
   setText('ft-count-all', String(snap.invoices.length))
   setText('ft-count-issued', String(snap.invoices.filter((i) => i.state === 'Issued').length))
@@ -221,12 +266,39 @@ function renderStatus(st: KasaStatus): void {
   document.querySelectorAll('.tb-net-pill span:last-child').forEach((e) => (e.textContent = label))
 }
 
+// Notifies once per transition, comparing against the previous snapshot — never on every poll.
+function notifyNewFlags(previous: KasaSnapshot, current: KasaSnapshot): void {
+  const prevState = new Map(previous.invoices.map((i) => [i.id, i.state]))
+  for (const i of current.invoices) {
+    const was = prevState.get(i.id)
+    if (was === i.state) continue
+    if (i.state === 'Overpaid')
+      w.pushNotification('&#x26A0;', 'Invoice Overpaid', `${esc(i.client)} sent extra on ${shortId(i)}.`, 'amber', () => w.openInvoice(i.id))
+    else if (i.state === 'Underpaid')
+      w.pushNotification('&#x26A0;', 'Invoice Underpaid', `${esc(i.client)} sent less than ${shortId(i)} requires.`, 'red', () => w.openInvoice(i.id))
+    else if (i.state === 'Flagged')
+      w.pushNotification('&#x2691;', 'Invoice Flagged', `${shortId(i)} needs manual review.`, 'red', () => w.openInvoice(i.id))
+    else if (i.state === 'Expired' && was && was !== 'Expired')
+      w.pushNotification('&#x23F0;', 'Invoice Expired', `${esc(i.client)}'s ${shortId(i)} expired unpaid.`, 'amber', () => w.openInvoice(i.id))
+  }
+  const prevProposals = new Set(previous.proposals.map((p) => p.id))
+  for (const p of current.proposals) {
+    if (p.status !== 'open' || prevProposals.has(p.id)) continue
+    const inv = current.invoices.find((i) => i.id === p.invoiceId)
+    w.pushNotification('&#x1F916;', 'Refund Proposed', inv ? `${p.kind} for ${shortId(inv)}: ${fmt(p.amount)} USDT.` : `${p.kind}: ${fmt(p.amount)} USDT.`, 'blue', inv ? () => w.openInvoice(inv.id) : undefined)
+  }
+}
+
 let refreshing = false
+let firstRefresh = true
 async function refresh(): Promise<void> {
   if (refreshing) return
   refreshing = true
   try {
     const [st, s] = await Promise.all([window.kasa.status(), window.kasa.snapshot()])
+    // skip the very first refresh: everything would look "newly" flagged against the empty initial snapshot
+    if (!firstRefresh) notifyNewFlags(snap, s)
+    firstRefresh = false
     snap = s
     renderStatus(st)
     renderInvoices()
@@ -359,18 +431,20 @@ let receiveInvoice: { invoice: string; expiresAt: number } | undefined
 const receiveButtons = (copy: boolean, fresh: boolean): void => {
   const copyBtn = $('rcv-copy') as HTMLButtonElement | null
   const freshBtn = $('rcv-fresh') as HTMLButtonElement | null
+  const emailBtn = $('rcv-email-btn') as HTMLButtonElement | null
   if (copyBtn) copyBtn.disabled = !copy
   if (freshBtn) freshBtn.disabled = !fresh
+  if (emailBtn) emailBtn.disabled = !copy
 }
-async function fillReceive(fresh = false): Promise<void> {
+async function fillReceive(fresh = false, amount?: string): Promise<void> {
   const generation = ++receiveGeneration
   receiveInvoice = undefined
   receiveButtons(false, false)
   setText('rcv-addr-text', '')
   setText('rcv-qr', '')
-  setText('rcv-seal-info', 'Generating receive invoice…')
+  setText('rcv-seal-info', 'Generating request invoice…')
   try {
-    const r = await window.kasa.receive(fresh)
+    const r = await window.kasa.receive(fresh, amount)
     if (!r.invoice.startsWith('rgb:') || r.expiresAt * 1000 <= Date.now())
       throw new Error('The node returned an invalid or expired receive invoice.')
     const qr = await QRCode.toString(r.invoice, { type: 'svg', margin: 4 })
@@ -390,11 +464,17 @@ async function fillReceive(fresh = false): Promise<void> {
     toastErr('No receive invoice', e, () => void fillReceive())
   }
 }
+const currentReceiveAmount = (): string => (($('rcv-amount') as HTMLInputElement | null)?.value ?? '').trim()
 w.setReceiveAsset = (asset: string): void => {
   if (asset !== 'usdt') return
-  void fillReceive()
+  void fillReceive(false, currentReceiveAmount() || undefined)
 }
-w.generateFreshSeal = (): Promise<void> => fillReceive(true)
+w.generateFreshSeal = (): Promise<void> => fillReceive(true, currentReceiveAmount() || undefined)
+let receiveAmountDebounce: ReturnType<typeof setTimeout> | undefined
+w.onReceiveAmountInput = (): void => {
+  clearTimeout(receiveAmountDebounce)
+  receiveAmountDebounce = setTimeout(() => void fillReceive(true, currentReceiveAmount() || undefined), 500)
+}
 w.openRecv = w.openReceiveModal
 w.copyReceiveAddress = async (): Promise<void> => {
   if (!receiveInvoice) return
@@ -411,6 +491,31 @@ w.copyReceiveAddress = async (): Promise<void> => {
     w.toast('rcv-cp', '✓', 'Invoice copied', 'Receive invoice copied to clipboard.', 'green')
   } catch (e) {
     toastErr('Copy failed', e)
+  }
+}
+w.emailReceiveRequest = async (): Promise<void> => {
+  if (!receiveInvoice) return
+  if (receiveInvoice.expiresAt * 1000 <= Date.now()) {
+    w.toast('rcv-em-exp', '!', 'Invoice expired', 'Generate a fresh invoice first.', 'red')
+    return
+  }
+  const to = ($('rcv-email') as HTMLInputElement | null)?.value.trim() ?? ''
+  const amount = currentReceiveAmount()
+  const subject = `Payment Request${amount ? ` — ${amount} USDT` : ''}`
+  const body = [
+    `You have a payment request${amount ? ` for ${amount} USDT` : ''} on the RGB / Bitcoin network.`,
+    '',
+    'Wallet / RGB invoice:',
+    receiveInvoice.invoice,
+    '',
+    `Valid until ${new Date(receiveInvoice.expiresAt * 1000).toLocaleString()}.`,
+    'Open this link with a KaleidoSwap-compatible RGB wallet to pay it directly, or copy the invoice string into your wallet app.'
+  ].join('\n')
+  try {
+    await window.kasa.emailInvoice(to || undefined, subject, body)
+    w.toast('rcv-em', '&#x2709;', 'Email draft opened', 'Review it in your mail app and hit send.', 'green')
+  } catch (e) {
+    toastErr('Could not open mail app', e)
   }
 }
 
@@ -546,5 +651,22 @@ w.openInvoice = async (id: string): Promise<void> => {
 
 // ---------- start ----------
 window.kasa.onChanged(() => void refresh())
+window.kasa.onPayment((p) => {
+  const who = p.client ? `from ${p.client}` : 'to your wallet'
+  w.toast(
+    'payment-' + Date.now(),
+    '&#x2193;',
+    'Payment Received',
+    `+${fmt(p.amount)} USDT ${who}.`,
+    'green'
+  )
+  w.pushNotification(
+    '&#x2193;',
+    'Payment Received',
+    `+${fmt(p.amount)} USDT ${who}.`,
+    'green',
+    p.invoiceId ? () => w.openInvoice(p.invoiceId) : undefined
+  )
+})
 setInterval(() => void refresh(), 10_000) // balances can change without an invoice event
 void refresh()

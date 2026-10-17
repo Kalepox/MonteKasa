@@ -714,6 +714,18 @@
       margin-left: auto;
       flex-shrink: 0;
     }
+    .notif-btn { position:fixed; top:17px; right:26px; z-index:250; width:32px; height:32px; border-radius:50%; background:var(--overlay-weak); border:1px solid var(--overlay-strong); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--t2); transition:all 0.2s cubic-bezier(0.16,1,0.3,1); }
+    .notif-btn:hover { color:var(--t1); border-color:var(--borderB); }
+    .notif-dot { position:absolute; top:-3px; right:-3px; min-width:16px; height:16px; padding:0 3px; border-radius:9px; background:var(--red); color:#fff; font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center; line-height:1; }
+    .notif-panel { position:fixed; top:56px; right:26px; width:320px; max-height:420px; overflow-y:auto; background:var(--c2); border:1px solid var(--borderB); border-radius:var(--r5); box-shadow:0 24px 48px rgba(0,0,0,0.5); z-index:260; display:none; }
+    .notif-panel.on { display:block; }
+    .notif-phdr { padding:12px 14px; border-bottom:1px solid var(--border); font-size:12px; font-weight:700; color:var(--t1); display:flex; justify-content:space-between; align-items:center; }
+    .notif-phdr span:last-child { font-size:10.5px; font-weight:600; color:var(--blue); cursor:pointer; }
+    .notif-item { display:flex; gap:10px; padding:11px 14px; border-bottom:1px solid var(--border); cursor:pointer; transition:background 0.15s; }
+    .notif-item:last-child { border-bottom:none; }
+    .notif-item:hover { background:var(--overlay-weak); }
+    .notif-item.unread { background:rgba(59,130,246,0.06); }
+    .notif-ic { width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0; }
     .cmd-trigger-btn {
       background: var(--overlay-weak);
       border: 1px solid var(--overlay-strong);
@@ -901,7 +913,7 @@
     <nav>
       <div class="nlbl">Overview</div>
       <div class="ni on" onclick="go('dashboard')"><span class="nic"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></span>Wallet</div>
-      <div class="ni" onclick="go('invoices')"><span class="nic"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>Invoices<span class="nbadge">2</span></div>
+      <div class="ni" onclick="go('invoices')"><span class="nic"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>Invoices<span class="nbadge" id="nav-inv-badge" style="display:none;">0</span></div>
       <div class="nlbl">Finance</div>
       <div class="ni" onclick="go('bitcoin')"><span class="nic"><svg viewBox="0 0 24 24"><path d="M9 4v2m6-2v2M9 18v2m6-2v2M7 6h6a3 3 0 0 1 3 3 3 3 0 0 1-3 3M7 12h7a3 3 0 0 1 3 3 3 3 0 0 1-3 3H7V6z"/><line x1="7" y1="12" x2="14" y2="12"/></svg></span>Buy Bitcoin</div>
       
@@ -955,7 +967,7 @@
               <span>Testnet Connected</span>
             </div>
             <button class="btn btn-s sm" onclick="openSend()">&#x2191; Send</button>
-            <button class="btn btn-p sm" onclick="openRecv()">&#x2193; Receive</button>
+            <button class="btn btn-p sm" onclick="openRecv()">&#x2193; Request</button>
             <button class="btn btn-s sm" onclick="go('new')"><span>+</span> New Invoice</button>
           </div>
           <button class="cmd-trigger-btn" onclick="openCmdPalette()" title="Spotlight Search (Cmd+K)">
@@ -997,7 +1009,7 @@
           </div>
           <div class="wh-acts">
             <button class="btn btn-p" onclick="openSend()" style="justify-content:center; padding:12px; font-size:13px; font-weight:700; border-radius:8px;">&#x2191; Send</button>
-            <button class="btn btn-s" onclick="openReceiveModal()" style="justify-content:center; padding:12px; font-size:13px; font-weight:700; border-radius:8px;">&#x2193; Receive</button>
+            <button class="btn btn-s" onclick="openReceiveModal()" style="justify-content:center; padding:12px; font-size:13px; font-weight:700; border-radius:8px;">&#x2193; Request</button>
           </div>
         </div>
 
@@ -1049,31 +1061,8 @@
           </div>
           <div>
             <div class="sh"><span class="sh-t">Upcoming Due</span></div>
-            <div class="tcard">
-              <div style="display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--border);">
-                <div class="av">MC</div>
-                <div style="flex:1; min-width:0;">
-                  <div style="font-size:12px; font-weight:600; color:var(--t1);">Meridian Creative</div>
-                  <div style="font-size:10px; color:var(--t3);">INV-0010 &middot; 800 USDT</div>
-                </div>
-                <span class="badge b-pending" style="font-size:9px;">Due in 2d</span>
-              </div>
-              <div style="display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--border);">
-                <div class="av">AH</div>
-                <div style="flex:1; min-width:0;">
-                  <div style="font-size:12px; font-weight:600; color:var(--t1);">Arco Holdings</div>
-                  <div style="font-size:10px; color:var(--t3);">INV-0011 &middot; 1,450 USDT</div>
-                </div>
-                <span class="badge b-issued" style="font-size:9px;">Due in 5d</span>
-              </div>
-              <div style="display:flex; align-items:center; gap:10px; padding:10px 14px;">
-                <div class="av">VG</div>
-                <div style="flex:1; min-width:0;">
-                  <div style="font-size:12px; font-weight:600; color:var(--t1);">Vertex Global</div>
-                  <div style="font-size:10px; color:var(--t3);">INV-0012 &middot; 620 USDT</div>
-                </div>
-                <span class="badge b-issued" style="font-size:9px;">Due in 9d</span>
-              </div>
+            <div class="tcard" id="upcoming-due">
+              <div style="padding:14px;text-align:center;color:var(--t3);font-size:12px;">No invoices awaiting payment</div>
             </div>
           </div>
         </div>
@@ -1193,7 +1182,7 @@
                   <div class="fg">
                     <label class="fl">Total</label>
                     <div style="position:relative; display:flex; align-items:center;">
-                      <input id="rv-total" class="fi auto" value="750.00" readonly style="padding-right:54px; font-family:'JetBrains Mono',monospace; font-weight:700;"/>
+                      <input id="rv-total" class="fi auto" type="number" min="0" step="0.01" value="750.00" oninput="onTotalInput(this.value)" style="padding-right:54px; font-family:'JetBrains Mono',monospace; font-weight:700;"/>
                       <span style="position:absolute; right:10px; font-size:11px; font-weight:700; color:var(--t3); pointer-events:none;">USDT</span>
                     </div>
                   </div>
@@ -1834,7 +1823,7 @@
                 </div>
                 <div style="font-size:14px; font-weight:700; color:var(--t3); text-align:center;">&rarr;</div>
                 <div class="btc-amt-box" style="background:var(--c2); border:1px solid var(--borderB); border-radius:var(--r4); padding:10px 13px; transition:border-color 0.2s, box-shadow 0.2s;">
-                  <div style="font-size:9.5px; color:var(--t3); margin-bottom:4px; font-weight:700; letter-spacing:0.4px;">ALINACAK TUTAR (BTC)</div>
+                  <div style="font-size:9.5px; color:var(--t3); margin-bottom:4px; font-weight:700; letter-spacing:0.4px;">AMOUNT TO RECEIVE (BTC)</div>
                   <div style="display:flex; align-items:center; gap:6px;">
                     <input id="btc-buy-btc" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" style="flex:1; width:100%; background:transparent; border:none; color:var(--green); font-size:18px; font-weight:800; font-family:'JetBrains Mono',monospace; outline:none;" oninput="this.value=this.value.replace(/,/g,'.').replace(/[^0-9.]/g,''); updateBtcPurchasePreview('btc')" />
                     <span style="font-size:13px; font-weight:800; color:var(--t2); background:var(--overlay-strong); padding:2px 6px; border-radius:4px;">BTC</span>
@@ -1960,10 +1949,10 @@
                   <button id="lock-toggle-btn" class="btn btn-s" style="justify-content:center; padding:9px;" onclick="toggleAppLock()">Off</button>
                 </div>
                 <div class="fg">
-                  <label class="fl">PIN (4-6 hane)</label>
+                  <label class="fl">PIN (4-6 digits)</label>
                   <div style="display:flex; gap:8px;">
                     <input id="settings-pin-input" class="fi" type="password" inputmode="numeric" maxlength="6" placeholder="••••" style="flex:1;"/>
-                    <button class="btn btn-g" style="white-space:nowrap;" onclick="savePin()">Kaydet</button>
+                    <button class="btn btn-g" style="white-space:nowrap;" onclick="savePin()">Save</button>
                   </div>
                 </div>
                 <button class="btn btn-s sm" style="width:100%; justify-content:center;" onclick="lockNow()">Lock Now (Preview)</button>
@@ -2671,6 +2660,20 @@
     const detail = document.getElementById('li-sum-detail');
     if (detail) detail.textContent = lineTotals.length ? lineTotals.map(n => n.toFixed(2)).join(' + ') + ' = ' + sum.toFixed(2) : '';
   }
+  // Typing straight into Total only makes sense with 0 or 1 line items (no sum to preserve);
+  // it just sets that single item's amount. With several items the field snaps back to the
+  // computed sum, since editing an aggregate of several lines would be ambiguous.
+  function onTotalInput(value) {
+    if (lineItems.length > 1) { updateTotalFromLineItems(); return; }
+    const amount = parseFloat(value) || 0;
+    if (!lineItems.length) lineItems.push({ desc: '', qty: 1, unit: 0 });
+    lineItems[0].desc = lineItems[0].desc || 'Services';
+    lineItems[0].qty = 1;
+    lineItems[0].unit = amount;
+    renderLineItems();
+    const totalInput = document.getElementById('rv-total');
+    if (totalInput) { totalInput.value = value; totalInput.focus(); }
+  }
 
   function startManualInvoice() {
     document.getElementById('step-upload').style.display = 'none';
@@ -2781,13 +2784,69 @@
     if (typeof retryFn === 'function') {
       const retryBtn = document.createElement('button');
       retryBtn.className = 't-retry';
-      retryBtn.textContent = 'Tekrar Dene';
+      retryBtn.textContent = 'Retry';
       retryBtn.addEventListener('click', (e) => { e.stopPropagation(); dismiss(); retryFn(); });
       el.appendChild(retryBtn);
     }
     box.appendChild(el);
     setTimeout(dismiss, retryFn ? 6000 : 3200);
   }
+
+  /* ──────────────── NOTIFICATIONS ──────────────── */
+  var notifications = [];
+  var NOTIF_ICON_BG = { green:'rgba(34,197,94,0.15)', red:'rgba(239,68,68,0.15)', amber:'rgba(245,158,11,0.15)', blue:'rgba(59,130,246,0.15)' };
+  var NOTIF_ICON_FG = { green:'var(--green)', red:'var(--red)', amber:'var(--amber)', blue:'var(--blue)' };
+  function pushNotification(icon, title, sub, color, onClick) {
+    notifications.unshift({ id: 'n' + Date.now() + Math.random(), icon: icon, title: title, sub: sub, color: color || 'blue', time: Date.now(), read: false, onClick: onClick });
+    if (notifications.length > 30) notifications.length = 30;
+    renderNotifList();
+  }
+  function timeAgo(ts) {
+    const s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+    if (s < 60) return 'just now';
+    if (s < 3600) return Math.floor(s / 60) + 'm ago';
+    if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+    return Math.floor(s / 86400) + 'd ago';
+  }
+  function renderNotifList() {
+    const list = document.getElementById('notif-list');
+    const dot = document.getElementById('notif-dot');
+    if (!list || !dot) return;
+    const unread = notifications.filter(n => !n.read).length;
+    dot.style.display = unread ? 'flex' : 'none';
+    dot.textContent = unread > 9 ? '9+' : String(unread);
+    list.innerHTML = notifications.length
+      ? notifications.map(n =>
+          '<div class="notif-item' + (n.read ? '' : ' unread') + '" data-id="' + n.id + '" onclick="onNotifClick(\'' + n.id + '\')">'
+          + '<div class="notif-ic" style="background:' + (NOTIF_ICON_BG[n.color] || NOTIF_ICON_BG.blue) + ';color:' + (NOTIF_ICON_FG[n.color] || NOTIF_ICON_FG.blue) + ';">' + n.icon + '</div>'
+          + '<div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:600;color:var(--t1);">' + n.title + '</div>'
+          + '<div style="font-size:11px;color:var(--t3);margin-top:1px;">' + n.sub + '</div>'
+          + '<div style="font-size:9.5px;color:var(--t3);margin-top:3px;">' + timeAgo(n.time) + '</div></div></div>'
+        ).join('')
+      : '<div style="padding:24px 14px;text-align:center;color:var(--t3);font-size:12px;">No notifications yet</div>';
+  }
+  function onNotifClick(id) {
+    const n = notifications.find(x => x.id === id);
+    if (!n) return;
+    n.read = true;
+    renderNotifList();
+    if (n.onClick) { toggleNotifPanel(); n.onClick(); }
+  }
+  function markAllNotifsRead() {
+    notifications.forEach(n => n.read = true);
+    renderNotifList();
+  }
+  function toggleNotifPanel(e) {
+    if (e) e.stopPropagation();
+    document.getElementById('notif-panel').classList.toggle('on');
+  }
+  document.addEventListener('click', e => {
+    const panel = document.getElementById('notif-panel');
+    const btn = document.querySelector('.notif-btn');
+    if (panel && panel.classList.contains('on') && !panel.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+      panel.classList.remove('on');
+    }
+  });
 
   /* Global Copy-to-Clipboard Listener */
   document.addEventListener('click', async e => {
@@ -3171,17 +3230,29 @@
       document.getElementById('ws-step-import').style.display = 'block';
     }
   }
-  function walletSetupSuccess() {
-    document.getElementById('ws-mhdr').style.display = 'none';
-    document.getElementById('ws-step-create').style.display = 'none';
-    document.getElementById('ws-step-import').style.display = 'none';
-    document.getElementById('ws-step-success').style.display = 'block';
+  var WALLET_SETUP_KEY = 'kasa_wallet_setup_complete';
+  function revealDashboard() {
     document.getElementById('wallet-empty-state').style.display = 'none';
     document.getElementById('dashboard-content').style.display = 'block';
     const walletActions = document.getElementById('dashboard-wallet-actions');
     if (walletActions) walletActions.style.display = 'flex';
     renderCashflowSmall();
   }
+  function walletSetupSuccess() {
+    try { localStorage.setItem(WALLET_SETUP_KEY, '1'); } catch (e) { /* storage unavailable, setup will be asked again */ }
+    document.getElementById('ws-mhdr').style.display = 'none';
+    document.getElementById('ws-step-create').style.display = 'none';
+    document.getElementById('ws-step-import').style.display = 'none';
+    document.getElementById('ws-step-success').style.display = 'block';
+    revealDashboard();
+  }
+  // Runs on every launch: if setup already completed before, skip straight to the dashboard
+  // instead of showing the "No Wallet Connected" first-run screen again.
+  (function restoreWalletState() {
+    try {
+      if (localStorage.getItem(WALLET_SETUP_KEY) === '1') revealDashboard();
+    } catch (e) { /* storage unavailable, fall back to showing setup */ }
+  })();
 
   /* ──────────────── CASHFLOW CHART ──────────────── */
   // window.__realPayments is populated by kasa.ts (renderCashflow) from the live snapshot
@@ -3323,6 +3394,7 @@
 
   // Dev-only helper: puts the app back into its "no wallet yet" first-run state so the setup flow can be retested.
   function devResetWallet() {
+    try { localStorage.removeItem(WALLET_SETUP_KEY); } catch (e) { /* storage unavailable */ }
     document.getElementById('dashboard-content').style.display = 'none';
     document.getElementById('wallet-empty-state').style.display = 'block';
     const walletActions = document.getElementById('dashboard-wallet-actions');
@@ -3453,6 +3525,10 @@
   /* ════ 3. WDK RECEIVE & SEND MODAL LOGIC ════ */
   function openReceiveModal() {
     document.getElementById('receive-modal')?.classList.add('on');
+    const amt = document.getElementById('rcv-amount');
+    if (amt) amt.value = '';
+    const email = document.getElementById('rcv-email');
+    if (email) email.value = '';
     setReceiveAsset('usdt');
   }
 
@@ -3819,7 +3895,7 @@
     <div class="cmd-quick-prompts">
       <span class="cmd-qp-pill" onclick="setCmdQuery('invoices')">Invoices</span>
       <span class="cmd-qp-pill" onclick="setCmdQuery('send')">Send USDT</span>
-      <span class="cmd-qp-pill" onclick="setCmdQuery('receive')">Receive</span>
+      <span class="cmd-qp-pill" onclick="setCmdQuery('receive')">Request</span>
       <span class="cmd-qp-pill" onclick="setCmdQuery('tax')">Tax &amp; VAT</span>
     </div>
     <div class="cmd-list" id="cmd-list"></div>
@@ -3841,7 +3917,7 @@
   <div class="modal" style="max-width:440px; position:relative;">
     <div class="mhdr" style="padding-bottom:14px; border-bottom:none;">
       <div style="flex:1; text-align:center;">
-        <div class="mttl" style="font-size:17px;">Receive Payment</div>
+        <div class="mttl" style="font-size:17px;">Request Payment</div>
         <div class="msub" style="display:inline-flex; align-items:center; gap:5px; justify-content:center; margin-top:6px; background:rgba(34,197,94,0.1); color:var(--green); padding:3px 10px; border-radius:20px; font-size:10.5px;">
           Self-Custodial Invoicing
         </div>
@@ -3854,6 +3930,15 @@
       <div style="display:flex; background:var(--overlay-weak); border:1px solid var(--borderB); border-radius:6px; padding:3px; margin-bottom:16px;">
         <button id="rcv-tab-usdt" class="btn" style="flex:1; justify-content:center; font-size:11px; padding:6px; border-radius:4px; background:var(--nav-active-bg); color:var(--nav-active-text);" onclick="setReceiveAsset('usdt')">₮ Tether USD (RGB20)</button>
         <button id="rcv-tab-btc" class="btn" style="flex:1; justify-content:center; font-size:11px; padding:6px; border-radius:4px; background:transparent; color:var(--t3);" onclick="setReceiveAsset('btc')">₿ Bitcoin (SegWit)</button>
+      </div>
+
+      <!-- Requested Amount -->
+      <div class="fg" style="margin-bottom:16px;">
+        <label class="fl">Amount (optional — leave blank for any amount)</label>
+        <div style="position:relative; display:flex; align-items:center;">
+          <input id="rcv-amount" class="fi" type="number" min="0" step="0.01" placeholder="0.00" oninput="onReceiveAmountInput(this.value)" style="padding-right:54px; font-family:'JetBrains Mono',monospace; font-weight:700;"/>
+          <span style="position:absolute; right:10px; font-size:11px; font-weight:700; color:var(--t3); pointer-events:none;">USDT</span>
+        </div>
       </div>
 
       <!-- QR Code Canvas / Container -->
@@ -3875,7 +3960,7 @@
       </div>
 
       <!-- Action buttons -->
-      <div style="display:flex; gap:10px;">
+      <div style="display:flex; gap:10px; margin-bottom:10px;">
         <button id="rcv-copy" disabled class="btn btn-p" style="flex:1; justify-content:center; padding:11px; font-size:12px; font-weight:700;" onclick="copyReceiveAddress()">
           Copy Address
         </button>
@@ -3883,8 +3968,26 @@
           New Blind Seal
         </button>
       </div>
+
+      <!-- Email the request -->
+      <div style="display:flex; gap:8px;">
+        <input id="rcv-email" class="fi" type="email" placeholder="client@email.com (optional)" style="flex:1; font-size:12px;"/>
+        <button id="rcv-email-btn" disabled class="btn btn-s" style="padding:11px 14px; font-size:12px; white-space:nowrap;" onclick="emailReceiveRequest()" title="Open an email draft with this request">
+          &#x2709; Email Request
+        </button>
+      </div>
     </div>
   </div>
+</div>
+
+<!-- Notifications -->
+<div class="notif-btn" onclick="toggleNotifPanel(event)" title="Notifications">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+  <span id="notif-dot" class="notif-dot" style="display:none;">0</span>
+</div>
+<div class="notif-panel" id="notif-panel">
+  <div class="notif-phdr"><span>Notifications</span><span onclick="markAllNotifsRead()">Mark all read</span></div>
+  <div id="notif-list"></div>
 </div>
 
 <script type="module" src="/src/kasa.ts"></script>

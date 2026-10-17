@@ -10,8 +10,14 @@ export const rgbConfig = {
   feeRate: Number(process.env.RGB_FEE_RATE ?? 2),
   network: process.env.RGB_NETWORK ?? 'SignetCustom',
   nodeChainApi: process.env.RGB_NODE_CHAIN_API ?? '',
-  checkpointHeight: Number(process.env.RGB_CHAIN_CHECKPOINT_HEIGHT ?? 0),
-  checkpointHash: process.env.RGB_CHAIN_CHECKPOINT_HASH ?? '',
+  // A trusted, fixed anchor block on Mutinynet signet so chain verification doesn't have to
+  // trust the explorer from genesis. Without this, incoming-payment confirmation checks fail
+  // silently (requireCheck in ChainObserver.identity) and every payment stays stuck on
+  // "confirming" forever, no matter how many real confirmations it has.
+  checkpointHeight: Number(process.env.RGB_CHAIN_CHECKPOINT_HEIGHT ?? 3500000),
+  checkpointHash:
+    process.env.RGB_CHAIN_CHECKPOINT_HASH ??
+    '000001d0ecff35c5940c318d04ae778ae153fd3fb084234d80ca75b3613b6736',
   maxFeeRate: 20,
   minBtcSats: 1000,
   confirmations: 3,
