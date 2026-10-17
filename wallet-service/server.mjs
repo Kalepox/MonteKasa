@@ -168,7 +168,12 @@ const authorized = (h) => {
 }
 
 const server = http.createServer((req, res) => {
-  const reply = (code, body) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(json(body)) }
+  // 'connection: close': a fresh connection per request. Reusing keep-alive sockets raced with
+  // Node's 5 s idle timeout (Kasa polls every 5 s) and surfaced as intermittent "fetch failed".
+  const reply = (code, body) => {
+    res.writeHead(code, { 'content-type': 'application/json', connection: 'close' })
+    res.end(json(body))
+  }
   if (req.method !== 'POST' || req.url !== '/rpc') return reply(404, { error: 'not found' })
   if (!authorized(req.headers.authorization)) return reply(401, { error: 'unauthorized' })
   let body = ''

@@ -60,12 +60,20 @@ export class WalletService {
 
   async call<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
     await this.start()
-    const res = await fetch(`http://127.0.0.1:${this.port}/rpc`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${this.token}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ method, params }),
-      signal: AbortSignal.timeout(120_000) // sends and refreshes can take a while
-    })
+    let res: Response
+    try {
+      res = await fetch(`http://127.0.0.1:${this.port}/rpc`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${this.token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ method, params }),
+        signal: AbortSignal.timeout(120_000) // sends and refreshes can take a while
+      })
+    } catch (e) {
+      // undici only says "fetch failed"; the real reason (ECONNRESET, ECONNREFUSED, timeout) is in `cause`
+      const cause = (e as { cause?: { code?: string; message?: string } }).cause
+      const why = cause?.code ?? cause?.message ?? (e as Error).name
+      throw new Error(`Wallet service unreachable during '${method}' (${why})`)
+    }
     const body = (await res.json()) as { result?: T; error?: string }
     if (body.error) throw new Error(body.error)
     return body.result as T

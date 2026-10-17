@@ -1,0 +1,169 @@
+/* Wallet gate: full-screen create / back up / restore / unlock / fund panel for the in-app WDK wallet */
+#wallet-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(8, 8, 9, 0.92);
+  backdrop-filter: blur(6px);
+}
+#wallet-gate[hidden] {
+  display: none;
+}
+.wg-card {
+  width: min(460px, 100%);
+  background: var(--c2, #18181a);
+  border: 1px solid var(--borderB, rgba(255, 255, 255, 0.12));
+  border-radius: var(--r6, 14px);
+  padding: 28px;
+  color: var(--t1, #f4f4f5);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+}
+.wg-brand {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--t3, #8b8b92);
+  margin-bottom: 6px;
+}
+.wg-card h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 700;
+}
+.wg-card p {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--t2, #c4c4c8);
+}
+.wg-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.wg-field label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--t3, #8b8b92);
+}
+.wg-field input,
+.wg-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--t1, #f4f4f5);
+  background: var(--c1, #111113);
+  border: 1px solid var(--borderB, rgba(255, 255, 255, 0.12));
+  border-radius: var(--r4, 8px);
+  outline: none;
+}
+.wg-field textarea {
+  min-height: 84px;
+  resize: vertical;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.wg-field input:focus,
+.wg-field textarea:focus {
+  border-color: var(--t3, #8b8b92);
+}
+.wg-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+.wg-actions .btn {
+  flex: 1;
+  justify-content: center;
+  padding: 10px 14px;
+  font-size: 13px;
+}
+.wg-link {
+  display: inline-block;
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--t3, #8b8b92);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.wg-error {
+  min-height: 18px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--red, #ef4444);
+}
+.wg-words {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin: 4px 0 14px;
+}
+.wg-words span {
+  padding: 8px 10px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  background: var(--c1, #111113);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  border-radius: var(--r3, 6px);
+}
+.wg-words span b {
+  color: var(--t3, #8b8b92);
+  font-weight: 500;
+  margin-right: 6px;
+}
+.wg-warn {
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--amber, #f59e0b);
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: var(--r4, 8px);
+}
+.wg-check {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 12px;
+  color: var(--t2, #c4c4c8);
+}
+.wg-address {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.wg-address img {
+  width: 160px;
+  height: 160px;
+  border-radius: var(--r4, 8px);
+  background: #fff;
+  padding: 6px;
+}
+.wg-address code {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font-size: 11px;
+  word-break: break-all;
+  text-align: center;
+  background: var(--c1, #111113);
+  border-radius: var(--r3, 6px);
+}
+.wg-status {
+  font-size: 12px;
+  color: var(--t3, #8b8b92);
+  text-align: center;
+}

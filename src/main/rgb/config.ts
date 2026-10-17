@@ -28,7 +28,8 @@ export const rgbConfig = {
     (mutinynet ? '00000166f046342c6b499798686eb13cd2b4c6e5fd4189157922dca54705eb71' : ''),
   maxFeeRate: 20,
   minBtcSats: 1000,
-  confirmations: 3,
+  // blocks before a payment counts as final; 1 suits Mutinynet test funds (raise for real money)
+  confirmations: Number(process.env.RGB_CONFIRMATIONS ?? 1),
   explorerApi: process.env.RGB_EXPLORER_API ?? 'https://mutinynet.com/api',
   walletNode: process.env.WALLET_NODE ?? 'node',              // must be a Node 22 binary
   walletMaxSendRaw: Number(process.env.WALLET_MAX_SEND_RAW ?? 500_000_000),

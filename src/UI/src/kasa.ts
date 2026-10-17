@@ -676,6 +676,7 @@ w.openInvoice = async (id: string): Promise<void> => {
 
 // ---------- start ----------
 window.kasa.onChanged(() => void refresh())
+window.addEventListener('wallet-unlocked', () => void refresh()) // from wallet-gate.ts
 window.kasa.onPayment((p) => {
   const who = p.client ? `from ${p.client}` : 'to your wallet'
   w.toast(
