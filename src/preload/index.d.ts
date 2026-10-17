@@ -9,7 +9,8 @@ export interface KasaStatus {
   configurationError?: string
   mock: boolean
   pubkey?: string
-  balance: number
+  balance: number // spendable (settled)
+  future?: number // display: settled + incoming − outgoing still on their way
   btcSats: number
 }
 

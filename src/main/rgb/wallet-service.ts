@@ -18,12 +18,13 @@ export class WalletService {
         : join(app.getAppPath(), 'wallet-service')
       const child = spawn(rgbConfig.walletNode, ['server.mjs'], {
         cwd: dir,
-        stdio: ['ignore', 'pipe', 'pipe'],
+        stdio: ['pipe', 'pipe', 'pipe'], // stdin stays open: the service exits when it closes (we died)
         env: {
           PATH: process.env.PATH ?? '',
           HOME: process.env.HOME ?? '',
           WALLET_DATA_DIR: join(app.getPath('userData'), 'wdk-wallet'),
           WALLET_TOKEN: this.token,
+          WALLET_PARENT_PIPE: '1',
           WALLET_ASSET_ID: rgbConfig.assetId,
           WALLET_MAX_SEND_RAW: String(rgbConfig.walletMaxSendRaw)
         }
@@ -52,7 +53,13 @@ export class WalletService {
       child.on('exit', (code) => {
         clearTimeout(timer)
         this.child = this.port = this.starting = undefined
-        reject(new Error(`Wallet service exited (code ${code}). Is WALLET_NODE a Node 22 binary?`))
+        reject(
+          new Error(
+            code === 2
+              ? 'Another app is already using this wallet. Close the other MonteKasa window first.'
+              : `Wallet service exited (code ${code}). Is WALLET_NODE a Node 22 binary?`
+          )
+        )
       })
     })
     return this.starting
@@ -60,12 +67,20 @@ export class WalletService {
 
   async call<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
     await this.start()
-    const res = await fetch(`http://127.0.0.1:${this.port}/rpc`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${this.token}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ method, params }),
-      signal: AbortSignal.timeout(120_000) // sends and refreshes can take a while
-    })
+    let res: Response
+    try {
+      res = await fetch(`http://127.0.0.1:${this.port}/rpc`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${this.token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ method, params }),
+        signal: AbortSignal.timeout(120_000) // sends and refreshes can take a while
+      })
+    } catch (e) {
+      // undici only says "fetch failed"; the real reason (ECONNRESET, ECONNREFUSED, timeout) is in `cause`
+      const cause = (e as { cause?: { code?: string; message?: string } }).cause
+      const why = cause?.code ?? cause?.message ?? (e as Error).name
+      throw new Error(`Wallet service unreachable during '${method}' (${why})`)
+    }
     const body = (await res.json()) as { result?: T; error?: string }
     if (body.error) throw new Error(body.error)
     return body.result as T

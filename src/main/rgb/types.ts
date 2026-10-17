@@ -8,6 +8,7 @@ export interface NodeStatus {
   mock: boolean
   pubkey?: string
   balanceRaw?: number // spendable
+  futureRaw?: number // display only: spendable + incoming − outgoing still on their way
   btcSats?: number // vanilla (fee) balance
 }
 

@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { RgbTransfer, RgbBackend } from '../rgb/types'
 vi.mock('electron', () => ({ app: { getPath: () => tmpdir() } }))
+// these tests exercise the confirmation logic against a 3-block policy (the app default is 1 on Mutinynet)
+process.env.RGB_CONFIRMATIONS = '3'
 const cleanups: (() => void)[] = []
 afterEach(() => {
   for (const close of cleanups.splice(0)) close()
