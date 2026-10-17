@@ -1,8 +1,6 @@
 import { getDb } from './index'
-import { readLedgerSource, type LedgerSource } from '../../shared/ledger-source'
 
 export interface InvoiceRow {
-  source?: LedgerSource
   id: string
   client: string
   amountRaw: number
@@ -15,7 +13,6 @@ export interface InvoiceRow {
 }
 
 export interface PaymentRow {
-  source?: LedgerSource
   nodeIdx: number
   direction: 'in' | 'out' // in: received, out: sent (receivedRaw = amount moved)
   invoiceId: string | null
@@ -31,32 +28,21 @@ export interface PaymentRow {
 
 const INVOICE_COLS = `id, client, amount_raw AS amountRaw, received_raw AS receivedRaw,
   rgb_invoice AS rgbInvoice, recipient_id AS recipientId, expires_at AS expiresAt,
-  state, created_at AS createdAt, source_json AS sourceJson`
+  state, created_at AS createdAt`
 
 const PAYMENT_COLS = `node_idx AS nodeIdx, direction, invoice_id AS invoiceId, recipient_id AS recipientId,
   requested_raw AS requestedRaw, received_raw AS receivedRaw, status, txid,
-  block_time AS blockTime, receive_utxo AS receiveUtxo, updated_at AS updatedAt, source_json AS sourceJson`
-
-function sourceRow<T extends InvoiceRow | PaymentRow>(row: unknown): T {
-  const { sourceJson, ...record } = row as T & { sourceJson: string | null }
-  let source: LedgerSource | undefined
-  try {
-    source = readLedgerSource(JSON.parse(sourceJson ?? 'null'))
-  } catch {
-    /* Unknown provenance. */
-  }
-  return { ...record, ...(source ? { source } : {}) } as unknown as T
-}
+  block_time AS blockTime, receive_utxo AS receiveUtxo, updated_at AS updatedAt`
 
 // ---- invoices ----
 
 export function insertInvoice(inv: InvoiceRow): void {
   getDb()
     .prepare(
-      `INSERT INTO invoices (id, client, amount_raw, received_raw, rgb_invoice, recipient_id, expires_at, state, created_at, source_json)
-       VALUES (@id, @client, @amountRaw, @receivedRaw, @rgbInvoice, @recipientId, @expiresAt, @state, @createdAt, @sourceJson)`
+      `INSERT INTO invoices (id, client, amount_raw, received_raw, rgb_invoice, recipient_id, expires_at, state, created_at)
+       VALUES (@id, @client, @amountRaw, @receivedRaw, @rgbInvoice, @recipientId, @expiresAt, @state, @createdAt)`
     )
-    .run({ ...inv, sourceJson: inv.source ? JSON.stringify(inv.source) : null })
+    .run(inv)
 }
 
 export function updateInvoiceState(id: string, state: string, receivedRaw: number): void {
@@ -68,37 +54,26 @@ export function updateInvoiceState(id: string, state: string, receivedRaw: numbe
 export function listInvoices(): InvoiceRow[] {
   return getDb()
     .prepare(`SELECT ${INVOICE_COLS} FROM invoices ORDER BY created_at DESC`)
-    .all()
-    .map((row) => sourceRow<InvoiceRow>(row))
+    .all() as InvoiceRow[]
 }
 
 export function getInvoiceByRecipient(recipientId: string): InvoiceRow | undefined {
-  const row = getDb()
+  return getDb()
     .prepare(`SELECT ${INVOICE_COLS} FROM invoices WHERE recipient_id = ?`)
-    .get(recipientId)
-  return row ? sourceRow<InvoiceRow>(row) : undefined
+    .get(recipientId) as InvoiceRow | undefined
 }
 
 // ---- payments ----
 
 // insert the first time we see a transfer, update its status/amount afterwards
 export function upsertPayment(p: Omit<PaymentRow, 'blockTime'>): boolean {
-  const existing = getPayment(p.nodeIdx)
-  if (existing?.source && p.source && existing.source.id !== p.source.id)
-    throw new Error(
-      'This transfer number belongs to another saved app ledger stream. Existing activity was preserved; use a separate ledger for the changed configuration.'
-    )
   return (
     getDb()
       .prepare(
-        `INSERT INTO payments (node_idx, direction, invoice_id, recipient_id, requested_raw, received_raw, status, txid, receive_utxo, updated_at, source_json)
-       VALUES (@nodeIdx, @direction, @invoiceId, @recipientId, @requestedRaw, @receivedRaw, @status, @txid, @receiveUtxo, @updatedAt, @sourceJson)
+        `INSERT INTO payments (node_idx, direction, invoice_id, recipient_id, requested_raw, received_raw, status, txid, receive_utxo, updated_at)
+       VALUES (@nodeIdx, @direction, @invoiceId, @recipientId, @requestedRaw, @receivedRaw, @status, @txid, @receiveUtxo, @updatedAt)
 
        ON CONFLICT(node_idx) DO UPDATE SET
-         direction    = excluded.direction,
-         recipient_id = excluded.recipient_id,
-         requested_raw = excluded.requested_raw,
-         receive_utxo = excluded.receive_utxo,
          received_raw = excluded.received_raw,
          status       = excluded.status,
          txid         = excluded.txid,
@@ -106,34 +81,26 @@ export function upsertPayment(p: Omit<PaymentRow, 'blockTime'>): boolean {
          invoice_id = excluded.invoice_id,
          block_time = CASE WHEN excluded.status != 'settled' OR payments.txid IS NOT excluded.txid THEN NULL ELSE payments.block_time END
        WHERE payments.received_raw != excluded.received_raw OR payments.status != excluded.status
-         OR payments.txid IS NOT excluded.txid OR payments.invoice_id IS NOT excluded.invoice_id
-         OR payments.direction != excluded.direction OR payments.recipient_id != excluded.recipient_id
-         OR payments.requested_raw IS NOT excluded.requested_raw OR payments.receive_utxo IS NOT excluded.receive_utxo`
+         OR payments.txid IS NOT excluded.txid OR payments.invoice_id IS NOT excluded.invoice_id`
       )
-      .run({ ...p, sourceJson: p.source ? JSON.stringify(p.source) : null }).changes > 0
+      .run(p).changes > 0
   )
 }
 
-export function setBlockTime(nodeIdx: number, blockTime: number): boolean {
-  return (
-    getDb()
-      .prepare('UPDATE payments SET block_time = ? WHERE node_idx = ? AND block_time IS NOT ?')
-      .run(blockTime, nodeIdx, blockTime).changes > 0
-  )
+export function setBlockTime(nodeIdx: number, blockTime: number): void {
+  getDb().prepare('UPDATE payments SET block_time = ? WHERE node_idx = ?').run(blockTime, nodeIdx)
 }
 
 export function listPayments(): PaymentRow[] {
   return getDb()
     .prepare(`SELECT ${PAYMENT_COLS} FROM payments ORDER BY node_idx DESC`)
-    .all()
-    .map((row) => sourceRow<PaymentRow>(row))
+    .all() as PaymentRow[]
 }
 
 export function paymentsForInvoice(invoiceId: string): PaymentRow[] {
   return getDb()
     .prepare(`SELECT ${PAYMENT_COLS} FROM payments WHERE invoice_id = ? AND direction = 'in'`)
-    .all(invoiceId)
-    .map((row) => sourceRow<PaymentRow>(row))
+    .all(invoiceId) as PaymentRow[]
 }
 
 export function paymentsMissingBlockTime(): PaymentRow[] {
@@ -141,8 +108,7 @@ export function paymentsMissingBlockTime(): PaymentRow[] {
     .prepare(
       `SELECT ${PAYMENT_COLS} FROM payments WHERE status = 'settled' AND txid IS NOT NULL AND block_time IS NULL`
     )
-    .all()
-    .map((row) => sourceRow<PaymentRow>(row))
+    .all() as PaymentRow[]
 }
 
 // ---- proposals ----
@@ -200,8 +166,8 @@ export function updateProposal(
 }
 
 export function getInvoice(id: string): InvoiceRow | undefined {
-  const row = getDb().prepare(`SELECT ${INVOICE_COLS} FROM invoices WHERE id = ?`).get(id)
-  return row ? sourceRow<InvoiceRow>(row) : undefined
+  return getDb().prepare(`SELECT ${INVOICE_COLS} FROM invoices WHERE id = ?`).get(id) as
+    InvoiceRow | undefined
 }
 export function reconciliationCandidates(changed: string[]): InvoiceRow[] {
   const placeholders = changed.map(() => '?').join(',')
@@ -209,8 +175,7 @@ export function reconciliationCandidates(changed: string[]): InvoiceRow[] {
     .prepare(
       `SELECT ${INVOICE_COLS} FROM invoices WHERE state IN ('Issued', 'Pending') ${changed.length ? `OR id IN (${placeholders})` : ''}`
     )
-    .all(...changed)
-    .map((row) => sourceRow<InvoiceRow>(row))
+    .all(...changed) as InvoiceRow[]
 }
 export function refreshOpenProposal(invoiceId: string, amountRaw: number, reason: string): void {
   getDb()
@@ -221,8 +186,6 @@ export function refreshOpenProposal(invoiceId: string, amountRaw: number, reason
 }
 
 export function getPayment(nodeIdx: number): PaymentRow | undefined {
-  const row = getDb()
-    .prepare(`SELECT ${PAYMENT_COLS} FROM payments WHERE node_idx = ?`)
-    .get(nodeIdx)
-  return row ? sourceRow<PaymentRow>(row) : undefined
+  return getDb().prepare(`SELECT ${PAYMENT_COLS} FROM payments WHERE node_idx = ?`).get(nodeIdx) as
+    PaymentRow | undefined
 }

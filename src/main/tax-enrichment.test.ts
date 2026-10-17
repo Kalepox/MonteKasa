@@ -246,15 +246,7 @@ describe('record enrichment', () => {
       )
     ).toThrow()
     expect(readFileSync(path, 'utf8')).toBe(saved)
-    expect(new TaxScopeStore(path, 'another-db').get()).toEqual({
-      version: 1,
-      databaseId: 'another-db',
-      taxpayers: [],
-      accounts: [],
-      assets: [],
-      assignments: []
-    })
-    expect(readFileSync(path, 'utf8')).toBe(saved)
+    expect(() => new TaxScopeStore(path, 'another-db').get()).toThrow()
     const corrupt = { ...fixture(), enrichments: [entry(), entry()] }
     expect(() => validateTaxScope(corrupt, 'db')).toThrow('Duplicate enrichment')
     writeFileSync(
