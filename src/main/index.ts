@@ -8,7 +8,7 @@ import type { IpcMainInvokeEvent } from 'electron'
 import type { PaymentIntent } from '../shared/security'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { createRgb } from './rgb'
+import { createRgb, rgbConfig } from './rgb'
 import { Kasa } from './core/kasa'
 import { toRaw, toUsdt } from './core/units'
 import { mkdirSync, writeFileSync } from 'node:fs'
@@ -18,6 +18,7 @@ import type { SecurityTarget } from '../shared/agent'
 import { invoiceDocumentHtml } from '../shared/invoice-document'
 import { TaxProfileStore } from './tax-profile'
 import { guardDisconnectedOutput } from './core/stdio'
+import { registerAppShutdown } from './core/app-shutdown'
 
 guardDisconnectedOutput(process.stdout)
 guardDisconnectedOutput(process.stderr)
@@ -136,16 +137,24 @@ app.whenReady().then(() => {
 
   const { backend, pay } = createRgb()
   const kasa = new Kasa(backend)
-  // WDK wallet lifecycle (used from DevTools until the onboarding screens exist)
+  // The wallet panel uses this handler for onboarding and unlock. Keep it registered
+  // for explicitly selected development backends too, with an explicit unavailable state.
   const wallet = (backend as { wallet?: import('./rgb/wallet-service').WalletService }).wallet
   if (wallet) {
-    app.on('will-quit', () => wallet.stop())
-    handle('wallet:call', (_e, method: unknown, params: unknown) => {
-      const allowed = ['state', 'create', 'restore', 'unlock', 'lock', 'address', 'createUtxos']
-      if (typeof method !== 'string' || !allowed.includes(method)) throw new Error('Not allowed')
-      return wallet.call(method, (params ?? {}) as Record<string, unknown>)
-    })
+    // Stop before waiting for AI cleanup; app.exit() bypasses will-quit.
+    app.prependOnceListener('before-quit', () => wallet.stop())
+    app.once('will-quit', () => wallet.stop())
+    process.once('exit', () => wallet.stop())
   }
+  handle('wallet:call', (_e, method: unknown, params: unknown) => {
+    const allowed = ['state', 'create', 'restore', 'unlock', 'lock', 'address', 'createUtxos']
+    if (typeof method !== 'string' || !allowed.includes(method)) throw new Error('Not allowed')
+    if (!wallet) {
+      if (method === 'state') return { state: 'unavailable', backend: rgbConfig.backend }
+      throw new Error('The WDK wallet is disabled. Set RGB_BACKEND=wdk and restart the app.')
+    }
+    return wallet.call(method, (params ?? {}) as Record<string, unknown>)
+  })
 
   readSecurity = (target, query) => freshSecurityContext(kasa.security, target, query)
   kasa.start()
@@ -257,21 +266,7 @@ app.whenReady().then(() => {
   })
 })
 
-let agentClosed = false
-app.on('before-quit', (event) => {
-  if (agentClosed) return
-  event.preventDefault()
-  agentClosed = true
-  // A stalled native worker must not prevent the application from quitting.
-  const timeout = setTimeout(() => app.exit(), 5000)
-  void agent
-    .dispose()
-    .catch(console.error)
-    .finally(() => {
-      clearTimeout(timeout)
-      app.quit()
-    })
-})
+registerAppShutdown(() => agent.dispose())
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits

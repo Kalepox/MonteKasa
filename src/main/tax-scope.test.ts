@@ -246,7 +246,7 @@ describe('calculation completeness', () => {
   })
 })
 describe('scope persistence', () => {
-  it('persists declarations and assignments across restart; rejects database changes and bad commands', () => {
+  it('persists declarations across restart, isolates databases and rejects bad commands', () => {
     const d = mkdtempSync(join(tmpdir(), 'scope-test-'))
     directories.push(d)
     const path = join(d, 'scope.json')
@@ -260,7 +260,7 @@ describe('scope persistence', () => {
     }
     store.change(command, null, records)
     expect(new TaxScopeStore(path, 'db-one').get().assignments).toHaveLength(1)
-    expect(() => new TaxScopeStore(path, 'db-two').get()).toThrow('different database')
+    expect(new TaxScopeStore(path, 'db-two').get()).toEqual({ ...empty, databaseId: 'db-two' })
     const before = readFileSync(path, 'utf8')
     expect(() => store.change({ ...command, assetId: 'absent' }, null, records)).toThrow()
     expect(readFileSync(path, 'utf8')).toBe(before)

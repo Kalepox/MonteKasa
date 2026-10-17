@@ -93,7 +93,35 @@ npm install
 ```
 Warnings about deprecated packages or vulnerabilities are normal – don't run `npm audit fix --force`.
 
-### 3. Start with a fake wallet (no setup needed)
+### 3. Start with the in-app WDK wallet
+
+`npm run dev` starts the app with **WDK** by default. Keep the terminal running while using the
+development app. The Wallet page offers setup for a new wallet, or unlock for an existing one.
+Starting the service does not create or unlock a wallet automatically.
+The app owns the wallet-service process: quitting or restarting Electron also stops WDK,
+including development reloads. On macOS, closing only the window keeps the app running;
+use **Quit** (Cmd+Q) to stop it completely.
+
+The wallet service needs **Node.js 22** and its own dependencies, separate from Electron:
+```bash
+# With nvm, if Node 22 or the wallet dependencies are not installed yet:
+nvm install 22
+nvm exec 22 npm --prefix wallet-service ci
+```
+The app finds Node 22 on PATH, in an installed NVM version, or in Homebrew's `node@22` location.
+For another installation, set `WALLET_NODE` to the Node 22 executable. Electron and the main
+development tools can keep using their existing Node version. A startup failure is shown in the
+Wallet page with a retry button.
+
+The default wallet uses **Mutinynet test funds**, with WDK network label `Signet`.
+Existing wallet files stay in `<app data>/wdk-wallet`; the WDK ledger uses `kasa-wdk.db`.
+Clear any old `RGB_BACKEND=kaleido` or `RGB_MOCK=1` override to use the default.
+
+To check WDK process cleanup with the installed dependencies, run
+`node scripts/wdk-cleanup-smoke.cjs`. It tests shutdown signals and parent termination
+using empty temporary directories and state reads; it does not use your saved wallet.
+
+### 4. Optional: start with a fake wallet (no setup needed)
 
 | macOS / Linux | Windows (PowerShell) |
 |---|---|
@@ -107,9 +135,9 @@ The status pill says **"Mock node"**. To try the whole flow:
    ```
 3. The invoice turns **Overpaid** → click it → paste any `rgb:` text → **Approve refund**.
 
-### 4. Start with a real wallet
-With your node running and unlocked (see below): `npm run dev`
-(PowerShell: `Remove-Item Env:RGB_MOCK -ErrorAction SilentlyContinue; npm run dev`).
+### 5. Optional: use an external Kaleido node
+With your node running and unlocked (see below): `RGB_BACKEND=kaleido npm run dev`
+(PowerShell: `$env:RGB_BACKEND="kaleido"; npm run dev`).
 The pill should say **"Mutinynet connected"**.
 
 | Pill | Meaning |
@@ -119,12 +147,12 @@ The pill should say **"Mutinynet connected"**.
 | Node locked | `kaleido node unlock` |
 | Node offline | Docker or the node isn't running |
 
-Other port: `RLN_NODE_URL=http://localhost:<port> npm run dev`.
+Other port: `RGB_BACKEND=kaleido RLN_NODE_URL=http://localhost:<port> npm run dev`.
 Run tests: `npm test`.
 
 ---
 
-## Your own test wallet (Mutinynet)
+## External Kaleido test wallet (Mutinynet)
 
 Everything is **test money with no value**. On Windows run these in **Ubuntu (WSL)**; on macOS in Terminal.
 
@@ -151,7 +179,7 @@ small Bitcoin outputs (**UTXOs**). An **invoice** is an `rgb:…` string; a paym
    (receiver refreshes first, then sender).
 
 **Daily routine:** start Docker Desktop → `kaleido node up default` → `kaleido node unlock` (once) →
-`npm run dev`.
+`RGB_BACKEND=kaleido npm run dev`.
 
 ### Rules
 - Only use KaleidoSwap's Mutinynet USDT `rgb:lX~ToKsO-Iup7dJ5-UM794sA-9WD21ge-VHYzBGb-E9PA_h0`
@@ -187,13 +215,13 @@ small Bitcoin outputs (**UTXOs**). An **invoice** is an `rgb:…` string; a paym
   `executeSend`, `setReceiveAsset`, `openM`, `closeM`, `toast`.
 - **Agents (QVAC):** read data through `src/main/db` (`listInvoices`, `listPayments`, `paymentsForInvoice`,
   `listProposals`) from the main process – read-only. Amounts are raw units (`toUsdt()` in `core/units.ts`).
-- **Database file:** `<app data>/kasa.db` (`kasa-mock.db` in mock mode) – macOS
+- **Database file:** `<app data>/kasa-wdk.db` (`kasa.db` for Kaleido, `kasa-mock.db` in mock mode) – macOS
   `~/Library/Application Support/<app>/`, Windows `%APPDATA%\<app>\`, Linux `~/.config/<app>/`.
 
 ## Payment checks and assistant explanations
 
-The default `SignetCustom` configuration uses the verified Mutinynet profile for both
-`npm run dev` and packaged launches: node indexer
+The default WDK `Signet` configuration (Kaleido calls it `SignetCustom`) uses the verified
+Mutinynet profile: node indexer
 `https://esplora.signet.kaleidoswap.com`, reference `https://mutinynet.com/api`, and
 checkpoint height `100000` with hash
 `00000166f046342c6b499798686eb13cd2b4c6e5fd4189157922dca54705eb71`.

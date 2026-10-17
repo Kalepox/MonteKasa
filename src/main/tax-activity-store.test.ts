@@ -110,9 +110,13 @@ describe('local-only activity organisation persistence', () => {
       expect(() => store.change(invalid, null, recordKeys(snapshot), snapshot)).toThrow()
       expect(readFileSync(path, 'utf8')).toBe(before)
     }
-    expect(() => new TaxScopeStore(path, 'another-database').organise(snapshot)).toThrow(
-      'different database'
-    )
+    expect(new TaxScopeStore(path, 'another-database').organise(snapshot)).toMatchObject({
+      databaseId: 'another-database',
+      taxpayers: [],
+      accounts: [],
+      assets: [],
+      assignments: []
+    })
     expect(readFileSync(path, 'utf8')).toBe(before)
   })
   it('persists manual exclusions and disconnect without deleting prior records', () => {

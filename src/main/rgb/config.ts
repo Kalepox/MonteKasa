@@ -1,20 +1,25 @@
 import process from 'process'
 export type RgbBackendName = 'mock' | 'kaleido' | 'wdk'
 const backend = (process.env.RGB_BACKEND ??
-  (process.env.RGB_MOCK === '1' ? 'mock' : 'kaleido')) as RgbBackendName
+  (process.env.RGB_MOCK === '1' ? 'mock' : 'wdk')) as RgbBackendName
+if (!['mock', 'kaleido', 'wdk'].includes(backend))
+  throw new Error('RGB_BACKEND must be wdk, kaleido or mock.')
 const WDK = backend === 'wdk'
 
 // RGB network label: the KaleidoSwap node calls Mutinynet 'SignetCustom', UTEXO's WDK module 'Signet'.
 const network = process.env.RGB_NETWORK ?? (WDK ? 'Signet' : 'SignetCustom')
 // Verified Mutinynet profile shared by development and packaged launches (same chain for both backends).
-const mutinynet = process.env.RGB_NETWORK === undefined || network === 'SignetCustom'
+const mutinynet = network === (WDK ? 'Signet' : 'SignetCustom')
 
 export const rgbConfig = {
   backend,
   mock: backend === 'mock',
   nodeUrl: process.env.RLN_NODE_URL ?? 'http://localhost:3001',
-  assetId: process.env.RGB_ASSET_ID ??
-    (WDK ? 'rgb:PZYLqe~F-l1W~luC-1zH3CCI-TChEioP-jbNuXjJ-zVo6J7k' : 'rgb:lX~ToKsO-Iup7dJ5-UM794sA-9WD21ge-VHYzBGb-E9PA_h0'),
+  assetId:
+    process.env.RGB_ASSET_ID ??
+    (WDK
+      ? 'rgb:PZYLqe~F-l1W~luC-1zH3CCI-TChEioP-jbNuXjJ-zVo6J7k'
+      : 'rgb:lX~ToKsO-Iup7dJ5-UM794sA-9WD21ge-VHYzBGb-E9PA_h0'),
   proxy: process.env.RGB_PROXY ?? 'rpcs://proxy.kaleidoswap.com/json-rpc',
   precision: 6,
   invoiceTtlSec: 3600,
@@ -31,8 +36,8 @@ export const rgbConfig = {
   // blocks before a payment counts as final; 1 suits Mutinynet test funds (raise for real money)
   confirmations: Number(process.env.RGB_CONFIRMATIONS ?? 1),
   explorerApi: process.env.RGB_EXPLORER_API ?? 'https://mutinynet.com/api',
-  walletNode: process.env.WALLET_NODE ?? 'node',              // must be a Node 22 binary
-  walletMaxSendRaw: Number(process.env.WALLET_MAX_SEND_RAW ?? 500_000_000),
+  walletNode: process.env.WALLET_NODE, // optional explicit Node 22 binary; otherwise discovered locally
+  walletMaxSendRaw: Number(process.env.WALLET_MAX_SEND_RAW ?? 500_000_000)
 }
 
 export function paymentConfigurationError(): string | undefined {

@@ -246,7 +246,7 @@ function listProfiles(next: TaxScope): void {
   }
   el('missing').textContent = next.taxpayers.length
     ? 'Choose a saved profile to review its records. Tax estimates are not available yet.'
-    : 'Create a personal or business profile to organise your tax records.'
+    : 'Create a personal or business profile for these saved payments. Profiles linked to other payment histories stay separate.'
   updateDraftControls()
 }
 

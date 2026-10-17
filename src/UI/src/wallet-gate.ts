@@ -1,10 +1,10 @@
 // Wallet panel: create, back up, restore and unlock the in-app WDK wallet from the UI.
 // Lives at the top of the Wallet page (sidebar → Wallet); the rest of the app stays usable while locked.
-// Only active with RGB_BACKEND=wdk: with other backends the `wallet:call` IPC doesn't exist.
+// WDK is the default. Explicit alternate backends return an unavailable state.
 import QRCode from 'qrcode'
 import './wallet-gate.css'
 
-type WalletState = 'none' | 'locked' | 'unlocked'
+type WalletState = 'none' | 'locked' | 'unlocked' | 'unavailable'
 
 const FAUCET = 'https://faucet.mutinynet.com'
 const MIN_PASSWORD = 8
@@ -14,14 +14,13 @@ const call = <T>(method: string, params?: Record<string, unknown>): Promise<T> =
 
 // IPC errors arrive as "Error invoking remote method 'wallet:call': Error: <message>"
 const message = (e: unknown): string =>
-  String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+  String((e as Error)?.message ?? e).replace(
+    /^Error invoking remote method '[^']+': (Error: )?/,
+    ''
+  )
 
-async function walletState(): Promise<WalletState | null> {
-  try {
-    return (await call<{ state: WalletState }>('state')).state
-  } catch {
-    return null // not the WDK backend, or the wallet service isn't up yet
-  }
+async function walletState(): Promise<WalletState> {
+  return (await call<{ state: WalletState }>('state')).state
 }
 
 // ---------- DOM ----------
@@ -30,7 +29,8 @@ const root = document.createElement('div')
 root.id = 'wallet-gate'
 root.hidden = true
 // top of the Wallet page, above the balance; falls back to the page body if the layout changes
-const walletPage = document.querySelector('#view-dashboard .vb') ?? document.getElementById('view-dashboard')
+const walletPage =
+  document.querySelector('#view-dashboard .vb') ?? document.getElementById('view-dashboard')
 ;(walletPage ?? document.body).prepend(root)
 
 let busy = false // a view is mid-action: don't let the poller replace it
@@ -55,7 +55,11 @@ function close(): void {
 }
 
 // run an action with the buttons disabled; errors appear in the card
-async function act(button: HTMLButtonElement, label: string, work: () => Promise<void>): Promise<void> {
+async function act(
+  button: HTMLButtonElement,
+  label: string,
+  work: () => Promise<void>
+): Promise<void> {
   if (busy) return
   busy = true
   const original = button.textContent
@@ -84,7 +88,8 @@ function onEnter(handler: () => void): void {
 function checkNewPassword(): string {
   const pw = $<HTMLInputElement>('#wg-pw').value
   const pw2 = $<HTMLInputElement>('#wg-pw2').value
-  if (pw.length < MIN_PASSWORD) throw new Error(`Password must be at least ${MIN_PASSWORD} characters.`)
+  if (pw.length < MIN_PASSWORD)
+    throw new Error(`Password must be at least ${MIN_PASSWORD} characters.`)
   if (pw !== pw2) throw new Error('The two passwords do not match.')
   return pw
 }
@@ -134,7 +139,9 @@ function viewCreate(): void {
   const go = $<HTMLButtonElement>('#wg-go')
   const submit = (): void =>
     void act(go, 'Creating…', async () => {
-      const { mnemonic } = await call<{ mnemonic: string }>('create', { password: checkNewPassword() })
+      const { mnemonic } = await call<{ mnemonic: string }>('create', {
+        password: checkNewPassword()
+      })
       viewBackup(mnemonic)
     })
   go.onclick = submit
@@ -154,7 +161,8 @@ function viewBackup(mnemonic: string): void {
     <div class="wg-error"></div>
     <div class="wg-actions"><button class="btn btn-p" id="wg-go" disabled>Continue</button></div>`)
   const go = $<HTMLButtonElement>('#wg-go')
-  $<HTMLInputElement>('#wg-ok').onchange = (e) => (go.disabled = !(e.target as HTMLInputElement).checked)
+  $<HTMLInputElement>('#wg-ok').onchange = (e) =>
+    (go.disabled = !(e.target as HTMLInputElement).checked)
   go.onclick = () => void viewFund() // the words leave the DOM with the next render
 }
 
@@ -171,7 +179,11 @@ function viewRestore(): void {
   const go = $<HTMLButtonElement>('#wg-go')
   go.onclick = () =>
     void act(go, 'Restoring…', async () => {
-      const mnemonic = $<HTMLTextAreaElement>('#wg-words').value.trim().toLowerCase().split(/\s+/).join(' ')
+      const mnemonic = $<HTMLTextAreaElement>('#wg-words')
+        .value.trim()
+        .toLowerCase()
+        .split(/\s+/)
+        .join(' ')
       if (mnemonic.split(' ').length !== 12) throw new Error('Enter exactly 12 words.')
       await call('restore', { mnemonic, password: checkNewPassword() })
       await viewFund()
@@ -226,22 +238,58 @@ async function viewFund(): Promise<void> {
 // ---------- keep the gate in sync with the wallet ----------
 
 let shown: WalletState | null = null
+let checking = false
+let startupError = ''
+
+function viewStartupError(error: string): void {
+  render(`
+    <h2>Wallet could not start</h2>
+    <p>Your saved wallet remains on this device. Resolve the startup issue below, then retry.</p>
+    <div class="wg-error" role="alert"></div>
+    <div class="wg-actions"><button class="btn btn-p" id="wg-retry">Retry wallet startup</button></div>`)
+  setError(error)
+  $<HTMLButtonElement>('#wg-retry').onclick = () => void sync()
+}
 
 async function sync(): Promise<void> {
-  if (busy) return
-  const state = await walletState()
-  if (state === null || state === 'unlocked') {
-    if (state === 'unlocked' && shown && shown !== 'unlocked' && !root.hidden && !busy) {
-      // unlocked elsewhere (or a view finished): keep the fund view if it's open
-      if (!root.querySelector('#wg-bal')) close()
+  if (busy || checking) return
+  checking = true
+  try {
+    const state = await walletState()
+    // An action may have started while the state request was in flight.
+    if (busy) return
+    if (startupError) {
+      startupError = ''
+      shown = null
+      root.hidden = true
+      root.innerHTML = ''
     }
+    if (state === 'unavailable') {
+      root.hidden = true
+      root.innerHTML = ''
+      shown = state
+      return
+    }
+    if (state === 'unlocked') {
+      if (shown && shown !== 'unlocked' && !root.hidden) {
+        // unlocked elsewhere (or a view finished): keep the fund view if it's open
+        if (!root.querySelector('#wg-bal')) close()
+      }
+      shown = state
+      return
+    }
+    if (state === shown && !root.hidden) return // the right view is already open
     shown = state
-    return
+    if (state === 'none') viewWelcome()
+    else viewUnlock()
+  } catch (error) {
+    if (busy) return
+    const text = message(error)
+    if (text !== startupError || root.hidden) viewStartupError(text)
+    startupError = text
+  } finally {
+    checking = false
   }
-  if (state === shown && !root.hidden) return // the right view is already open
-  shown = state
-  if (state === 'none') viewWelcome()
-  else viewUnlock()
 }
 
 void sync()

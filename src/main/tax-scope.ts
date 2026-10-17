@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync, renameSync } from 'node:fs'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
+import { parse, join } from 'node:path'
 import { changeTaxScope, validateTaxScope, type TaxScope } from '../shared/tax-scope'
 import { bindLedgerSource, organiseTaxActivity } from '../shared/tax-activity'
 import type { KasaSnapshot } from '../preload/index.d'
@@ -11,28 +12,47 @@ export class TaxScopeStore {
     private readonly databaseId: string
   ) {}
   get(): TaxScope {
+    return (
+      this.storage().scope ?? {
+        version: 1,
+        databaseId: this.databaseId,
+        taxpayers: [],
+        accounts: [],
+        assets: [],
+        assignments: []
+      }
+    )
+  }
+  private read(path: string, databaseId?: string): TaxScope | undefined {
     let content: string
     try {
-      content = readFileSync(this.path, 'utf8')
+      content = readFileSync(path, 'utf8')
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT')
-        return {
-          version: 1,
-          databaseId: this.databaseId,
-          taxpayers: [],
-          accounts: [],
-          assets: [],
-          assignments: []
-        }
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
       throw error
     }
     try {
-      return validateTaxScope(JSON.parse(content), this.databaseId)
+      const value = JSON.parse(content)
+      if (typeof value?.databaseId !== 'string' || !value.databaseId.trim())
+        throw new Error('Missing database identity.')
+      return validateTaxScope(value, databaseId ?? value.databaseId)
     } catch {
       throw new Error(
         'Scope file is invalid or belongs to a different database. No assignments have been applied.'
       )
     }
+  }
+  private storage(): { path: string; scope?: TaxScope } {
+    // Keep the original file for its original ledger. A different backend gets
+    // its own file, never another ledger's ownership or tax assignments.
+    const legacy = this.read(this.path)
+    if (legacy?.databaseId === this.databaseId) return { path: this.path, scope: legacy }
+    const { dir, name, ext } = parse(this.path)
+    const hash = createHash('sha256').update(this.databaseId).digest('hex')
+    const path = join(dir, `${name}-${hash}${ext || '.json'}`)
+    const scope = this.read(path, this.databaseId)
+    // Also retain an existing sidecar if the original file was removed.
+    return legacy || scope ? { path, scope } : { path: this.path }
   }
   change(
     input: unknown,
@@ -55,7 +75,8 @@ export class TaxScopeStore {
     return next
   }
   private save(state: TaxScope): void {
-    writeFileSync(`${this.path}.tmp`, JSON.stringify(state, null, 2), { mode: 0o600 })
-    renameSync(`${this.path}.tmp`, this.path)
+    const { path } = this.storage()
+    writeFileSync(`${path}.tmp`, JSON.stringify(state, null, 2), { mode: 0o600 })
+    renameSync(`${path}.tmp`, path)
   }
 }
