@@ -2,6 +2,7 @@ import type { TaxScopeAPI } from '../shared/tax-scope'
 import type { TaxProfileAPI } from '../shared/tax-profile'
 import type { SecurityAPI } from '../shared/security'
 import type { AgentAPI } from '../shared/agent'
+import type { LedgerSource } from '../shared/ledger-source'
 
 export interface KasaStatus {
   state: 'online' | 'syncing' | 'locked' | 'offline' | 'timeout' | 'error'
@@ -14,6 +15,9 @@ export interface KasaStatus {
 }
 
 export interface KasaInvoice {
+  source?: LedgerSource
+  amountRaw?: number
+  receivedRaw?: number
   id: string
   client: string
   amount: number
@@ -37,6 +41,11 @@ export interface KasaProposal {
 }
 
 export interface KasaPayment {
+  source?: LedgerSource
+  receivedRaw?: number
+  requestedRaw?: number | null
+  recipientId?: string
+  updatedAt?: number
   nodeIdx: number
   direction: 'in' | 'out'
   invoiceId: string | null
@@ -74,7 +83,9 @@ declare global {
       mockPay(recipientId: string, amount: number): Promise<void>
       wallet(method: string, params?: Record<string, unknown>): Promise<unknown>
       onChanged(cb: () => void): () => void
-      onPayment(cb: (p: { amount: number; client?: string; invoiceId?: string }) => void): () => void
+      onPayment(
+        cb: (p: { amount: number; client?: string; invoiceId?: string }) => void
+      ): () => void
     }
   }
 }

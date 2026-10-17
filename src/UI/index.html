@@ -1446,41 +1446,61 @@
       </div>
     </div>
 
-    <!-- Commercialista: recorded ledger overview; AI controls follow separately. -->
-    <div id="view-tax" class="view">
+    <!-- Commercialista: guided setup and saved-record workspace. -->
+    <div id="view-tax" class="view" data-tax-page="overview">
       <div class="topbar">
-        <div style="flex:1"><div class="tb-title">Commercialista · Tax &amp; VAT</div><div class="tb-sub">Review your records and prepare for tax estimates</div></div>
-        <span>All recorded dates · USDT</span>
-        <button class="btn btn-s sm" onclick="exportTaxCSV()">Export records CSV</button>
+        <div style="flex:1"><div class="tb-title">Commercialista · Tax &amp; VAT</div><div class="tb-sub">Your profiles, records and next steps</div></div>
+        <button class="btn btn-s" type="button" data-tax-open="profile">Manage profiles</button>
       </div>
-      <div class="vb">
-        <section class="tcard" style="padding:24px; margin-bottom:20px;" aria-labelledby="tax-setup-title">
-          <h2 id="tax-setup-title">Your tax profiles</h2>
-          <p>Keep personal and business activity separate. Each profile represents one taxpayer and tax year. Creating a profile does not connect a wallet or assign records.</p>
-          <ul id="tax-profile-existing"></ul>
-          <button id="tax-profile-new" class="btn btn-p" type="button" disabled>Create a new profile</button>
-          <button id="tax-profile-legacy" class="btn btn-s" type="button" hidden>Use previous setup as a starting point</button>
-          <form id="tax-profile-form" novalidate style="margin-top:20px;" hidden>
-            <fieldset id="tax-profile-fields" disabled style="border:0; padding:0;">
-              <p id="tax-profile-progress" aria-live="polite"></p>
+      <div class="vb tax-workspace">
+        <nav class="tax-nav" aria-label="Commercialista sections">
+          <button type="button" data-tax-page="overview" aria-current="page">Overview</button>
+          <button type="button" data-tax-page="activity">Activity</button>
+          <button type="button" data-tax-page="reports">Reports</button>
+          <button type="button" data-tax-page="profile">Profile</button>
+        </nav>
+        <div class="tax-page-heading">
+          <h2 id="tax-page-title" tabindex="-1">Your tax overview</h2>
+          <p id="tax-page-description">See what is saved and what needs your attention.</p>
+        </div>
+        <p id="tax-navigation-status" role="status" hidden></p>
+        <section id="tax-setup" class="tax-panel tax-setup" data-tax-panel="profile" aria-labelledby="tax-setup-title" hidden>
+          <div class="tax-profile-library">
+            <div class="tax-section-heading"><div><h3 id="tax-setup-title">Your saved profiles</h3><p>Keep personal and business activity separate. Each saved profile includes its tax year.</p></div><button id="tax-profile-new" class="btn btn-p" type="button" disabled>Add profile</button></div>
+            <ul id="tax-profile-existing" class="tax-profile-list"></ul>
+            <button id="tax-profile-legacy" class="btn btn-s" type="button" hidden>Reuse previous setup</button>
+            <div class="tax-draft-actions">
+              <p id="tax-profile-draft-note"></p>
+              <button id="tax-profile-resume" class="btn btn-p" type="button" hidden>Resume setup</button>
+              <button id="tax-profile-discard" class="btn btn-s" type="button" hidden>Discard draft</button>
+            </div>
+          </div>
+          <form id="tax-profile-form" novalidate hidden>
+            <fieldset id="tax-profile-fields" disabled>
+              <p id="tax-profile-progress" class="tax-eyebrow" aria-live="polite"></p>
               <h3 id="tax-profile-step-title" tabindex="-1"></h3>
-              <fieldset id="tax-profile-step-0" style="border:0; padding:0;">
-                <legend>Who is this tax profile for?</legend>
-                <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; margin:16px 0;">
-                  <label class="tcard" style="padding:18px; cursor:pointer;"><input type="radio" name="tax-profile-type" value="personal" required /> <strong>Personal</strong><br />Crypto held or used outside a business.</label>
-                  <label class="tcard" style="padding:18px; cursor:pointer;"><input type="radio" name="tax-profile-type" value="business" required /> <strong>Business or professional activity</strong><br />Crypto received, held or spent through your business or professional work.</label>
+              <fieldset id="tax-profile-step-0">
+                <legend class="tax-sr-only">Profile type</legend>
+                <p class="tax-step-help">Choose whose activity you want to organise. You can add another profile later.</p>
+                <div class="tax-type-choices">
+                  <label><input type="radio" name="tax-profile-type" value="personal" required /><span><strong>Personal</strong><small>Crypto you hold or use outside a business.</small></span></label>
+                  <label><input type="radio" name="tax-profile-type" value="business" required /><span><strong>Business / professional</strong><small>Your company, business or independent professional activity.</small></span></label>
                 </div>
-                <p>If you have both kinds of activity, create a separate profile for each.</p>
               </fieldset>
-              <fieldset id="tax-profile-step-1" hidden disabled style="border:0; padding:0;">
-                <legend>A few details about this profile</legend>
-                <label class="fl">Profile name<input class="fi" id="tax-profile-name" required maxlength="200" aria-describedby="tax-profile-name-help" /></label>
-                <p id="tax-profile-name-help">Choose a name you will recognise, such as “My personal taxes” or your business name. No tax identification number is needed here.</p>
-                <label class="fl"><span id="tax-profile-country-label">Country of tax residence</span><select class="fi" id="tax-profile-country" required aria-describedby="tax-profile-country-help"><option value="">Choose a country</option><option value="IT">Italy</option><option value="other">Another country</option></select></label>
-                <p id="tax-profile-country-help">Use tax residence, not citizenship or the location of an exchange. If unsure, confirm with your adviser before continuing.</p>
-                <p id="tax-profile-country-warning" role="status" hidden>Italian taxpayer review is currently supported. You can organise a profile for another country, but Italian calculations will not apply.</p>
-                <label class="fl">Tax year to review<select class="fi" id="tax-profile-year" required></select></label>
-                <p>Choose the year whose activity you want to review. This does not change transaction dates or establish a business’s fiscal-year boundaries.</p>
+              <fieldset id="tax-profile-step-1" hidden disabled>
+                <legend class="tax-sr-only">Country and tax year</legend>
+                <p class="tax-step-help">Tax rules depend on where you are tax resident and the year you are reviewing.</p>
+                <label>Profile name<input class="fi" id="tax-profile-name" required maxlength="200" aria-describedby="tax-profile-name-help" /></label>
+                <p id="tax-profile-name-help" class="tax-help">Use a familiar name, such as “My personal taxes” or your business name.</p>
+                <div class="tax-form-grid">
+                  <div><label><span id="tax-profile-country-label">Country of tax residence</span><select class="fi" id="tax-profile-country" required aria-describedby="tax-profile-country-help"><option value="">Choose a country</option><option value="IT">Italy</option><option value="other">Another country</option></select></label><p id="tax-profile-country-help" class="tax-help">Tax residence can differ from citizenship or an exchange’s location.</p></div>
+                  <div><label>Tax year to review<select class="fi" id="tax-profile-year" required></select></label><p class="tax-help">The year of the activity, not the year you file a return. Business fiscal periods need separate review.</p></div>
+                </div>
+                <p id="tax-profile-country-warning" class="tax-notice" role="status" hidden>You can organise records for another country. Italian tax calculations will not apply.</p>
+              </fieldset>
+              <fieldset id="tax-profile-step-2" hidden disabled>
+                <legend class="tax-sr-only">Tax details</legend>
+                <p class="tax-step-help">Answer what you know. “I’m not sure” keeps the question open for later review.</p>
                 <div id="tax-profile-personal-field" hidden>
                   <label class="fl">How are your crypto taxes handled?<select class="fi" id="tax-profile-personal"><option value="unknown">I’m not sure</option><option value="dichiarativo">I report them in my tax return</option><option value="amministrato">My intermediary handles them under an Italian administered arrangement</option></select></label>
                   <p>An exchange account alone does not establish an administered arrangement. Treatment may differ between accounts; this answer needs confirmation.</p>
@@ -1494,51 +1514,93 @@
                   <p>Forfettario is shown only for sole traders and professionals. Selecting it does not verify eligibility. Your accountant can confirm the applicable regime.</p>
                 </div>
               </fieldset>
-              <fieldset id="tax-profile-step-2" hidden disabled style="border:0; padding:0;">
-                <legend>Review before creating</legend>
-                <dl id="tax-profile-summary"></dl>
-                <button id="tax-profile-edit-type" class="btn btn-s" type="button">Edit personal/business choice</button>
-                <button id="tax-profile-edit-details" class="btn btn-s" type="button">Edit details</button>
-                <p>This creates a local taxpayer profile for organising records. It does not submit a tax return, verify your tax status, calculate tax or assign existing records. Existing profiles are kept.</p>
-                <p>Unknown answers remain on your checklist. Record history starts unconfirmed unless you explicitly reuse a previous setup.</p>
+              <fieldset id="tax-profile-step-3" hidden disabled>
+                <legend class="tax-sr-only">Saved app activity</legend>
+                <p class="tax-step-help">Payments already recorded in the app do not need to be entered again.</p>
+                <p id="tax-profile-activity-summary" class="tax-notice" role="status">Reading saved records…</p>
+                <ul id="tax-profile-activity-accounts" class="tax-profile-list"></ul>
+                <p class="tax-help">This step shows local records only. After setup, open Activity to confirm who owns a recognised app source. Matching records can then be organised automatically; existing assignments stay unchanged.</p>
               </fieldset>
-              <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:20px;">
+              <fieldset id="tax-profile-step-4" hidden disabled>
+                <legend class="tax-sr-only">Review your answers</legend>
+                <p class="tax-step-help">Check your answers. Creating this profile keeps all existing profiles and records.</p>
+                <dl id="tax-profile-summary" class="tax-summary"></dl>
+                <div class="tax-review-actions">
+                  <button id="tax-profile-edit-type" class="btn btn-s" type="button">Edit profile type</button>
+                  <button id="tax-profile-edit-details" class="btn btn-s" type="button">Edit country &amp; year</button>
+                  <button id="tax-profile-edit-tax" class="btn btn-s" type="button">Edit tax details</button>
+                  <button id="tax-profile-edit-activity" class="btn btn-s" type="button">Review app activity</button>
+                </div>
+                <p class="tax-help">Saved on this device. This organises your records; it does not file a return or calculate tax. Unknown answers stay open for review.</p>
+              </fieldset>
+              <div class="tax-step-actions">
                 <button id="tax-profile-back" class="btn btn-s" type="button">Back</button>
                 <button id="tax-profile-next" class="btn btn-p" type="submit">Continue</button>
-                <button id="tax-profile-cancel" class="btn btn-s" type="button">Cancel setup</button>
+                <button id="tax-profile-cancel" class="btn btn-s" type="button">Save &amp; close</button>
               </div>
             </fieldset>
           </form>
           <p id="tax-profile-status" role="status" aria-live="polite">Loading saved profiles…</p>
           <button id="tax-profile-retry" class="btn btn-s" type="button" hidden>Retry loading profiles</button>
-          <ul id="tax-profile-notes"></ul>
+          <ul id="tax-profile-notes" class="tax-help"></ul>
         </section>
-        <section class="tcard" style="padding:18px; margin-bottom:20px;" aria-label="Tax scope and completeness">
-          <strong>Accounts, assets and records</strong>
-          <p>Select a profile created above, then declare its accounts and assets. These are local declarations, not wallet connections or verified ownership. No wallet data is fetched by these controls.</p>
-          <p>Each taxpayer keeps its own saved profile snapshot. Creating another profile does not change existing taxpayers or reassign records. Create a new taxpayer review for a different profile or year.</p>
-          <p id="tax-scope-status" role="status">Loading local scope…</p>
-          <button id="tax-scope-refresh" type="button" class="btn btn-s">Reload scope</button>
-          <fieldset id="tax-scope-fields" disabled style="border:0; padding:0;">
-            <label>Selected tax profile<select id="scope-taxpayer" class="fi"></select></label>
+          <div class="tax-context">
+            <label>Profile &amp; tax year<select id="scope-taxpayer" class="fi" disabled></select></label>
             <p id="scope-profile"></p>
-            <section id="scope-overview" class="scope-section" aria-labelledby="scope-overview-title">
-              <h3 id="scope-overview-title">Your profile at a glance</h3>
-              <p id="scope-overview-status" role="status"></p>
-              <div id="scope-overview-totals" class="scope-grid"></div>
-              <p>Counts cover all dates assigned to this profile, including earlier history needed for review. Invoice requests and payment observations may describe the same funds. These are record counts, not taxable amounts.</p>
-              <p id="scope-overview-unassigned"></p>
-              <h4>What to do next</h4>
-              <ul id="scope-next-steps"></ul>
+          </div>
+            <section class="tax-panel" data-tax-panel="activity" hidden aria-labelledby="tax-activity-title">
+              <div class="tax-section-heading"><div><h3 id="tax-activity-title">Activity from your app</h3><p>Payments come from the saved ledger. Confirm a source’s owner once to organise matching records automatically.</p></div><button id="tax-activity-refresh" class="btn btn-s" type="button">Refresh activity</button></div>
+              <p id="tax-activity-status" role="status">Reading saved activity…</p>
+              <p id="tax-activity-pending" class="tax-notice" role="status" hidden>New saved activity is waiting. Save or discard your open edits to refresh.</p>
+              <div id="tax-activity-sources" class="tax-source-list"></div>
+              <form id="tax-source-form" class="tax-source-form" hidden>
+                <fieldset id="tax-source-fields">
+                  <legend>Confirm source ownership</legend>
+                  <p id="tax-source-context"></p>
+                  <input id="tax-source-id" type="hidden" />
+                  <label>Save under which account?<select id="tax-source-account" class="fi"></select></label>
+                  <div id="tax-source-new-account">
+                    <label>Account name<input id="tax-source-label" class="fi" maxlength="200" required /></label>
+                    <label>How much of this source belongs to the selected profile?<select id="tax-source-ownership" class="fi"><option value="unknown">I’m not sure / mixed personal and business activity</option><option value="full">All of it</option><option value="partial">A fixed ownership share</option></select></label>
+                    <label id="tax-source-share-field" hidden>Ownership percentage<input id="tax-source-share" class="fi" type="number" min="0.01" max="99.99" step="0.01" disabled /></label>
+                  </div>
+                  <p id="tax-source-account-help" class="tax-help">If ownership varies between records, leave the source unlinked and review those records individually.</p>
+                  <label class="tax-source-confirm"><input id="tax-source-confirm" type="checkbox" required /> I confirm this source’s ownership for the selected profile, including earlier history and future activity saved by the app.</label>
+                  <p class="tax-help">Existing assignments and tax details stay unchanged. This does not verify ownership, settlement or tax treatment. Asset details come from the saved source.</p>
+                  <div class="tax-review-actions"><button id="tax-source-save" class="btn btn-p" type="submit">Confirm &amp; organise</button><button id="tax-source-cancel" class="btn btn-s" type="button">Cancel</button></div>
+                </fieldset>
+                <p id="tax-source-status" role="status"></p>
+              </form>
+              <div class="tax-section-heading tax-activity-toolbar"><p id="tax-activity-summary"></p><label>Show<select id="tax-activity-filter" class="fi"><option value="profile">This profile + unassigned</option><option value="assigned">This profile only</option><option value="all">All saved activity</option></select></label></div>
+              <p class="tax-help">Linked invoices appear as supporting information on payments, never as an extra receipt. Received does not mean income; sent does not mean a deductible expense.</p>
+              <div class="tax-activity-table"><table aria-label="Saved payment activity"><thead><tr><th>Activity</th><th>Recorded amount</th><th>Status</th><th>Assigned profile</th><th>Review</th></tr></thead><tbody id="tax-activity-rows"></tbody></table></div>
+              <button id="tax-activity-more" class="btn btn-s" type="button" hidden>Show more activity</button>
+            </section>
+        <fieldset id="tax-scope-fields" class="tax-scope-fields" disabled>
+          <section class="tax-panel tax-estimate-empty" data-tax-panel="overview" aria-label="Tax estimate availability">
+            <div><span class="tax-eyebrow">Tax estimate</span><h3>Not available yet</h3><p id="tax-profile-missing">Choose or create a profile to get started.</p></div>
+            <p>Tax calculations are not available yet. You can review saved records and add supporting details in Activity.</p>
+          </section>
+          <section id="scope-overview" class="scope-section tax-panel" data-tax-panel="overview" aria-labelledby="scope-overview-title">
+            <h3 id="scope-overview-title">Your saved activity</h3>
+            <p id="scope-overview-status" role="status"></p>
+            <div id="scope-overview-totals" class="scope-grid"></div>
+            <p class="tax-help">Record counts cover all dates assigned to this profile. Requests and payments may describe the same funds; these are not taxable totals.</p>
+            <p id="scope-overview-unassigned" class="tax-help"></p>
+            <h4>Next steps</h4>
+            <ul id="scope-next-steps" class="tax-next-steps"></ul>
+          </section>
+          <section class="scope-section tax-panel" data-tax-panel="profile" hidden aria-labelledby="tax-history-title">
+            <h3 id="tax-history-title">History coverage</h3>
               <form id="scope-history-form">
                 <label>Have you included all relevant accounts and records, including earlier acquisitions?<select id="scope-history" class="fi" aria-describedby="scope-history-help"><option value="unknown">I’m not sure</option><option value="incomplete">Some are missing</option><option value="complete">Yes, I have included them</option></select></label>
                 <p id="scope-history-help">This covers the selected profile only. “Yes” is your declaration; records must still be reconciled with supporting statements. It does not certify completeness or mean no tax is due.</p>
                 <p id="scope-history-saved" role="status"></p>
                 <button id="scope-history-save" class="btn btn-s" type="submit">Save history answer</button>
               </form>
-            </section>
-            <section class="scope-section" aria-labelledby="scope-accounts-title">
-              <h3 id="scope-accounts-title">1. Add your accounts</h3>
+          </section>
+            <section class="scope-section tax-panel" data-tax-panel="profile" hidden aria-labelledby="scope-accounts-title">
+              <h3 id="scope-accounts-title">Saved accounts</h3>
               <p>An account is a label for a wallet or exchange account belonging to this profile. Adding it here does not connect to a wallet or import transactions. Never enter a seed phrase or private key.</p>
               <ul id="scope-account-list"></ul>
               <details id="scope-account-panel"><summary>Add an account · optional for now</summary>
@@ -1555,8 +1617,8 @@
                 </form>
               </details>
             </section>
-            <section class="scope-section" aria-labelledby="scope-assets-title">
-              <h3 id="scope-assets-title">2. Identify the assets</h3>
+            <section class="scope-section tax-panel" data-tax-panel="profile" hidden aria-labelledby="scope-assets-title">
+              <h3 id="scope-assets-title">Saved assets</h3>
               <p>Choose from saved assets when assigning a record below. A ticker such as USDT is not enough to identify a token: its network and contract matter. Saved asset definitions are shared across profiles; this does not share record ownership.</p>
               <ul id="scope-asset-list"></ul>
               <details id="scope-asset-panel"><summary>Add an asset · only when you know its identity</summary>
@@ -1577,9 +1639,10 @@
                 </form>
               </details>
             </section>
-            <section class="scope-section" aria-labelledby="scope-records-title">
-              <h3 id="scope-records-title">3. Assign existing records</h3>
-              <p>These records come from this app’s local database. An invoice is a request for payment; a payment observation records activity. They may describe the same funds and are not automatically combined.</p>
+            <section class="scope-section tax-panel" data-tax-panel="activity" hidden aria-labelledby="scope-records-title">
+              <h3 id="scope-records-title">Organise existing records</h3>
+              <p>Use manual review for older records without source identity, mixed ownership or an assignment you need to correct. No payment needs to be entered again.</p>
+              <details id="tax-manual-assignment"><summary>Review an individual assignment</summary>
               <form id="scope-assignment-form">
                 <label>Record to organise<select id="scope-record" class="fi" required></select></label>
                 <p id="scope-record-preview" role="status"></p>
@@ -1594,8 +1657,9 @@
                 <button class="btn btn-p" id="scope-assign-save" type="submit">Save record assignment</button>
                 <button class="btn btn-s" id="scope-unassign" type="button">Remove assignment</button>
               </form>
+              </details>
             </section>
-            <section class="scope-section" aria-labelledby="scope-review-title">
+            <section class="scope-section tax-panel" data-tax-panel="activity" hidden aria-labelledby="scope-review-title">
               <h3 id="scope-review-title">Review this profile’s records</h3>
               <p>These filters only change the tax details and completeness report below. They never assign or move records.</p>
               <div class="scope-grid">
@@ -1603,8 +1667,8 @@
                 <label>Show asset<select id="scope-asset" class="fi"></select></label>
               </div>
             </section>
-          </fieldset>
-          <form id="enrichment-form" class="scope-section" style="margin:18px 0;" aria-labelledby="enrichment-title">
+        </fieldset>
+          <form id="enrichment-form" class="scope-section tax-panel" data-tax-panel="activity" hidden aria-labelledby="enrichment-title">
             <h3 id="enrichment-title">Explain a record</h3>
             <p>Choose an assigned record from the profile and review filters above. Tell us what happened, then add only the details you know. You can save incomplete information.</p>
             <label>Which record would you like to explain?<select id="enrichment-record" class="fi"></select></label>
@@ -1667,15 +1731,15 @@
             </fieldset>
             <p id="enrichment-status" role="status" aria-live="polite">Select a profile and an assigned record.</p>
           </form>
+        <section class="tax-panel" data-tax-panel="reports" hidden aria-label="Calculation requirements">
           <p id="scope-record-counts"></p>
           <section class="scope-section" aria-labelledby="scope-checklist-title">
             <h3 id="scope-checklist-title">What is needed before calculating?</h3>
             <p>This detailed checklist follows the account and asset review filters. Saved entries are user declarations; supporting references have not been verified. There is no “tax ready” score.</p>
             <div id="scope-completeness"></div>
           </section>
-          <p>Completeness describes missing inputs, not compliance certification. No tax amount is calculated. Other ledger summaries and exports below remain unscoped database views.</p>
         </section>
-        <div class="tcard" style="padding:18px; margin-bottom:20px;" aria-label="Shared local AI">
+        <div class="tax-panel tax-ai-panel" data-tax-panel="profile" hidden aria-label="Shared local AI">
           <strong>Local AI</strong>
           <p id="tax-ai-status" role="status">Checking local AI…</p>
           <button id="tax-ai-prepare" class="btn btn-p" type="button" disabled>Checking…</button>
@@ -1683,6 +1747,8 @@
           <p>Uses the same model as Kasa Assistant. Closing AI switches it off for both sections; downloaded files stay on this device.</p>
           <p>Tax questions and explanations are not available yet. Ledger summaries and CSV export work without AI.</p>
         </div>
+        <section class="tax-panel" data-tax-panel="reports" hidden aria-label="Database records and exports">
+          <div class="tax-section-heading"><div><h3>App records &amp; exports</h3><p>These exports cover the app database, not only the selected profile. They are records for review, not a tax return.</p></div><button class="btn btn-s" type="button" onclick="exportTaxCSV()">Export all records CSV</button></div>
         <p id="commercialista-status" role="status">Loading recorded invoices and payments…</p>
         <p>These summaries work without AI. Recorded receipts are not taxable revenue. Invoice and payment records may describe the same funds.</p>
         <div class="tcard" style="margin:20px 0;">
@@ -1711,12 +1777,11 @@
             <table aria-label="Saved tax-year records"><thead><tr><th>Record</th><th>ID</th><th>Invoice ID</th><th>Client</th><th>Direction</th><th>Amount</th><th>Status</th><th>Date (UTC)</th></tr></thead><tbody id="tax-year-rows"></tbody></table>
           </div>
         </div>
-        <section class="tcard" style="padding:18px;" aria-label="Tax estimate availability">
-          <h3>Why is there no tax estimate yet?</h3>
-          <p id="tax-profile-missing">Select a profile to see its next steps above.</p>
-          <p>Organising records is the first step. Tax calculations are not implemented yet. Acquisition history, supporting evidence and applicable tax treatment still need review, even when all visible fields are filled in.</p>
-          <p>No tax liability has been calculated. The records CSV is an unscoped database export, not a tax return or an audited report.</p>
         </section>
+        <div class="tax-local-status">
+          <p id="tax-scope-status" role="status">Loading saved records…</p>
+          <button id="tax-scope-refresh" type="button" class="btn btn-s">Refresh saved records</button>
+        </div>
       </div>
     </div>
     <!-- ──────────────── TAX SETTLEMENT (PAY NOW DETAILS) ──────────────── -->
@@ -4123,8 +4188,10 @@ function startManualInvoice() {
 <script type="module" src="/src/kasa.ts"></script>
 <script type="module" src="/src/wallet-gate.ts"></script>
 <script type="module" src="/src/agent.ts"></script>
+<script type="module" src="/src/commercialista-nav.ts"></script>
 <script type="module" src="/src/tax-profile.ts"></script>
 <script type="module" src="/src/tax-year.ts"></script>
 <script type="module" src="/src/tax-scope.ts"></script>
+<script type="module" src="/src/tax-activity.ts"></script>
 </body>
 </html>

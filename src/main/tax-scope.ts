@@ -1,6 +1,8 @@
 import { readFileSync, writeFileSync, renameSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { changeTaxScope, validateTaxScope, type TaxScope } from '../shared/tax-scope'
+import { bindLedgerSource, organiseTaxActivity } from '../shared/tax-activity'
+import type { KasaSnapshot } from '../preload/index.d'
 import type { TaxProfile } from '../shared/tax-profile'
 
 export class TaxScopeStore {
@@ -32,10 +34,28 @@ export class TaxScopeStore {
       )
     }
   }
-  change(input: unknown, profile: TaxProfile | null, records: Set<string>): TaxScope {
-    const state = changeTaxScope(this.get(), input, profile, records, randomUUID())
+  change(
+    input: unknown,
+    profile: TaxProfile | null,
+    records: Set<string>,
+    snapshot?: KasaSnapshot
+  ): TaxScope {
+    const binding = (input as { kind?: unknown } | null)?.kind === 'bind-source'
+    if (binding && !snapshot) throw new Error('Saved ledger data is required to link a source.')
+    const state = binding
+      ? bindLedgerSource(this.get(), snapshot!, input, randomUUID())
+      : changeTaxScope(this.get(), input, profile, records, randomUUID())
+    this.save(state)
+    return state
+  }
+  organise(snapshot: KasaSnapshot): TaxScope {
+    const current = this.get()
+    const next = organiseTaxActivity(current, snapshot)
+    if (next !== current) this.save(next)
+    return next
+  }
+  private save(state: TaxScope): void {
     writeFileSync(`${this.path}.tmp`, JSON.stringify(state, null, 2), { mode: 0o600 })
     renameSync(`${this.path}.tmp`, this.path)
-    return state
   }
 }

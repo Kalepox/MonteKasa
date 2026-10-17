@@ -6,6 +6,7 @@ import type { SecurityAPI } from '../shared/security'
 import type { AgentAPI, AgentEvent } from '../shared/agent'
 
 const taxScope: TaxScopeAPI = {
+  organise: () => ipcRenderer.invoke('tax-scope:organise'),
   get: () => ipcRenderer.invoke('tax-scope:get'),
   change: (command) => ipcRenderer.invoke('tax-scope:change', command)
 }
@@ -63,8 +64,10 @@ const kasa = {
     }
   },
   onPayment: (cb: (p: { amount: number; client?: string; invoiceId?: string }) => void) => {
-    const l = (_e: IpcRendererEvent, p: { amount: number; client?: string; invoiceId?: string }): void =>
-      cb(p)
+    const l = (
+      _e: IpcRendererEvent,
+      p: { amount: number; client?: string; invoiceId?: string }
+    ): void => cb(p)
     ipcRenderer.on('kasa:payment', l)
     return () => {
       ipcRenderer.removeListener('kasa:payment', l)

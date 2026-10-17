@@ -151,13 +151,19 @@ app.whenReady().then(() => {
   kasa.start()
   const taxScope = new TaxScopeStore(join(app.getPath('userData'), 'tax-scopes.json'), getDb().name)
   handle('tax-scope:get', () => taxScope.get())
-  handle('tax-scope:change', (_event, command: unknown) =>
-    taxScope.change(
+  handle('tax-scope:organise', () => {
+    const snapshot = kasa.snapshot()
+    return { scope: taxScope.organise(snapshot), snapshot }
+  })
+  handle('tax-scope:change', (_event, command: unknown) => {
+    const snapshot = kasa.snapshot()
+    return taxScope.change(
       command,
       (command as { kind?: unknown } | null)?.kind === 'taxpayer' ? taxProfile.get() : null,
-      recordKeys(kasa.snapshot())
+      recordKeys(snapshot),
+      snapshot
     )
-  )
+  })
 
   handle('security:review', (_e, intent: PaymentIntent) => kasa.reviewPayment(intent))
   handle('security:execute', (_e, id: unknown, token: unknown, verified: unknown) =>
