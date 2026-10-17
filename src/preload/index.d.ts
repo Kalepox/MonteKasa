@@ -72,6 +72,7 @@ declare global {
       approve(id: string, refundInvoice: string): Promise<void>
       dismiss(id: string): Promise<void>
       mockPay(recipientId: string, amount: number): Promise<void>
+      wallet(method: string, params?: Record<string, unknown>): Promise<unknown>
       onChanged(cb: () => void): () => void
       onPayment(cb: (p: { amount: number; client?: string; invoiceId?: string }) => void): () => void
     }

@@ -55,9 +55,9 @@
     "vitest": "^5.0.5"
   },
   "allowScripts": {
-    "electron@39.8.10": true,
     "esbuild@0.25.12": true,
     "esbuild@0.28.2": true,
-    "better-sqlite3@13.0.3": true
+    "better-sqlite3@13.0.3": true,
+    "electron@44.8.0": true
   }
 }

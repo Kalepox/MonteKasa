@@ -10,7 +10,8 @@ let db: Database.Database | undefined
 export function getDb(): Database.Database {
   if (db) return db
   // separate file in mock mode, so fake payments never mix with real ones
-  const name = rgbConfig.mock ? 'kasa-mock.db' : 'kasa.db'
+  // one database per backend: transfer numbers (node_idx) of different wallets would collide
+  const name = rgbConfig.mock ? 'kasa-mock.db' : rgbConfig.backend === 'wdk' ? 'kasa-wdk.db' : 'kasa.db'
   const file = process.env.KASA_DB ?? join(app.getPath('userData'), name)
   db = new Database(file)
   db.pragma('journal_mode = WAL')
