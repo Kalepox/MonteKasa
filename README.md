@@ -42,7 +42,7 @@ on the merchant's laptop; keys never leave it; only settlement touches the netwo
 |---|---|
 | Desktop app | Electron 39 + TypeScript (electron-vite), UI in plain HTML/CSS/JS |
 | RGB payments | KaleidoSwap **RGB Lightning Node** (Docker) via `kaleido-sdk` 0.1.23, on **Mutinynet** (Bitcoin signet) |
-| Wallet (during event) | Tether **WDK** – `@utexo/wdk-wallet-rgb` (planned, see below) |
+| Wallet | Tether **WDK** – `@utexo/wdk-wallet-rgb` in `wallet-service/` (Node 22), enabled with `RGB_BACKEND=wdk` |
 | Local AI | **QVAC SDK** (planned, see below) |
 | Storage | SQLite via `better-sqlite3`, with schema migrations |
 | Tests | Vitest |
@@ -107,7 +107,29 @@ The status pill says **"Mock node"**. To try the whole flow:
    ```
 3. The invoice turns **Overpaid** → click it → paste any `rgb:` text → **Approve refund**.
 
-### 4. Start with a real wallet
+### 4. Start with the in-app wallet (WDK) – main way to run
+The wallet runs inside the app (Tether WDK, `@utexo/wdk-wallet-rgb`) – no Docker, no Kaleido node.
+It needs **Node 22** for the wallet service (install with [nvm](https://github.com/nvm-sh/nvm): `nvm install 22`).
+
+One time, install the wallet service:
+```bash
+cd wallet-service && npm install && cd ..
+```
+
+Start:
+```bash
+RGB_BACKEND=wdk WALLET_NODE=$(nvm which 22) npm run dev
+```
+
+Create the wallet on the **Wallet** page (password 8+ characters, write down the 12 words), or from
+**F12 → Console**:
+```js
+await kasa.wallet('unlock', { password: '<your password>' })     // after every app start
+await kasa.wallet('address')                                       // fund it at https://faucet.mutinynet.com
+await kasa.wallet('createUtxos', { num: 10, size: 3000 })          // once the BTC has arrived
+```
+
+### 5. Start with the KaleidoSwap node (alternative)
 With your node running and unlocked (see below): `npm run dev`
 (PowerShell: `Remove-Item Env:RGB_MOCK -ErrorAction SilentlyContinue; npm run dev`).
 The pill should say **"Mutinynet connected"**.
