@@ -1,7 +1,7 @@
 import { TaxScopeStore } from './tax-scope'
 import { recordKeys } from '../shared/tax-scope'
 import { getDb } from './db'
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, Notification } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'node:url'
 import type { IpcMainInvokeEvent } from 'electron'
@@ -189,9 +189,22 @@ app.whenReady().then(() => {
   handle('kasa:createInvoice', (_e, client: string, amount: number) =>
     kasa.createInvoice(client, amount)
   )
-  handle('kasa:receive', (_e, fresh: unknown = false) => {
+  handle('kasa:receive', (_e, fresh: unknown = false, amount: unknown = undefined) => {
     if (typeof fresh !== 'boolean') throw new Error('Invalid receive request.')
-    return kasa.receiveInvoice(fresh)
+    if (amount !== undefined && typeof amount !== 'string' && typeof amount !== 'number')
+      throw new Error('Invalid amount.')
+    return kasa.receiveInvoice(fresh, amount)
+  })
+  // Opens the user's own default mail client with a pre-filled draft (mailto:) — never sends
+  // anything itself. The user reviews and clicks send themselves in their own mail app.
+  handle('kasa:emailInvoice', (_e, to: unknown, subject: unknown, body: unknown) => {
+    if (typeof subject !== 'string' || typeof body !== 'string')
+      throw new Error('Invalid email content.')
+    if (to !== undefined && (typeof to !== 'string' || /[\r\n]/.test(to)))
+      throw new Error('Invalid recipient address.')
+    if (subject.length > 300 || body.length > 4000) throw new Error('Email content too long.')
+    const url = `mailto:${encodeURIComponent(to ?? '')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    return shell.openExternal(url).then(() => true)
   })
   handle('kasa:send', () => kasa.send())
   handle('kasa:approve', () => kasa.approve())
@@ -209,6 +222,14 @@ app.whenReady().then(() => {
   kasa.on('changed', () =>
     BrowserWindow.getAllWindows().forEach((w) => w.webContents.send('kasa:changed'))
   )
+  kasa.on('payment', (p: { amount: number; client?: string; invoiceId?: string }) => {
+    const body = p.client
+      ? `${p.client} paid ${p.amount.toLocaleString('en-US')} USDT.`
+      : `${p.amount.toLocaleString('en-US')} USDT received.`
+    if (Notification.isSupported())
+      new Notification({ title: 'Payment received', body, icon }).show()
+    BrowserWindow.getAllWindows().forEach((w) => w.webContents.send('kasa:payment', p))
+  })
 
   createWindow()
 

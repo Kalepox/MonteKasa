@@ -122,13 +122,14 @@ export class Kasa extends EventEmitter {
 
   private async tick(): Promise<void> {
     const changedIds = new Set<string>()
+    const newlySettled: { amount: number; client?: string; invoiceId?: string }[] = []
     let chainRequests = 0
     // 1. copy the node's view (received and sent) into our own DB
     for (const t of await this.rgb.listTransfers()) {
       // only incoming transfers pay our invoices
       const invoice = t.direction === 'in' ? db.getInvoiceByRecipient(t.recipientId) : undefined
+      const previous = db.getPayment(t.idx)
       if (t.direction === 'in' && t.status === 'settled') {
-        const previous = db.getPayment(t.idx)
         // Recent settlements get checked again; old settlements still follow node status changes.
         const oldStable =
           previous?.status === 'settled' &&
@@ -208,6 +209,9 @@ export class Kasa extends EventEmitter {
         updatedAt: t.updatedAt
       })
       if (changed && invoice) changedIds.add(invoice.id)
+      // notify once, exactly when a payment first settles (not on every re-poll of an old one)
+      if (changed && t.direction === 'in' && t.status === 'settled' && previous?.status !== 'settled')
+        newlySettled.push({ amount: toUsdt(t.receivedRaw), client: invoice?.client, invoiceId: invoice?.id })
     }
 
     // 2. legal receipt date = block time of the Bitcoin transaction
@@ -242,6 +246,7 @@ export class Kasa extends EventEmitter {
       changed = true
       if (r.state === 'Overpaid') this.proposeRefund(inv, r.receivedRaw)
     }
+    for (const p of newlySettled) this.emit('payment', p)
     if (changed) this.emit('changed')
   }
 
@@ -315,15 +320,22 @@ export class Kasa extends EventEmitter {
     this.emit('changed')
   }
 
-  // wallet "Receive": a plain USDT invoice, not tied to a client invoice.
-  // Reused for a few minutes, because every invoice reserves a UTXO.
+  // wallet "Request": a plain USDT invoice, not tied to a client invoice, optionally for
+  // a specific amount. Reused for a few minutes, because every invoice reserves a UTXO —
+  // but only when no specific amount is requested, since a cached invoice may ask for a
+  // different (or no) amount than the one the merchant just typed.
   private receiveCache?: { invoice: string; expiresAt: number }
-  async receiveInvoice(fresh = false): Promise<{ invoice: string; expiresAt: number }> {
-    if (!fresh && this.receiveCache && this.receiveCache.expiresAt - now() > 300)
+  async receiveInvoice(
+    fresh = false,
+    amount?: string | number
+  ): Promise<{ invoice: string; expiresAt: number }> {
+    const amountRaw = amount !== undefined && amount !== null && amount !== '' ? toRaw(amount) : null
+    if (amountRaw === null && !fresh && this.receiveCache && this.receiveCache.expiresAt - now() > 300)
       return this.receiveCache
-    const r = await this.rgb.createInvoice(null, now() + rgbConfig.invoiceTtlSec)
-    this.receiveCache = { invoice: r.invoice, expiresAt: r.expiresAt }
-    return this.receiveCache
+    const r = await this.rgb.createInvoice(amountRaw, now() + rgbConfig.invoiceTtlSec)
+    const result = { invoice: r.invoice, expiresAt: r.expiresAt }
+    if (amountRaw === null) this.receiveCache = result
+    return result
   }
 
   // wallet "Send": the merchant's own action; same asset/network/proxy checks as refunds

@@ -63,12 +63,17 @@ declare global {
       snapshot(): Promise<KasaSnapshot>
       invoicePdf(id: string): Promise<Uint8Array>
       createInvoice(client: string, amount: number | string): Promise<KasaInvoice>
-      receive(fresh?: boolean): Promise<{ invoice: string; expiresAt: number }>
+      receive(
+        fresh?: boolean,
+        amount?: string | number
+      ): Promise<{ invoice: string; expiresAt: number }>
+      emailInvoice(to: string | undefined, subject: string, body: string): Promise<boolean>
       send(invoice: string, amount: number): Promise<{ txid: string }>
       approve(id: string, refundInvoice: string): Promise<void>
       dismiss(id: string): Promise<void>
       mockPay(recipientId: string, amount: number): Promise<void>
       onChanged(cb: () => void): () => void
+      onPayment(cb: (p: { amount: number; client?: string; invoiceId?: string }) => void): () => void
     }
   }
 }
