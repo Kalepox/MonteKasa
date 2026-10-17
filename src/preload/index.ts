@@ -28,6 +28,7 @@ const security: SecurityAPI = {
 const kasa = {
   status: () => ipcRenderer.invoke('kasa:status'),
   snapshot: () => ipcRenderer.invoke('kasa:snapshot'),
+  invoicePdf: (id: string) => ipcRenderer.invoke('kasa:invoicePdf', id),
   createInvoice: (client: string, amount: number | string) =>
     ipcRenderer.invoke('kasa:createInvoice', client, amount),
   receive: (fresh = false) => ipcRenderer.invoke('kasa:receive', fresh),

@@ -1,6 +1,6 @@
 import type { KasaInvoice } from '../../preload/index.d'
 
-const cell = (value: string): string => {
+export const csvCell = (value: string): string => {
   // Quoting alone does not stop spreadsheet applications from evaluating formulas.
   const safe = /^[\s\uFEFF]*[=+@-]|^[\t\r\n]/.test(value) ? `'${value}` : value
   return `"${safe.replace(/"/g, '""')}"`
@@ -27,5 +27,5 @@ export function invoicesCsv(invoices: KasaInvoice[]): string {
       invoice.state
     ])
   ]
-  return rows.map((row) => row.map(cell).join(',')).join('\r\n') + '\r\n'
+  return rows.map((row) => row.map(csvCell).join(',')).join('\r\n') + '\r\n'
 }

@@ -3,6 +3,8 @@
 // Everything else in the UI (views, animations, demo sections) stays as it is.
 import QRCode from 'qrcode'
 import { invoicesCsv } from './invoice-csv'
+import { invoiceDocumentBody } from '../../shared/invoice-document'
+import { searchLedger, taxRecordsCsv } from './ledger'
 import { reviewPayment } from './security'
 import type { KasaInvoice, KasaSnapshot, KasaStatus } from '../../preload/index.d'
 
@@ -53,6 +55,36 @@ const initials = (name: string): string =>
 const shortId = (i: KasaInvoice): string => 'INV-' + i.id.slice(0, 6).toUpperCase()
 
 let snap: KasaSnapshot = { invoices: [], proposals: [], payments: [] }
+let searchRequest = 0
+w.qry = async (): Promise<void> => {
+  const request = ++searchRequest
+  const query = ($('qi') as HTMLInputElement).value.trim()
+  const output = $('qa')!
+  output.style.display = 'block'
+  output.style.whiteSpace = 'pre-wrap'
+  output.textContent = 'Searching recorded invoices and payments…'
+  try {
+    const current = await window.kasa.snapshot()
+    if (request === searchRequest) output.textContent = searchLedger(current, query)
+  } catch (e) {
+    if (request === searchRequest) output.textContent = `Search failed: ${errText(e)}`
+  }
+}
+w.exportTaxCSV = async (): Promise<void> => {
+  try {
+    const current = await window.kasa.snapshot()
+    w.downloadFile('tax-records-all-dates.csv', taxRecordsCsv(current), 'text/csv;charset=utf-8;')
+    w.toast(
+      'tax-csv',
+      '✓',
+      'Records exported',
+      'USDT records only. Tax liability and EUR conversion are not calculated.',
+      'blue'
+    )
+  } catch (e) {
+    toastErr('Export failed', e)
+  }
+}
 let walletBalance = 0
 
 // ---------- rendering ----------
@@ -199,6 +231,24 @@ w.issueRGB = async (): Promise<void> => {
 }
 
 // Send modal
+w.autofillSendAddress = async (): Promise<void> => {
+  try {
+    const invoice = (await navigator.clipboard.readText()).trim()
+    if (!invoice.startsWith('rgb:')) throw new Error('Clipboard does not contain an RGB invoice.')
+    const input = $('send-addr-input') as HTMLInputElement | null
+    if (input) input.value = invoice
+    w.toast(
+      'af',
+      '✓',
+      'Invoice pasted',
+      'Review the recipient and amount before submitting.',
+      'blue'
+    )
+  } catch (e) {
+    toastErr('Paste failed', e)
+  }
+}
+
 w.setSendMax = (): void => {
   const input = $('send-amt-input') as HTMLInputElement | null
   if (input) input.value = walletBalance.toFixed(6).replace(/\.?0+$/, '') || '0'
@@ -304,18 +354,48 @@ w.exportInvoicesCSV = async (): Promise<void> => {
 }
 
 // Invoice modal: real data + refund approval
+let selectedInvoiceId: string | undefined
+w.openM = (id: string): void => {
+  selectedInvoiceId = undefined
+  const invoice = snap.invoices.find((i) => shortId(i) === id)
+  if (invoice) void w.openInvoice(invoice.id)
+  else
+    w.toast(
+      'document',
+      '!',
+      'Invoice unavailable',
+      'Open an invoice from the recorded ledger.',
+      'red'
+    )
+}
+w.exportCurrentInvoiceCSV = async (): Promise<void> => {
+  try {
+    const current = await window.kasa.snapshot()
+    const invoice = current.invoices.find((i) => i.id === selectedInvoiceId)
+    if (!invoice) throw new Error('Open a recorded invoice first.')
+    w.downloadFile(`Invoice_${invoice.id}.csv`, invoicesCsv([invoice]), 'text/csv;charset=utf-8;')
+  } catch (e) {
+    toastErr('Export failed', e)
+  }
+}
+w.downloadInvoicePdf = async (): Promise<void> => {
+  try {
+    if (!selectedInvoiceId) throw new Error('Open a recorded invoice first.')
+    const id = selectedInvoiceId
+    const bytes = await window.kasa.invoicePdf(id)
+    w.downloadFile(`Invoice_${id}.pdf`, new Uint8Array(bytes), 'application/pdf')
+  } catch (e) {
+    toastErr('PDF export failed', e)
+  }
+}
+w.printInvoiceDoc = w.downloadInvoicePdf
 w.openInvoice = async (id: string): Promise<void> => {
   const i = snap.invoices.find((x) => x.id === id)
   if (!i) return
-  w.openM('INV-0009') // let the UI open and lay out the modal, then overwrite the fields
+  selectedInvoiceId = i.id
+  $('modal')?.classList.add('on')
   setText('m-id', `${shortId(i)} Details`)
-  setText('doc-id', shortId(i))
-  setText('doc-date', new Date(i.createdAt * 1000).toDateString())
-  setText('doc-due', new Date(i.expiresAt * 1000).toDateString())
-  setText('doc-amt', `${fmt(i.amount)} USDT`)
-  setText('doc-pay-amt', `${fmt(i.amount)} USDT`)
-  const to = $('doc-to')
-  if (to) to.innerHTML = `<strong>${esc(i.client)}</strong>`
+  document.querySelector('#modal .doc')!.innerHTML = invoiceDocumentBody(i)
   const b = $('m-badge')
   if (b) {
     b.className = `badge ${BADGE[i.state] ?? 'b-pending'}`

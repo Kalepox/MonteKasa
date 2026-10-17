@@ -54,6 +54,7 @@ declare global {
     kasa: {
       status(): Promise<KasaStatus>
       snapshot(): Promise<KasaSnapshot>
+      invoicePdf(id: string): Promise<Uint8Array>
       createInvoice(client: string, amount: number | string): Promise<KasaInvoice>
       receive(fresh?: boolean): Promise<{ invoice: string; expiresAt: number }>
       send(invoice: string, amount: number): Promise<{ txid: string }>

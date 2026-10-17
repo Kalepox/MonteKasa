@@ -12,6 +12,11 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { Agent } from './ai/agent'
 import { securityContext } from './ai/security-context'
 import type { SecurityTarget } from '../shared/agent'
+import { invoiceDocumentHtml } from '../shared/invoice-document'
+import { guardDisconnectedOutput } from './core/stdio'
+
+guardDisconnectedOutput(process.stdout)
+guardDisconnectedOutput(process.stderr)
 
 let readSecurity: ((target?: SecurityTarget) => string) | undefined
 const agent = new Agent(
@@ -139,6 +144,32 @@ app.whenReady().then(() => {
     return { ...s, balance: toUsdt(s.balanceRaw ?? 0), btcSats: s.btcSats ?? 0 }
   })
   handle('kasa:snapshot', () => kasa.snapshot())
+  handle('kasa:invoicePdf', async (_e, id: unknown) => {
+    if (typeof id !== 'string' || id.length > 100) throw new Error('Invalid invoice ID.')
+    const invoice = kasa.snapshot().invoices.find((i) => i.id === id)
+    if (!invoice) throw new Error('Invoice not found.')
+    const document = new BrowserWindow({
+      show: false,
+      webPreferences: {
+        sandbox: true,
+        contextIsolation: true,
+        nodeIntegration: false,
+        javascript: false
+      }
+    })
+    document.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+    try {
+      await document.loadURL(
+        `data:text/html;charset=utf-8,${encodeURIComponent(invoiceDocumentHtml(invoice))}`
+      )
+      return await document.webContents.printToPDF({
+        printBackground: true,
+        preferCSSPageSize: true
+      })
+    } finally {
+      document.destroy()
+    }
+  })
   handle('kasa:createInvoice', (_e, client: string, amount: number) =>
     kasa.createInvoice(client, amount)
   )
