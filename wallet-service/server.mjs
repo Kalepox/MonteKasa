@@ -105,9 +105,10 @@ const api = {
 
   async status({ assetId }) {
     const r = await unlocked().registerWallet() // also refreshes the BTC balance
-    let asset = { settled: 0, spendable: 0 }
-    try { asset = await account.getTokenBalance(assetId) } catch (e) { if (!notFound(e)) throw e }
-    return { address: r.address, btc: r.btcBalance, asset }
+    // getTokenBalance returns a plain number (BigInt), not an object
+    let spendable = 0
+    try { spendable = Number(await account.getTokenBalance(assetId)) } catch (e) { if (!notFound(e)) throw e }
+    return { address: r.address, btc: r.btcBalance, asset: { settled: spendable, spendable } }
   },
 
   async address() {
