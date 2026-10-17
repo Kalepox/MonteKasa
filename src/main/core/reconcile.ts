@@ -7,7 +7,15 @@ export function reconcile(
   now: number
 ): { state: InvoiceState; receivedRaw: number } {
   const settled = payments.filter((p) => p.status === 'settled')
-  const receivedRaw = settled.reduce((s, p) => s + p.receivedRaw, 0)
+  const receivedRaw = settled.reduce((s, p) => {
+    if (
+      !Number.isSafeInteger(p.receivedRaw) ||
+      p.receivedRaw < 0 ||
+      !Number.isSafeInteger(s + p.receivedRaw)
+    )
+      throw new Error('Payment total exceeds the supported integer range.')
+    return s + p.receivedRaw
+  }, 0)
 
   if (settled.length > 1) return { state: 'Flagged', receivedRaw }
   if (settled.length === 1) {

@@ -1,7 +1,7 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
-import * as path from 'path';
+import { app, BrowserWindow, ipcMain } from 'electron'
+import * as path from 'path'
 
-function createWindow() {
+function createWindow(): void {
   const mainWindow = new BrowserWindow({
     width: 1100,
     height: 750,
@@ -9,40 +9,40 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
-      contextIsolation: true,
+      contextIsolation: true
     }
-  });
+  })
 
-  mainWindow.loadFile(path.join(__dirname, 'index.html'));
+  mainWindow.loadFile(path.join(__dirname, 'index.html'))
 }
 
 app.whenReady().then(() => {
-  createWindow();
+  createWindow()
 
   ipcMain.handle('extract-invoice', async () => {
     // Mocking the QVAC extraction logic delay
-    return new Promise(resolve => setTimeout(resolve, 2000));
-  });
+    return new Promise((resolve) => setTimeout(resolve, 2000))
+  })
 
   ipcMain.handle('issue-rgb', async () => {
     // Mocking WDK/RGB transaction issue
-    return new Promise(resolve => setTimeout(resolve, 1500));
-  });
+    return new Promise((resolve) => setTimeout(resolve, 1500))
+  })
 
-  ipcMain.handle('send-funds', async (event, amount, address) => {
+  ipcMain.handle('send-funds', async () => {
     // Mocking WDK/RGB send
-    return new Promise(resolve => setTimeout(resolve, 1500));
-  });
+    return new Promise((resolve) => setTimeout(resolve, 1500))
+  })
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      createWindow()
     }
-  });
-});
+  })
+})
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    app.quit();
+    app.quit()
   }
-});
+})

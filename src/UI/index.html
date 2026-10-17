@@ -1982,8 +1982,7 @@
             </div>
             <div class="doc-lbl">RGB Invoice String</div>
             <div class="doc-pay-str">
-              rgb:invoice:1qr59xj7arco932k9x2m4/1200/usdt
-            </div>
+                </div>
           </div>
           <div class="doc-qr">
             <svg width="100%" height="100%" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -2221,7 +2220,7 @@
         r.style.display = '';
       } else {
         const bText = badge.textContent.trim().toLowerCase();
-        r.style.display = (bText.includes(filterText) || (filterText === 'received' && bText.includes('paid')) || (filterText === 'paid' && bText.includes('received'))) ? '' : 'none';
+        r.style.display = (bText === filterText || (filterText === 'received' && bText === 'paid') || (filterText === 'paid' && bText === 'received')) ? '' : 'none';
       }
     });
   }
@@ -2764,57 +2763,9 @@
 
 
   /* ════ 3. WDK RECEIVE & SEND MODAL LOGIC ════ */
-  let currentReceiveAsset = 'usdt';
-
   function openReceiveModal() {
-    const m = document.getElementById('receive-modal');
-    if (m) m.classList.add('on');
+    document.getElementById('receive-modal')?.classList.add('on');
     setReceiveAsset('usdt');
-  }
-
-  function setReceiveAsset(asset) {
-    currentReceiveAsset = asset;
-    const tabUsdt = document.getElementById('rcv-tab-usdt');
-    const tabBtc = document.getElementById('rcv-tab-btc');
-    const addrLabel = document.getElementById('rcv-addr-label');
-    const addrText = document.getElementById('rcv-addr-text');
-    const sealInfo = document.getElementById('rcv-seal-info');
-
-    if (asset === 'usdt') {
-      tabUsdt.style.background = 'rgba(255,255,255,0.08)';
-      tabUsdt.style.color = '#fff';
-      tabBtc.style.background = 'transparent';
-      tabBtc.style.color = 'var(--t3)';
-      addrLabel.textContent = 'RGB20 INVOICE STRING (TETHER)';
-      addrText.textContent = 'rgb:invoice:1qr59xj7arco932k9x2m4/1200/usdt';
-      sealInfo.textContent = 'Single-Use Seal: Anchored to Bitcoin UTXO #803,214:0';
-    } else {
-      tabBtc.style.background = 'rgba(255,255,255,0.08)';
-      tabBtc.style.color = '#fff';
-      tabUsdt.style.background = 'transparent';
-      tabUsdt.style.color = 'var(--t3)';
-      addrLabel.textContent = 'BITCOIN NATIVE SEGWIT ADDRESS';
-      addrText.textContent = 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh2k4a9x7';
-      sealInfo.textContent = 'Derivation: m/84\'/0\'/0\'/0/0 (Bech32 Verified)';
-    }
-  }
-
-  function copyReceiveAddress() {
-    const text = document.getElementById('rcv-addr-text')?.textContent.trim();
-    if (navigator.clipboard && text) navigator.clipboard.writeText(text);
-    toast('rcv-cp', '✓', 'Adres Kopyalandı', text.slice(0, 24) + '...', 'green');
-  }
-
-  function generateFreshSeal() {
-    const randHex = Math.random().toString(16).substring(2, 8);
-    const randUtxo = Math.floor(Math.random() * 800000 + 100000);
-    const sealInfo = document.getElementById('rcv-seal-info');
-    const addrText = document.getElementById('rcv-addr-text');
-    if (sealInfo) sealInfo.textContent = 'Yeni Mühür Üretildi: UTXO #' + randUtxo + ':' + Math.floor(Math.random() * 3);
-    if (addrText && currentReceiveAsset === 'usdt') {
-      addrText.textContent = 'rgb:invoice:1qr' + randHex + 'seal' + randUtxo + '/usdt';
-    }
-    toast('new-seal', '🔄', 'Yeni Kör Mühür Üretildi', 'İstemci tarafı doğrulama için taze UTXO mühürlendi.', 'amber');
   }
 
   function setSendMax() {
@@ -2894,22 +2845,6 @@
     link.click();
     document.body.removeChild(link);
     setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-  }
-
-  function exportInvoicesCSV() {
-    const rows = [
-      ["Invoice_ID", "Client_Name", "Amount_USDT", "Currency", "Issue_Date", "Due_Date", "Status", "RGB_TxID", "VAT_Number", "Jurisdiction"],
-      ["INV-0010", "Meridian Creative LLC", "800.00", "USDT", "2026-10-01", "2026-10-08", "Pending", "rgb:tx:3a7fc29b...", "US123456789", "United States (Export 0%)"],
-      ["INV-0009", "Arco Holdings Ltd", "1200.00", "USDT", "2026-09-28", "2026-10-05", "Paid", "rgb:tx:f81b942e...", "GB987654321", "United Kingdom (Reverse Charge)"],
-      ["INV-0008", "Vertex Global", "500.00", "USDT", "2026-09-25", "2026-09-30", "Overpaid (+120)", "rgb:tx:a12ce940...", "DE112233445", "Germany (EU Reverse Charge)"],
-      ["INV-0007", "Nova Works", "350.00", "USDT", "2026-09-20", "2026-09-27", "Flagged", "rgb:tx:d49a11ef...", "US987654321", "United States (Export 0%)"],
-      ["INV-0006", "Hanseatic Design", "650.00", "USDT", "2026-09-15", "2026-09-22", "Paid", "rgb:tx:4d1e88cc...", "DE882299110", "Germany (EU Reverse Charge)"],
-      ["INV-0005", "Nordic FinTech AB", "1450.00", "USDT", "2026-09-10", "2026-09-18", "Paid", "rgb:tx:9b1104fe...", "SE556677889", "Sweden (EU Reverse Charge)"],
-      ["INV-0004", "Kyoto Creative Lab", "900.00", "USDT", "2026-09-02", "2026-09-12", "Paid", "rgb:tx:6c2a88df...", "JP445566778", "Japan (Export 0%)"]
-    ];
-    const csvContent = rows.map(e => e.map(val => `"${val}"`).join(",")).join("\n");
-    downloadFile("invoices_ledger_2026.csv", csvContent, "text/csv;charset=utf-8;");
-    toast('csv-exp', '📊', 'CSV Dışa Aktarıldı', 'Tüm faturalar invoices_ledger_2026.csv olarak indirildi.', 'blue');
   }
 
   function exportInvoicesXML() {
@@ -3324,26 +3259,15 @@
       <!-- Asset Selector -->
       <div style="display:flex; background:rgba(255,255,255,0.03); border:1px solid var(--borderB); border-radius:6px; padding:3px; margin-bottom:16px;">
         <button id="rcv-tab-usdt" class="btn" style="flex:1; justify-content:center; font-size:11px; padding:6px; border-radius:4px; background:rgba(255,255,255,0.08); color:#fff;" onclick="setReceiveAsset('usdt')">₮ Tether USD (RGB20)</button>
-        <button id="rcv-tab-btc" class="btn" style="flex:1; justify-content:center; font-size:11px; padding:6px; border-radius:4px; background:transparent; color:var(--t3);" onclick="setReceiveAsset('btc')">₿ Bitcoin (SegWit)</button>
+        <button id="rcv-tab-btc" disabled title="Bitcoin receiving is unavailable: the wallet backend does not expose address generation." class="btn" style="flex:1; justify-content:center; font-size:11px; padding:6px; border-radius:4px; background:transparent; color:var(--t3);" >₿ Bitcoin (unavailable)</button>
       </div>
 
       <!-- QR Code Canvas / Container -->
       <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; margin-bottom:16px;">
-        <div style="width:150px; height:150px; background:#fff; border-radius:8px; padding:10px; display:flex; align-items:center; justify-content:center; box-shadow:0 8px 24px rgba(0,0,0,0.4);">
-          <svg id="rcv-qr-svg" width="100%" height="100%" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-            <rect width="100" height="100" fill="white"/>
-            <rect x="5" y="5" width="30" height="30" fill="none" stroke="#000" stroke-width="4"/><rect x="11" y="11" width="18" height="18" fill="#000"/>
-            <rect x="65" y="5" width="30" height="30" fill="none" stroke="#000" stroke-width="4"/><rect x="71" y="11" width="18" height="18" fill="#000"/>
-            <rect x="5" y="65" width="30" height="30" fill="none" stroke="#000" stroke-width="4"/><rect x="11" y="71" width="18" height="18" fill="#000"/>
-            <rect x="42" y="5" width="6" height="6" fill="#000"/><rect x="52" y="5" width="6" height="6" fill="#000"/><rect x="42" y="18" width="6" height="6" fill="#000"/>
-            <rect x="52" y="24" width="6" height="6" fill="#000"/><rect x="42" y="42" width="6" height="6" fill="#000"/><rect x="52" y="42" width="6" height="6" fill="#000"/>
-            <rect x="62" y="42" width="6" height="6" fill="#000"/><rect x="72" y="42" width="6" height="6" fill="#000"/><rect x="82" y="42" width="6" height="6" fill="#000"/>
-            <rect x="42" y="62" width="6" height="6" fill="#000"/><rect x="52" y="62" width="6" height="6" fill="#000"/><rect x="62" y="62" width="6" height="6" fill="#000"/>
-            <rect x="42" y="75" width="6" height="6" fill="#000"/><rect x="62" y="75" width="6" height="6" fill="#000"/><rect x="75" y="75" width="6" height="6" fill="#000"/>
-            <rect x="52" y="85" width="6" height="6" fill="#000"/><rect x="75" y="85" width="6" height="6" fill="#000"/><rect x="85" y="85" width="6" height="6" fill="#000"/>
-          </svg>
+        <div id="rcv-qr" style="width:150px; height:150px; background:#fff; border-radius:8px; padding:10px; display:flex; align-items:center; justify-content:center; box-shadow:0 8px 24px rgba(0,0,0,0.4);">
+
         </div>
-        <div style="font-size:10.5px; color:var(--t3); margin-top:8px;" id="rcv-seal-info">Single-Use Seal: Anchored to Bitcoin UTXO #803,214:0</div>
+        <div style="font-size:10.5px; color:var(--t3); margin-top:8px;" id="rcv-seal-info">Generate an RGB receive invoice.</div>
       </div>
 
       <!-- Address Box -->
@@ -3353,17 +3277,16 @@
           <span style="font-size:9.5px; color:var(--green); font-family:'JetBrains Mono',monospace;">Zero Tracking</span>
         </div>
         <div id="rcv-addr-text" style="font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--t1); word-break:break-all; line-height:1.4;">
-          rgb:invoice:1qr59xj7arco932k9x2m4/1200/usdt
         </div>
       </div>
 
       <!-- Action buttons -->
       <div style="display:flex; gap:10px;">
-        <button class="btn btn-p" style="flex:1; justify-content:center; padding:11px; font-size:12px; font-weight:700;" onclick="copyReceiveAddress()">
-          📋 Adresi Kopyala
+        <button id="rcv-copy" disabled class="btn btn-p" style="flex:1; justify-content:center; padding:11px; font-size:12px; font-weight:700;" onclick="copyReceiveAddress()">
+          📋 Copy invoice
         </button>
-        <button class="btn btn-s" style="padding:11px 14px; font-size:12px;" onclick="generateFreshSeal()" title="Generate new blinded seal">
-          🔄 Yeni Kör Mühür
+        <button id="rcv-fresh" class="btn btn-s" style="padding:11px 14px; font-size:12px;" onclick="generateFreshSeal()" title="Generate new blinded seal">
+          🔄 Fresh invoice
         </button>
       </div>
     </div>
@@ -3448,5 +3371,6 @@
   </div>
 </div>
 <script type="module" src="/src/kasa.ts"></script>
+<script type="module" src="/src/agent.ts"></script>
 </body>
 </html>

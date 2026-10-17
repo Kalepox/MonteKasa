@@ -1,14 +1,17 @@
+import { ChainObserver, bounded } from '../security/network'
+import { requireCheck } from '../security/rules'
 import { KaleidoClient } from 'kaleido-sdk'
 import { AssetFilterIdType, TransferKind, TransferStatus as RlnStatus } from 'kaleido-sdk/rln'
-import type { AssignmentAny, AssignmentFungible , Transfer} from 'kaleido-sdk/rln'
+import type { AssignmentAny, AssignmentFungible, Transfer } from 'kaleido-sdk/rln'
 import { rgbConfig } from './config'
 import type { IncomingTransfer, NodeState, RgbBackend, TransferStatus } from './types'
 type Assignment = Transfer['assignments'][number]
 
-const fungible = (value: number) => ({ type: 'Fungible', value }) as AssignmentFungible
-const anyAmount = () => ({ type: 'Any' }) as AssignmentAny
+const fungible = (value: number): AssignmentFungible =>
+  ({ type: 'Fungible', value }) as AssignmentFungible
+const anyAmount = (): AssignmentAny => ({ type: 'Any' }) as AssignmentAny
 
-const sum = (as: Assignment[]) => as.reduce((s, a) => s + ('value' in a ? a.value : 0), 0)
+const sum = (as: Assignment[]): number => as.reduce((s, a) => s + ('value' in a ? a.value : 0), 0)
 
 // both {type:"Any"} and {type:"Fungible", value:0} mean "any amount"
 function requested(a?: Assignment | null): number | null {
@@ -23,8 +26,8 @@ function mapStatus(s: RlnStatus): TransferStatus {
   return 'confirming'
 }
 
-const errText = (e: unknown) => String((e as { message?: string })?.message ?? e)
-const unknownAsset = (e: unknown) => errText(e).includes('Unknown RGB contract')
+const errText = (e: unknown): string => String((e as { message?: string })?.message ?? e)
+const unknownAsset = (e: unknown): boolean => errText(e).includes('Unknown RGB contract')
 
 function stateFromError(e: unknown): NodeState {
   const msg = errText(e).toLowerCase()
@@ -36,8 +39,85 @@ function stateFromError(e: unknown): NodeState {
 export function createKaleidoBackend(): RgbBackend {
   const rln = KaleidoClient.create({ nodeUrl: rgbConfig.nodeUrl }).rln
   const assetId = rgbConfig.assetId
+  const reference = new ChainObserver(
+    rgbConfig.explorerApi,
+    rgbConfig.checkpointHeight,
+    rgbConfig.checkpointHash
+  )
+  const nodeChain = new ChainObserver(
+    rgbConfig.nodeChainApi,
+    rgbConfig.checkpointHeight,
+    rgbConfig.checkpointHash
+  )
 
   return {
+    async decodeInvoice(invoice) {
+      const d = await bounded(rln.decodeRgbInvoice({ invoice }))
+      requireCheck(
+        d.assignment.type === 'Any' || d.assignment.type === 'Fungible',
+        'assignment',
+        'Only fungible or open-amount invoices are supported.'
+      )
+      return {
+        recipientId: d.recipient_id,
+        assetId: d.asset_id ?? null,
+        network: d.network,
+        amountRaw: d.assignment.type === 'Fungible' ? d.assignment.value : null,
+        expiresAt: d.expiration_timestamp ?? null,
+        endpoints: d.transport_endpoints
+      }
+    },
+    async networkEvidence() {
+      requireCheck(
+        Boolean(rgbConfig.nodeChainApi),
+        'chain-config',
+        'Configure RGB_NODE_CHAIN_API for the Esplora chain source used by this RGB node.',
+        'unavailable'
+      )
+      await Promise.all([reference.identity(), nodeChain.identity()])
+      await bounded(rln.refreshTransfers({ filter: [], skip_sync: false }))
+      const [network, refHeight, nodeHeight, balance, btc] = await Promise.all([
+        bounded(rln.getNetworkInfo()),
+        reference.height(true),
+        nodeChain.height(true),
+        bounded(rln.getAssetBalance({ asset_id: assetId })),
+        bounded(rln.getBtcBalance(true))
+      ])
+      const sharedHeight = Math.min(network.height, refHeight, nodeHeight)
+      const [left, right] = await Promise.all([
+        reference.blockHash(sharedHeight),
+        nodeChain.blockHash(sharedHeight)
+      ])
+      const identityVerified =
+        /^[a-f0-9]{64}$/.test(left) && left === right && Math.abs(network.height - nodeHeight) <= 2
+      return {
+        network: network.network,
+        height: network.height,
+        referenceHeight: refHeight,
+        identityVerified,
+        online: true,
+        balanceRaw: balance.spendable,
+        btcSats: btc.vanilla.spendable,
+        checkedAt: Math.floor(Date.now() / 1000),
+        source: rgbConfig.explorerApi,
+        recommendedFeeRate: await reference.recommendedFee()
+      }
+    },
+    async outgoingTransfers() {
+      await bounded(rln.refreshTransfers({ filter: [], skip_sync: false }))
+      const { transfers } = await bounded(
+        rln.listTransfers({ asset_filter: { type: AssetFilterIdType.Id, value: assetId } })
+      )
+      return transfers
+        .filter((t) => t.kind === TransferKind.Send && t.recipient_id)
+        .map((t) => ({
+          recipientId: t.recipient_id!,
+          amountRaw: sum(t.assignments),
+          txid: t.txid ?? undefined,
+          status: t.status
+        }))
+    },
+    chainEvidence: (txid) => reference.transaction(txid),
     async status() {
       try {
         const info = await rln.getNodeInfo()
@@ -48,8 +128,13 @@ export function createKaleidoBackend(): RgbBackend {
         } catch (e) {
           if (!unknownAsset(e)) throw e // never received USDT yet balance 0
         }
-        return { state: 'online', mock: false, pubkey: info.pubkey, balanceRaw, btcSats: btc.vanilla.spendable }
-
+        return {
+          state: 'online',
+          mock: false,
+          pubkey: info.pubkey,
+          balanceRaw,
+          btcSats: btc.vanilla.spendable
+        }
       } catch (e) {
         return { state: stateFromError(e), mock: false }
       }
@@ -74,55 +159,69 @@ export function createKaleidoBackend(): RgbBackend {
         // first USDT ever: the node can't name the asset yet, so ask for "any asset"
         res = await rln.createRgbInvoice({ ...base, asset_id: null, assignment: anyAmount() })
       }
-      return { recipientId: res.recipient_id, invoice: res.invoice, expiresAt: res.expiration_timestamp }
+      return {
+        recipientId: res.recipient_id,
+        invoice: res.invoice,
+        expiresAt: res.expiration_timestamp
+      }
     },
 
     async listIncoming() {
-      await rln.refreshTransfers({ filter: [], skip_sync: false })
+      await bounded(rln.refreshTransfers({ filter: [], skip_sync: false }))
       let transfers
       try {
-        ;({ transfers } = await rln.listTransfers({
-          asset_filter: { type: AssetFilterIdType.Id, value: assetId }
-        }))
+        ;({ transfers } = await bounded(
+          rln.listTransfers({
+            asset_filter: { type: AssetFilterIdType.Id, value: assetId }
+          })
+        ))
       } catch (e) {
         if (unknownAsset(e)) return []
         throw e
       }
       return transfers
-        .filter((t) => t.kind === TransferKind.ReceiveBlind || t.kind === TransferKind.ReceiveWitness)
-        .filter((t) => t.recipient_id)
-        .map(
-          (t): IncomingTransfer => ({
-            idx: t.idx,
-            recipientId: t.recipient_id!,
-            requestedRaw: requested(t.requested_assignment),
-            receivedRaw: sum(t.assignments),
-            status: mapStatus(t.status),
-            txid: t.txid ?? undefined,
-            receiveUtxo: t.receive_utxo ?? undefined,
-            updatedAt: t.updated_at
-          })
+        .filter(
+          (t) => t.kind === TransferKind.ReceiveBlind || t.kind === TransferKind.ReceiveWitness
         )
+        .filter((t) => t.recipient_id)
+        .map((t): IncomingTransfer => ({
+          idx: t.idx,
+          recipientId: t.recipient_id!,
+          requestedRaw: requested(t.requested_assignment),
+          receivedRaw: sum(t.assignments),
+          status: mapStatus(t.status),
+          txid: t.txid ?? undefined,
+          receiveUtxo: t.receive_utxo ?? undefined,
+          updatedAt: t.updated_at
+        }))
     },
 
     // decode first: /sendrgb wants the recipient id + endpoints, not the whole invoice
     async send(recipientInvoice, amountRaw) {
-      const d = await rln.decodeRgbInvoice({ invoice: recipientInvoice })
+      const d = await bounded(rln.decodeRgbInvoice({ invoice: recipientInvoice }))
 
-      if (d.asset_id && d.asset_id !== assetId) throw new Error(`Invoice is for another asset (${d.asset_id})`)
-      if (!d.recipient_id.startsWith('sbc:')) throw new Error(`Invoice is not on Mutinynet (${d.recipient_id})`)
+      if (d.asset_id && d.asset_id !== assetId)
+        throw new Error(`Invoice is for another asset (${d.asset_id})`)
+      if (d.network !== rgbConfig.network)
+        throw new Error(`Invoice is for another network (${d.network})`)
 
-      return rln.sendRgb({
-        donation: false,
-        fee_rate: rgbConfig.feeRate,
-        min_confirmations: 1,
-        expiration_timestamp: Math.floor(Date.now() / 1000) + 86400,
-        recipient_map: {
-          [assetId]: [
-            { recipient_id: d.recipient_id, assignment: fungible(amountRaw), transport_endpoints: d.transport_endpoints }
-          ]
-        }
-      })
+      return bounded(
+        rln.sendRgb({
+          donation: false,
+          fee_rate: rgbConfig.feeRate,
+          min_confirmations: 1,
+          expiration_timestamp: Math.floor(Date.now() / 1000) + 86400,
+          recipient_map: {
+            [assetId]: [
+              {
+                recipient_id: d.recipient_id,
+                assignment: fungible(amountRaw),
+                transport_endpoints: d.transport_endpoints
+              }
+            ]
+          }
+        })
+      )
     }
   }
 }
