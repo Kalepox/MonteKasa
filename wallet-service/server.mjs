@@ -311,7 +311,9 @@ const server = http.createServer((req, res) => {
       try {
         reply(200, { result: await api[method](params ?? {}) })
       } catch (e) {
-        reply(500, { error: String(e?.message ?? e) }) // never echoes params (passwords, mnemonics)
+        // include the underlying cause (rgb-lib's real reason); never echoes params (passwords, mnemonics)
+        const cause = e?.cause?.message ?? e?.cause
+        reply(500, { error: String(e?.message ?? e) + (cause ? `: ${String(cause)}` : '') })
       }
     }
     if (READ_ONLY.has(method)) void run()

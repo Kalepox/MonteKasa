@@ -3435,12 +3435,13 @@ function startManualInvoice() {
       const now = Date.now();
       const byDay = {};
       window.__realPayments.forEach(p => {
-        if (!p.blockTime) return;
-        const ts = p.blockTime * 1000;
+        // net total incl. payments still confirming (no block time yet → today); failed ones never count
+        if (p.status === 'failed' || !p.received) return;
+        const ts = p.blockTime ? p.blockTime * 1000 : now;
         if (now - ts > days * 86400000) return;
         const key = new Date(ts).toDateString();
         byDay[key] = byDay[key] || { date: new Date(ts), amount: 0, items: [] };
-        byDay[key].amount += p.received;
+        byDay[key].amount += p.direction === 'out' ? -p.received : p.received;
         byDay[key].items.push(p);
       });
       const out = [];
@@ -3466,14 +3467,19 @@ function startManualInvoice() {
     const total = values.reduce((a, b) => a + b, 0);
     const half = Math.floor(values.length / 2);
     const recent = values.slice(half).reduce((a, b) => a + b, 0);
-    const prior = values.slice(0, half).reduce((a, b) => a + b, 0) || 1;
-    const pct = Math.round(((recent - prior) / prior) * 100);
+    const prior = values.slice(0, half).reduce((a, b) => a + b, 0);
+    const pct = prior > 0 ? Math.round(((recent - prior) / prior) * 100) : null; // no baseline: no %
     const totalEl = document.getElementById('cf-net-total');
     const trendEl = document.getElementById('cf-trend');
-    if (totalEl) totalEl.innerHTML = '+' + Math.round(total).toLocaleString('en-US') + ' <span style="font-size:11px; font-weight:600; color:var(--t3);">USDT net</span>';
+    if (totalEl) totalEl.innerHTML = (total < 0 ? '−' : '+') + Math.abs(Math.round(total)).toLocaleString('en-US') + ' <span style="font-size:11px; font-weight:600; color:var(--t3);">USDT net</span>';
     if (trendEl) {
-      trendEl.innerHTML = (pct >= 0 ? '&#x2191; ' : '&#x2193; ') + Math.abs(pct) + '% vs prior period';
-      trendEl.style.color = pct >= 0 ? 'var(--green)' : 'var(--red)';
+      if (pct === null) {
+        trendEl.innerHTML = total > 0 ? 'New this period' : '';
+        trendEl.style.color = 'var(--t3)';
+      } else {
+        trendEl.innerHTML = (pct >= 0 ? '&#x2191; ' : '&#x2193; ') + Math.abs(pct) + '% vs prior period';
+        trendEl.style.color = pct >= 0 ? 'var(--green)' : 'var(--red)';
+      }
     }
   }
 
