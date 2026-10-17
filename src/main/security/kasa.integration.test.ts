@@ -1,0 +1,188 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import type { IncomingTransfer, RgbBackend } from '../rgb/types'
+vi.mock('electron', () => ({ app: { getPath: () => tmpdir() } }))
+const cleanups: (() => void)[] = []
+afterEach(() => {
+  for (const close of cleanups.splice(0)) close()
+  vi.unstubAllEnvs()
+})
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+async function fixture() {
+  vi.resetModules()
+  const dir = mkdtempSync(join(tmpdir(), 'kasa-reconcile-'))
+  vi.stubEnv('KASA_DB', join(dir, 'test.db'))
+  vi.stubEnv('RGB_MOCK', '1')
+  const { Kasa } = await import('../core/kasa')
+  const db = await import('../db')
+  const { rgbConfig } = await import('../rgb/config')
+  let transfers: IncomingTransfer[] = []
+  let confirmations = 3
+  const backend: RgbBackend = {
+    status: async () => ({ state: 'online', mock: true, balanceRaw: 100000000, btcSats: 10000 }),
+    createInvoice: async (raw, expiresAt) => ({
+      recipientId: 'incoming',
+      invoice: `rgb:${raw}`,
+      expiresAt
+    }),
+    listIncoming: async () => structuredClone(transfers),
+    decodeInvoice: async () => ({
+      recipientId: 'refund-recipient',
+      assetId: rgbConfig.assetId,
+      network: rgbConfig.network,
+      amountRaw: null,
+      expiresAt: null,
+      endpoints: [rgbConfig.proxy]
+    }),
+    networkEvidence: async () => ({
+      network: rgbConfig.network,
+      height: 100,
+      referenceHeight: 100,
+      identityVerified: true,
+      online: true,
+      balanceRaw: 100000000,
+      btcSats: 10000,
+      checkedAt: Math.floor(Date.now() / 1000),
+      source: 'test'
+    }),
+    outgoingTransfers: async () => [],
+    chainEvidence: async () => ({
+      confirmed: true,
+      inBestChain: true,
+      confirmations,
+      checkedAt: Math.floor(Date.now() / 1000)
+    }),
+    send: vi.fn(async () => ({ txid: 'tx' }))
+  }
+  const kasa = new Kasa(backend)
+  cleanups.push(() => {
+    db.getDb().close()
+    rmSync(dir, { recursive: true, force: true })
+  })
+  const invoice = await kasa.createInvoice('Client', '10')
+  const payment = (
+    idx: number,
+    raw: number,
+    status: IncomingTransfer['status'] = 'settled'
+  ): IncomingTransfer => ({
+    idx,
+    recipientId: 'incoming',
+    requestedRaw: 10000000,
+    receivedRaw: raw,
+    status,
+    txid: `tx${idx}`,
+    updatedAt: Math.floor(Date.now() / 1000)
+  })
+  return {
+    kasa,
+    db,
+    invoice,
+    backend,
+    payment,
+    setTransfers: (t: IncomingTransfer[]): void => {
+      transfers = t
+    },
+    setConfirmations: (n: number): void => {
+      confirmations = n
+    }
+  }
+}
+describe('Kasa security integration', () => {
+  it('reconciles late payments even after Paid and deduplicates evidence', async () => {
+    const f = await fixture()
+    f.setTransfers([f.payment(1, 10000000)])
+    await f.kasa.refresh()
+    expect(f.db.getInvoice(f.invoice.id)?.state).toBe('Paid')
+    f.setTransfers([f.payment(1, 10000000), f.payment(2, 2000000)])
+    await f.kasa.refresh()
+    await f.kasa.refresh()
+    expect(f.db.getInvoice(f.invoice.id)?.state).toBe('Flagged')
+    expect(f.db.getInvoice(f.invoice.id)?.receivedRaw).toBe(12000000)
+    expect(
+      f.kasa.security.snapshot().findings.filter((x) => x.rule === 'late-payment-change')
+    ).toHaveLength(1)
+  })
+  it('does not mark an incoming payment paid below confirmation policy', async () => {
+    const f = await fixture()
+    f.setConfirmations(1)
+    f.setTransfers([f.payment(1, 10000000)])
+    await f.kasa.refresh()
+    expect(f.db.getInvoice(f.invoice.id)?.state).toBe('Pending')
+  })
+  it('reopens a paid invoice when node settlement regresses', async () => {
+    const f = await fixture()
+    f.setTransfers([f.payment(1, 10000000)])
+    await f.kasa.refresh()
+    f.setTransfers([f.payment(1, 10000000, 'confirming')])
+    await f.kasa.refresh()
+    expect(f.db.getInvoice(f.invoice.id)?.state).toBe('Pending')
+    expect(f.db.paymentsForInvoice(f.invoice.id)[0].blockTime).toBeNull()
+  })
+  it('rejects a stale refund after payment amount changes before execution', async () => {
+    const f = await fixture()
+    f.setTransfers([f.payment(1, 12000000)])
+    await f.kasa.refresh()
+    const proposal = f.db.listProposals()[0]
+    const review = await f.kasa.reviewPayment({
+      invoice: 'rgb:refund',
+      amount: '2',
+      proposalId: proposal.id
+    })
+    f.setTransfers([f.payment(1, 11000000)])
+    await expect(
+      f.kasa.executePayment(review.operation.id, review.approvalToken, true)
+    ).rejects.toThrow('amount')
+    expect(f.backend.send).not.toHaveBeenCalled()
+    expect(f.db.getProposal(proposal.id)?.amountRaw).toBe(1000000)
+  })
+  it('does not execute a refund after confirmation regression', async () => {
+    const f = await fixture()
+    f.setTransfers([f.payment(1, 12000000)])
+    await f.kasa.refresh()
+    const proposal = f.db.listProposals()[0]
+    const review = await f.kasa.reviewPayment({
+      invoice: 'rgb:refund',
+      amount: '2',
+      proposalId: proposal.id
+    })
+    f.setConfirmations(1)
+    await expect(
+      f.kasa.executePayment(review.operation.id, review.approvalToken, true)
+    ).rejects.toThrow('confirmation')
+    expect(f.backend.send).not.toHaveBeenCalled()
+  })
+  it('disables both legacy money-moving entry points', async () => {
+    const f = await fixture()
+    await expect(f.kasa.send()).rejects.toThrow('gate')
+    await expect(f.kasa.approve()).rejects.toThrow('gate')
+    expect(f.backend.send).not.toHaveBeenCalled()
+  })
+})
+
+describe('successful refund flow', () => {
+  it('moves a verified refund through submitted to completed and refuses repeat approval', async () => {
+    const f = await fixture()
+    f.setTransfers([f.payment(1, 12000000)])
+    await f.kasa.refresh()
+    const proposal = f.db.listProposals()[0]
+    const review = await f.kasa.reviewPayment({
+      invoice: 'rgb:refund',
+      amount: '2',
+      proposalId: proposal.id
+    })
+    const result = await f.kasa.executePayment(review.operation.id, review.approvalToken, true)
+    expect(result.state).toBe('submitted')
+    expect(f.db.getProposal(proposal.id)?.status).toBe('submitted')
+    f.backend.outgoingTransfers = async () => [
+      { recipientId: 'refund-recipient', amountRaw: 2000000, txid: 'tx', status: 'Settled' }
+    ]
+    await f.kasa.security.monitor()
+    expect(f.db.getProposal(proposal.id)?.status).toBe('completed')
+    await expect(
+      f.kasa.executePayment(review.operation.id, review.approvalToken, true)
+    ).rejects.toThrow()
+    expect(f.backend.send).toHaveBeenCalledTimes(1)
+  })
+})

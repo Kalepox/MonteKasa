@@ -1,5 +1,7 @@
 appId: com.electron.app
 productName: agentic-euros
+# The QVAC Bare subprocess needs real filesystem paths for JS and native addons.
+asar: false
 directories:
   buildResources: build
 files:

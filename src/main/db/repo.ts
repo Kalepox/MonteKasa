@@ -45,34 +45,44 @@ export function insertInvoice(inv: InvoiceRow): void {
 }
 
 export function updateInvoiceState(id: string, state: string, receivedRaw: number): void {
-  getDb().prepare('UPDATE invoices SET state = ?, received_raw = ? WHERE id = ?').run(state, receivedRaw, id)
+  getDb()
+    .prepare('UPDATE invoices SET state = ?, received_raw = ? WHERE id = ?')
+    .run(state, receivedRaw, id)
 }
 
 export function listInvoices(): InvoiceRow[] {
-  return getDb().prepare(`SELECT ${INVOICE_COLS} FROM invoices ORDER BY created_at DESC`).all() as InvoiceRow[]
+  return getDb()
+    .prepare(`SELECT ${INVOICE_COLS} FROM invoices ORDER BY created_at DESC`)
+    .all() as InvoiceRow[]
 }
 
 export function getInvoiceByRecipient(recipientId: string): InvoiceRow | undefined {
-  return getDb().prepare(`SELECT ${INVOICE_COLS} FROM invoices WHERE recipient_id = ?`).get(recipientId) as
-    | InvoiceRow
-    | undefined
+  return getDb()
+    .prepare(`SELECT ${INVOICE_COLS} FROM invoices WHERE recipient_id = ?`)
+    .get(recipientId) as InvoiceRow | undefined
 }
 
 // ---- payments ----
 
 // insert the first time we see a transfer, update its status/amount afterwards
-export function upsertPayment(p: Omit<PaymentRow, 'blockTime'>): void {
-  getDb()
-    .prepare(
-      `INSERT INTO payments (node_idx, invoice_id, recipient_id, requested_raw, received_raw, status, txid, receive_utxo, updated_at)
+export function upsertPayment(p: Omit<PaymentRow, 'blockTime'>): boolean {
+  return (
+    getDb()
+      .prepare(
+        `INSERT INTO payments (node_idx, invoice_id, recipient_id, requested_raw, received_raw, status, txid, receive_utxo, updated_at)
        VALUES (@nodeIdx, @invoiceId, @recipientId, @requestedRaw, @receivedRaw, @status, @txid, @receiveUtxo, @updatedAt)
        ON CONFLICT(node_idx) DO UPDATE SET
          received_raw = excluded.received_raw,
          status       = excluded.status,
          txid         = excluded.txid,
-         updated_at   = excluded.updated_at`
-    )
-    .run(p)
+         updated_at   = excluded.updated_at,
+         invoice_id = excluded.invoice_id,
+         block_time = CASE WHEN excluded.status != 'settled' OR payments.txid IS NOT excluded.txid THEN NULL ELSE payments.block_time END
+       WHERE payments.received_raw != excluded.received_raw OR payments.status != excluded.status
+         OR payments.txid IS NOT excluded.txid OR payments.invoice_id IS NOT excluded.invoice_id`
+      )
+      .run(p).changes > 0
+  )
 }
 
 export function setBlockTime(nodeIdx: number, blockTime: number): void {
@@ -80,16 +90,22 @@ export function setBlockTime(nodeIdx: number, blockTime: number): void {
 }
 
 export function listPayments(): PaymentRow[] {
-  return getDb().prepare(`SELECT ${PAYMENT_COLS} FROM payments ORDER BY node_idx DESC`).all() as PaymentRow[]
+  return getDb()
+    .prepare(`SELECT ${PAYMENT_COLS} FROM payments ORDER BY node_idx DESC`)
+    .all() as PaymentRow[]
 }
 
 export function paymentsForInvoice(invoiceId: string): PaymentRow[] {
-  return getDb().prepare(`SELECT ${PAYMENT_COLS} FROM payments WHERE invoice_id = ?`).all(invoiceId) as PaymentRow[]
+  return getDb()
+    .prepare(`SELECT ${PAYMENT_COLS} FROM payments WHERE invoice_id = ?`)
+    .all(invoiceId) as PaymentRow[]
 }
 
 export function paymentsMissingBlockTime(): PaymentRow[] {
   return getDb()
-    .prepare(`SELECT ${PAYMENT_COLS} FROM payments WHERE status = 'settled' AND txid IS NOT NULL AND block_time IS NULL`)
+    .prepare(
+      `SELECT ${PAYMENT_COLS} FROM payments WHERE status = 'settled' AND txid IS NOT NULL AND block_time IS NULL`
+    )
     .all() as PaymentRow[]
 }
 
@@ -122,11 +138,14 @@ export function insertProposal(p: Omit<ProposalRow, 'refundInvoice' | 'txid' | '
 }
 
 export function getProposal(id: string): ProposalRow | undefined {
-  return getDb().prepare(`SELECT ${PROPOSAL_COLS} FROM proposals WHERE id = ?`).get(id) as ProposalRow | undefined
+  return getDb().prepare(`SELECT ${PROPOSAL_COLS} FROM proposals WHERE id = ?`).get(id) as
+    ProposalRow | undefined
 }
 
 export function listProposals(): ProposalRow[] {
-  return getDb().prepare(`SELECT ${PROPOSAL_COLS} FROM proposals ORDER BY created_at DESC`).all() as ProposalRow[]
+  return getDb()
+    .prepare(`SELECT ${PROPOSAL_COLS} FROM proposals ORDER BY created_at DESC`)
+    .all() as ProposalRow[]
 }
 
 export function updateProposal(
@@ -142,4 +161,29 @@ export function updateProposal(
        WHERE id = @id`
     )
     .run({ id, refundInvoice: null, txid: null, error: null, ...f })
+}
+
+export function getInvoice(id: string): InvoiceRow | undefined {
+  return getDb().prepare(`SELECT ${INVOICE_COLS} FROM invoices WHERE id = ?`).get(id) as
+    InvoiceRow | undefined
+}
+export function reconciliationCandidates(changed: string[]): InvoiceRow[] {
+  const placeholders = changed.map(() => '?').join(',')
+  return getDb()
+    .prepare(
+      `SELECT ${INVOICE_COLS} FROM invoices WHERE state IN ('Issued', 'Pending') ${changed.length ? `OR id IN (${placeholders})` : ''}`
+    )
+    .all(...changed) as InvoiceRow[]
+}
+export function refreshOpenProposal(invoiceId: string, amountRaw: number, reason: string): void {
+  getDb()
+    .prepare(
+      "UPDATE proposals SET amount_raw = ?, reason = ? WHERE invoice_id = ? AND status = 'open'"
+    )
+    .run(amountRaw, reason, invoiceId)
+}
+
+export function getPayment(nodeIdx: number): PaymentRow | undefined {
+  return getDb().prepare(`SELECT ${PAYMENT_COLS} FROM payments WHERE node_idx = ?`).get(nodeIdx) as
+    PaymentRow | undefined
 }
