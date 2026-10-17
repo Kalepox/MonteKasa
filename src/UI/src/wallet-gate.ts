@@ -1,5 +1,5 @@
-// Wallet gate: create, back up, restore and unlock the in-app WDK wallet from the UI.
-// Shown whenever the wallet doesn't exist or is locked; hidden once it's unlocked.
+// Wallet panel: create, back up, restore and unlock the in-app WDK wallet from the UI.
+// Lives at the top of the Wallet page (sidebar → Wallet); the rest of the app stays usable while locked.
 // Only active with RGB_BACKEND=wdk: with other backends the `wallet:call` IPC doesn't exist.
 import QRCode from 'qrcode'
 import './wallet-gate.css'
@@ -29,14 +29,18 @@ async function walletState(): Promise<WalletState | null> {
 const root = document.createElement('div')
 root.id = 'wallet-gate'
 root.hidden = true
-document.body.appendChild(root)
+// top of the Wallet page, above the balance; falls back to the page body if the layout changes
+const walletPage = document.querySelector('#view-dashboard .vb') ?? document.getElementById('view-dashboard')
+;(walletPage ?? document.body).prepend(root)
 
 let busy = false // a view is mid-action: don't let the poller replace it
 
 function render(html: string): void {
   root.innerHTML = `<div class="wg-card"><div class="wg-brand">Vault · self-custodial wallet</div>${html}</div>`
   root.hidden = false
-  root.querySelector<HTMLInputElement>('input, textarea')?.focus()
+  // only take focus when the Wallet page is the one on screen
+  if (document.getElementById('view-dashboard')?.classList.contains('on'))
+    root.querySelector<HTMLInputElement>('input, textarea')?.focus()
 }
 
 const $ = <T extends HTMLElement>(sel: string): T => root.querySelector<T>(sel)!

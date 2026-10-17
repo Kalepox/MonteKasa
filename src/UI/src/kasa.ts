@@ -222,11 +222,13 @@ function renderInvoices(): void {
 
 function renderWallet(st: KasaStatus): void {
   walletBalance = st.state === 'online' ? st.balance : 0
-  setText('w-balance', st.state === 'online' ? `${fmt(st.balance)} USDT` : 'Unavailable')
-  setText('w-usdt', st.state === 'online' ? `${fmt(st.balance)} USDT` : 'Unavailable')
-  setText('w-btc', st.state === 'online' ? `${(st.btcSats / 1e8).toFixed(8)} BTC` : 'Unavailable')
+  // what to show instead of a number: still loading, locked, or a real problem
+  const pending = ['syncing', 'timeout'].includes(st.state) ? 'Loading…' : st.state === 'locked' ? 'Locked' : 'Unavailable'
+  setText('w-balance', st.state === 'online' ? `${fmt(st.balance)} USDT` : pending)
+  setText('w-usdt', st.state === 'online' ? `${fmt(st.balance)} USDT` : pending)
+  setText('w-btc', st.state === 'online' ? `${(st.btcSats / 1e8).toFixed(8)} BTC` : pending)
   setText('w-usdt-id', 'rgb:lX~ToKsO…E9PA_h0 · RGB20')
-  setText('send-avail-bal', st.state === 'online' ? `${fmt(st.balance)} USDT` : 'Unavailable')
+  setText('send-avail-bal', st.state === 'online' ? `${fmt(st.balance)} USDT` : pending)
 
   const tx = $('w-tx')
   if (!tx) return

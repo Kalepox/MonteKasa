@@ -1,26 +1,17 @@
-/* Wallet gate: full-screen create / back up / restore / unlock / fund panel for the in-app WDK wallet */
+/* Wallet panel: create / back up / restore / unlock / fund card at the top of the Wallet page */
 #wallet-gate {
-  position: fixed;
-  inset: 0;
-  z-index: 10000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: rgba(8, 8, 9, 0.92);
-  backdrop-filter: blur(6px);
+  margin-bottom: 18px;
 }
 #wallet-gate[hidden] {
   display: none;
 }
 .wg-card {
-  width: min(460px, 100%);
+  max-width: 520px;
   background: var(--c2, #18181a);
   border: 1px solid var(--borderB, rgba(255, 255, 255, 0.12));
   border-radius: var(--r6, 14px);
   padding: 28px;
   color: var(--t1, #f4f4f5);
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
 }
 .wg-brand {
   font-size: 11px;

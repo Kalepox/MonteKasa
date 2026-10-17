@@ -1,5 +1,9 @@
 // MonteKasa wallet service: one WDK RGB wallet behind a local, token-protected JSON API.
 // Started by Kasa (Electron main) with WALLET_DATA_DIR and WALLET_TOKEN; prints {"ready":true,"port":N}.
+//
+// Network vs local: unlocking, balances, history and invoices only touch the wallet's local database
+// (milliseconds). All indexer/proxy syncing happens in ONE background loop, so API calls never wait
+// for a sync they didn't need. Sends and UTXO creation still go to the network, as they must.
 import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -31,6 +35,7 @@ let wdk = null
 let account = null
 const approved = new Set() // sends the merchant approved: `${invoice}|${amountRaw}`
 
+// opens the wallet from its local database only: no network, so unlocking is fast
 async function openWallet(mnemonic) {
   wdk = new WDK(mnemonic)
     .registerWallet('rgb', WalletManagerRgb, CONFIG)
@@ -58,31 +63,14 @@ async function openWallet(mnemonic) {
       }]
     })
   account = await wdk.getAccount('rgb', 0)
-  await account.registerWallet()
-}
-
-// Every WDK balance read syncs with the indexer over the internet (seconds each), and calls run one
-// at a time, so polling status() directly queued sync behind sync. status() now answers from the last
-// sync for a few seconds; anything that changes the wallet clears the cache.
-const BALANCE_CACHE_MS = 15_000
-let balances = null // { at, assetId, address, btc, spendable }
-let transfersSeen = '' // idx:status of the last listTransfers, to notice incoming/settled payments
-
-async function syncBalances(assetId) {
-  const r = await unlocked().registerWallet() // syncs and returns the BTC balance
-  let spendable = 0
-  // getTokenBalance returns a plain number (BigInt), not an object
-  try { spendable = Number(await account.getTokenBalance(assetId)) } catch (e) { if (!notFound(e)) throw e }
-  balances = { at: Date.now(), assetId, address: r.address, btc: r.btcBalance, spendable }
-  return balances
+  startSync()
 }
 
 function closeWallet() {
+  stopSync()
   try { wdk?.dispose() } catch { /* wdk-wallet-rgb 2.0.3 throws 'Invalid checksum' on dispose */ }
   wdk = account = null
   approved.clear()
-  balances = null
-  transfersSeen = ''
 }
 
 const unlocked = () => {
@@ -91,6 +79,61 @@ const unlocked = () => {
 }
 const notFound = (e) => /AssetNotFound/.test(String(e?.message))
 
+// ---------- background sync: the only scheduled network traffic ----------
+
+const SYNC_EVERY_MS = 6_000 // refresh transfers: accept incoming, broadcast our sends, mark settled
+const BTC_EVERY_TICKS = 4 // the BTC balance changes rarely: every ~24 s, or right after we spent BTC
+const EMPTY_BTC = { vanilla: { settled: 0, future: 0, spendable: 0 }, colored: { settled: 0, future: 0, spendable: 0 } }
+
+let view = null // { address, btc, at } from the last BTC sync; null until the first sync after unlock
+let btcDirty = true
+let tick = 0
+let syncError = null
+let syncQueued = false
+let loop = null
+
+async function syncOnce() {
+  syncQueued = false
+  if (!account) return
+  try {
+    await account.refreshWallet()
+    if (btcDirty || !view || tick % BTC_EVERY_TICKS === 0) {
+      const r = await account.registerWallet() // goes online the first time, syncs, returns BTC balance
+      view = { address: r.address, btc: r.btcBalance, at: Date.now() }
+      btcDirty = false
+    }
+    syncError = null
+  } catch (e) {
+    syncError = String(e?.message ?? e)
+  } finally {
+    tick++
+  }
+}
+
+// queued like any API call, so it never runs at the same time as one; at most one waits in line
+function requestSync() {
+  if (syncQueued || !account) return
+  syncQueued = true
+  serial(syncOnce)
+}
+
+function startSync() {
+  view = null
+  btcDirty = true
+  tick = 0
+  syncError = null
+  requestSync() // first sync right after unlock, in the background
+  loop = setInterval(requestSync, SYNC_EVERY_MS)
+}
+
+function stopSync() {
+  if (loop) clearInterval(loop)
+  loop = null
+  view = null
+  syncQueued = false
+}
+
+// ---------- the API ----------
 
 const api = {
   state: () => ({ state: account ? 'unlocked' : fs.existsSync(SEED_FILE) ? 'locked' : 'none' }),
@@ -121,22 +164,35 @@ const api = {
 
   lock: () => (closeWallet(), { ok: true }),
 
+  // local reads only; `synced: false` until the first background sync after unlock has finished
   async status({ assetId }) {
-    unlocked()
-    const fresh = balances && balances.assetId === assetId && Date.now() - balances.at < BALANCE_CACHE_MS
-    const b = fresh ? balances : await syncBalances(assetId)
-    return { address: b.address, btc: b.btc, asset: { settled: b.spendable, spendable: b.spendable } }
+    const a = unlocked()
+    let spendable = 0
+    // getTokenBalance reads the local database and returns a plain number (BigInt)
+    try { spendable = Number(await a.getTokenBalance(assetId)) } catch (e) { if (!notFound(e)) throw e }
+    return {
+      synced: Boolean(view),
+      lastSync: view?.at ?? null,
+      syncError,
+      address: view?.address ?? null,
+      btc: view?.btc ?? EMPTY_BTC,
+      asset: { settled: spendable, spendable }
+    }
   },
 
   async address() {
-    return { address: (await unlocked().registerWallet()).address } // fund THIS address
+    if (view?.address) return { address: view.address }
+    const r = await unlocked().registerWallet() // before the first sync: fetch it directly
+    view = { address: r.address, btc: r.btcBalance, at: Date.now() }
+    return { address: r.address } // fund THIS address
   },
 
   async createUtxos({ num = 10, size = 3000, feeRate = 2 }) {
     const a = unlocked()
     const psbt = await a.createUtxosBegin({ upTo: true, num, size, feeRate })
     const created = await a.createUtxosEnd({ signedPsbt: await a.signPsbt(psbt) })
-    balances = null // BTC moved from vanilla to colored
+    btcDirty = true // BTC moved from vanilla to colored
+    requestSync()
     return { created }
   },
 
@@ -150,18 +206,13 @@ const api = {
     }
   },
 
+  // local read; the background loop keeps it current
   async listTransfers({ assetId }) {
     const a = unlocked()
-    await a.refreshWallet()
-    let list = []
-    try { list = await a.listTransfers(assetId) } catch (e) { if (!notFound(e)) throw e }
-    // a new or changed transfer (incoming payment, settlement) means the balances changed too
-    const seen = list.map((t) => `${t.idx}:${t.status}`).join(',')
-    if (seen !== transfersSeen) { transfersSeen = seen; balances = null }
-    return list
+    try { return await a.listTransfers(assetId) } catch (e) { if (notFound(e)) return []; throw e }
   },
 
-   async send({ invoice, assetId, amountRaw, feeRate = 2 }) {
+  async send({ invoice, assetId, amountRaw, feeRate = 2 }) {
     const a = unlocked()
     const key = `${invoice}|${amountRaw}`
     approved.add(key) // reached only after Kasa's security review + the merchant's approval
@@ -170,10 +221,10 @@ const api = {
       return { txid: r.hash ?? r.txid }
     } finally {
       approved.delete(key)
-      balances = null // funds left (or may have left) the wallet
+      btcDirty = true // the send paid a BTC fee
+      requestSync() // pick up the receiver's acceptance and broadcast as soon as possible
     }
   },
-
 
   decodeInvoice({ invoice }) {
     const inv = new rgblib.Invoice(invoice)
@@ -181,7 +232,7 @@ const api = {
   }
 }
 
-//one call at a time: rgb-lib is not built for concurrent use 
+// one call at a time: rgb-lib is not built for concurrent use
 let queue = Promise.resolve()
 const serial = (fn) => (queue = queue.then(fn, fn))
 

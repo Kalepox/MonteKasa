@@ -68,11 +68,14 @@ export function createWdkBackend(): RgbBackend & { wallet: WalletService } {
         const { state } = await wallet.call<{ state: string }>('state')
         if (state !== 'unlocked') return { state: 'locked', mock: false } // 'none' = no wallet yet (onboarding)
         const s = await wallet.call<{
-          address: string
+          synced: boolean
+          address: string | null
           btc: { vanilla: { spendable: number } }
           asset: { spendable: number }
         }>('status', { assetId })
-        return { state: 'online', mock: false, pubkey: s.address,
+        // unlocked, but the first background sync after unlock hasn't finished yet
+        if (!s.synced) return { state: 'syncing', mock: false }
+        return { state: 'online', mock: false, pubkey: s.address ?? undefined,
           balanceRaw: Number(s.asset.spendable ?? 0), btcSats: s.btc.vanilla.spendable }
       } catch {
         return { state: 'offline', mock: false }
@@ -119,8 +122,11 @@ export function createWdkBackend(): RgbBackend & { wallet: WalletService } {
       await Promise.all([reference.identity(), walletChain.identity()])
       const [refHeight, walletHeight, st] = await Promise.all([
         reference.height(true), walletChain.height(true),
-        wallet.call<{ btc: { vanilla: { spendable: number } }; asset: { spendable: number } }>('status', { assetId })
+        wallet.call<{ synced: boolean; btc: { vanilla: { spendable: number } }; asset: { spendable: number } }>(
+          'status', { assetId })
       ])
+      // payment checks need real balances, not the placeholders before the first sync
+      requireCheck(st.synced, 'wallet-sync', 'Wallet is still syncing; try again in a few seconds.', 'unavailable')
       const shared = Math.min(refHeight, walletHeight)
       const [left, right] = await Promise.all([reference.blockHash(shared), walletChain.blockHash(shared)])
       return {
