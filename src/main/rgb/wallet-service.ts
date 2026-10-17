@@ -18,12 +18,13 @@ export class WalletService {
         : join(app.getAppPath(), 'wallet-service')
       const child = spawn(rgbConfig.walletNode, ['server.mjs'], {
         cwd: dir,
-        stdio: ['ignore', 'pipe', 'pipe'],
+        stdio: ['pipe', 'pipe', 'pipe'], // stdin stays open: the service exits when it closes (we died)
         env: {
           PATH: process.env.PATH ?? '',
           HOME: process.env.HOME ?? '',
           WALLET_DATA_DIR: join(app.getPath('userData'), 'wdk-wallet'),
           WALLET_TOKEN: this.token,
+          WALLET_PARENT_PIPE: '1',
           WALLET_ASSET_ID: rgbConfig.assetId,
           WALLET_MAX_SEND_RAW: String(rgbConfig.walletMaxSendRaw)
         }
@@ -52,7 +53,13 @@ export class WalletService {
       child.on('exit', (code) => {
         clearTimeout(timer)
         this.child = this.port = this.starting = undefined
-        reject(new Error(`Wallet service exited (code ${code}). Is WALLET_NODE a Node 22 binary?`))
+        reject(
+          new Error(
+            code === 2
+              ? 'Another app is already using this wallet. Close the other MonteKasa window first.'
+              : `Wallet service exited (code ${code}). Is WALLET_NODE a Node 22 binary?`
+          )
+        )
       })
     })
     return this.starting

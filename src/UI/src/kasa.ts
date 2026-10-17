@@ -224,8 +224,10 @@ function renderWallet(st: KasaStatus): void {
   walletBalance = st.state === 'online' ? st.balance : 0
   // what to show instead of a number: still loading, locked, or a real problem
   const pending = ['syncing', 'timeout'].includes(st.state) ? 'Loading…' : st.state === 'locked' ? 'Locked' : 'Unavailable'
-  setText('w-balance', st.state === 'online' ? `${fmt(st.balance)} USDT` : pending)
-  setText('w-usdt', st.state === 'online' ? `${fmt(st.balance)} USDT` : pending)
+  // shown balance includes payments on their way; spending (Send → Available) uses settled only
+  const shown = st.future ?? st.balance
+  setText('w-balance', st.state === 'online' ? `${fmt(shown)} USDT` : pending)
+  setText('w-usdt', st.state === 'online' ? `${fmt(shown)} USDT` : pending)
   setText('w-btc', st.state === 'online' ? `${(st.btcSats / 1e8).toFixed(8)} BTC` : pending)
   setText('w-usdt-id', 'rgb:lX~ToKsO…E9PA_h0 · RGB20')
   setText('send-avail-bal', st.state === 'online' ? `${fmt(st.balance)} USDT` : pending)

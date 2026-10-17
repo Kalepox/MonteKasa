@@ -168,7 +168,13 @@ app.whenReady().then(() => {
 
   handle('kasa:status', async () => {
     const s = await backend.status()
-    return { ...s, balance: toUsdt(s.balanceRaw ?? 0), btcSats: s.btcSats ?? 0 }
+    return {
+      ...s,
+      balance: toUsdt(s.balanceRaw ?? 0),
+      // display balance incl. transfers on their way; other backends: same as balance
+      future: toUsdt(s.futureRaw ?? s.balanceRaw ?? 0),
+      btcSats: s.btcSats ?? 0
+    }
   })
   handle('kasa:snapshot', () => kasa.snapshot())
   handle('kasa:invoicePdf', async (_e, id: unknown) => {
