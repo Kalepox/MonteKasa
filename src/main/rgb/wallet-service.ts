@@ -52,6 +52,7 @@ export class WalletService {
           HOME: process.env.HOME ?? '',
           WALLET_DATA_DIR: join(app.getPath('userData'), 'wdk-wallet'),
           WALLET_TOKEN: this.token,
+          WALLET_PARENT_PIPE: '1',
           WALLET_ASSET_ID: rgbConfig.assetId,
           WALLET_MAX_SEND_RAW: String(rgbConfig.walletMaxSendRaw)
         }
@@ -110,9 +111,12 @@ export class WalletService {
       child.on('exit', (code) => {
         fail(
           new Error(
-            `Wallet service exited (code ${code}). Check that wallet-service dependencies are installed for Node.js 22.`
+            code === 2
+              ? 'Another app is already using this wallet. Close the other MonteKasa window first.'
+              : `Wallet service exited (code ${code}). Check that wallet-service dependencies are installed for Node.js 22.`
           )
         )
+
       })
     })
   }

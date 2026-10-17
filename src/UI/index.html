@@ -941,11 +941,6 @@
       <div class="ni" onclick="go('settings')"><span class="nic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>Settings</div>
     </nav>
 
-    <button onclick="devResetWallet()" title="Reset wallet state for testing" style="margin:0 12px 8px; padding:7px 10px; border-radius:var(--r4); background:var(--c2); border:1px dashed var(--borderB); color:var(--t3); font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer;">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v6h6"/><path d="M3 13a9 9 0 1 0 3-7.7L3 8"/></svg>
-      Test: Reset Wallet
-    </button>
-
     <div class="sfoot" onclick="go('profile')" style="cursor:pointer;" title="Click to edit profile">
       <div class="sav" id="sidebar-av">GM</div>
       <div><div class="sname" id="sidebar-name">Giulia Mancini</div><div class="sco" id="sidebar-co">Studio Mancini</div></div>
@@ -1009,8 +1004,7 @@
         <div class="whero">
           <div class="wh-info">
             <div class="whl">Total Balance</div>
-            <div class="whb" id="w-balance">2,450.00 USDT</div>
-            <div class="whf">&asymp; &euro;2,264.90 at current rate</div>
+            <div class="whb" id="w-balance">0.00 USDT</div>
             <div class="wha-box">
               <span style="font-size:10px;color:#6b7280;font-weight:700;">WALLET</span>
               <span id="w-addr" style="font-family:'JetBrains Mono', monospace; font-size:12.5px; color:#d1d5db; min-width:200px;" data-full="bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh2k4a9x7" data-mask="bc1q &bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull; a9x7">bc1q &bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull; a9x7</span>
@@ -1026,18 +1020,14 @@
           </div>
         </div>
 
-        <div class="sh"><span class="sh-t">RGB Assets</span></div>
+        <div class="sh"><span class="sh-t">Latest Transactions</span></div>
         <div class="tcard" style="margin-bottom:16px;">
-          <div class="aro">
-            <div class="aico2" style="background:linear-gradient(135deg,#1a5c43,#0e3d2a);color:#26a17b;font-size:14px;">&#x20AE;</div>
-            <div><div class="an">Tether USD &mdash; Test asset</div><div class="aid" id="w-usdt-id">rgb:2WBcas9&hellip;TmGEn5x &middot; RGB20</div></div>
-            <div class="ab"><div class="abv" id="w-usdt" style="color:var(--t1);">2,450.00 USDT</div><div class="abf">&asymp; &euro;2,264.90</div></div>
-          </div>
-          <div class="aro">
-            <div class="aico2" style="background:linear-gradient(135deg,#4a2e10,#2e1c08);color:#f7931a;font-size:14px;">&#x20BF;</div>
-            <div><div class="an">Bitcoin</div><div class="aid">Native &middot; RGB fee reserve</div></div>
-            <div class="ab"><div class="abv" id="w-btc" style="color:var(--t1);">0.0014 BTC</div><div class="abf">&asymp; &euro;87.40</div></div>
-          </div>
+          <table>
+            <thead><tr><th>RGB Txid</th><th>Direction</th><th>Amount</th><th>Invoice</th><th>Block</th></tr></thead>
+            <tbody id="w-tx-latest">
+              <tr><td colspan="5" style="color:var(--t3);text-align:center;padding:18px;">No RGB transfers yet</td></tr>
+            </tbody>
+          </table>
         </div>
 
 
@@ -2408,7 +2398,7 @@
         </div>
 
         <div style="font-size:11px; color:var(--t3); margin-top:10px;">
-          Available: <strong id="send-avail-bal" style="color:var(--t1);">2,450.00 USDT</strong>
+          Available: <strong id="send-avail-bal" style="color:var(--t1);">0.00 USDT</strong>
         </div>
       </div>
 
@@ -3500,12 +3490,13 @@ function startManualInvoice() {
       const now = Date.now();
       const byDay = {};
       window.__realPayments.forEach(p => {
-        if (!p.blockTime) return;
-        const ts = p.blockTime * 1000;
+        // net total incl. payments still confirming (no block time yet → today); failed ones never count
+        if (p.status === 'failed' || !p.received) return;
+        const ts = p.blockTime ? p.blockTime * 1000 : now;
         if (now - ts > days * 86400000) return;
         const key = new Date(ts).toDateString();
         byDay[key] = byDay[key] || { date: new Date(ts), amount: 0, items: [] };
-        byDay[key].amount += p.received;
+        byDay[key].amount += p.direction === 'out' ? -p.received : p.received;
         byDay[key].items.push(p);
       });
       const out = [];
@@ -3531,14 +3522,19 @@ function startManualInvoice() {
     const total = values.reduce((a, b) => a + b, 0);
     const half = Math.floor(values.length / 2);
     const recent = values.slice(half).reduce((a, b) => a + b, 0);
-    const prior = values.slice(0, half).reduce((a, b) => a + b, 0) || 1;
-    const pct = Math.round(((recent - prior) / prior) * 100);
+    const prior = values.slice(0, half).reduce((a, b) => a + b, 0);
+    const pct = prior > 0 ? Math.round(((recent - prior) / prior) * 100) : null; // no baseline: no %
     const totalEl = document.getElementById('cf-net-total');
     const trendEl = document.getElementById('cf-trend');
-    if (totalEl) totalEl.innerHTML = '+' + Math.round(total).toLocaleString('en-US') + ' <span style="font-size:11px; font-weight:600; color:var(--t3);">USDT net</span>';
+    if (totalEl) totalEl.innerHTML = (total < 0 ? '−' : '+') + Math.abs(Math.round(total)).toLocaleString('en-US') + ' <span style="font-size:11px; font-weight:600; color:var(--t3);">USDT net</span>';
     if (trendEl) {
-      trendEl.innerHTML = (pct >= 0 ? '&#x2191; ' : '&#x2193; ') + Math.abs(pct) + '% vs prior period';
-      trendEl.style.color = pct >= 0 ? 'var(--green)' : 'var(--red)';
+      if (pct === null) {
+        trendEl.innerHTML = total > 0 ? 'New this period' : '';
+        trendEl.style.color = 'var(--t3)';
+      } else {
+        trendEl.innerHTML = (pct >= 0 ? '&#x2191; ' : '&#x2193; ') + Math.abs(pct) + '% vs prior period';
+        trendEl.style.color = pct >= 0 ? 'var(--green)' : 'var(--red)';
+      }
     }
   }
 
@@ -3587,17 +3583,6 @@ function startManualInvoice() {
       </tr>`).join('') : '<tr><td colspan="3" style="padding:14px;text-align:center;color:var(--t3);">No movements in this period</td></tr>';
   }
 
-  // Dev-only helper: puts the app back into its "no wallet yet" first-run state so the setup flow can be retested.
-  function devResetWallet() {
-    try { localStorage.removeItem(WALLET_SETUP_KEY); } catch (e) { /* storage unavailable */ }
-    document.getElementById('dashboard-content').style.display = 'none';
-    document.getElementById('wallet-empty-state').style.display = 'block';
-    const walletActions = document.getElementById('dashboard-wallet-actions');
-    if (walletActions) walletActions.style.display = 'none';
-    closeWalletSetupModal();
-    go('dashboard');
-    toast('dev-reset', '&#x21bb;', 'Wallet Reset', 'Back to first-run state for testing.', 'amber');
-  }
   // TODO(backend): replace with window.kasa.createWallet() once the WDK wallet service is wired up
   function createWalletContinue() {
     walletSetupSuccess();

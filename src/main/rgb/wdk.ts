@@ -35,6 +35,25 @@ export function createWdkBackend(): RgbBackend & { wallet: WalletService } {
   const reference = new ChainObserver(rgbConfig.explorerApi, rgbConfig.checkpointHeight, rgbConfig.checkpointHash)
   const walletChain = new ChainObserver(rgbConfig.nodeChainApi, rgbConfig.checkpointHeight, rgbConfig.checkpointHash)
 
+  // The checkpoint can't change while the app runs: verify the chain identity once per session
+  // (retried if it failed). The fee estimate is the slowest chain call: reuse it for a minute.
+  let identityOnce: Promise<void> | undefined
+  const verifiedIdentity = (): Promise<void> =>
+    (identityOnce ??= Promise.all([reference.identity(), walletChain.identity()]).then(
+      () => undefined,
+      (e) => {
+        identityOnce = undefined
+        throw e
+      }
+    ))
+  let fee: { value: number | undefined; at: number } | undefined
+  const feeEstimate = async (): Promise<number | undefined> => {
+    if (fee && Date.now() - fee.at < 60_000) return fee.value
+    const value = await reference.recommendedFee()
+    fee = { value, at: Date.now() }
+    return value
+  }
+
   const transfers = async (): Promise<WdkTransfer[]> =>
     (await wallet.call<WdkTransfer[]>('listTransfers', { assetId })).filter((t) => t.recipientId)
 
@@ -71,12 +90,13 @@ export function createWdkBackend(): RgbBackend & { wallet: WalletService } {
           synced: boolean
           address: string | null
           btc: { vanilla: { spendable: number } }
-          asset: { spendable: number }
+          asset: { spendable: number; future?: number }
         }>('status', { assetId })
         // unlocked, but the first background sync after unlock hasn't finished yet
         if (!s.synced) return { state: 'syncing', mock: false }
         return { state: 'online', mock: false, pubkey: s.address ?? undefined,
-          balanceRaw: Number(s.asset.spendable ?? 0), btcSats: s.btc.vanilla.spendable }
+          balanceRaw: Number(s.asset.spendable ?? 0), btcSats: s.btc.vanilla.spendable,
+          futureRaw: Number(s.asset.future ?? s.asset.spendable ?? 0) }
       } catch {
         return { state: 'offline', mock: false }
       }
@@ -119,11 +139,12 @@ export function createWdkBackend(): RgbBackend & { wallet: WalletService } {
     decodeInvoice,
 
     async networkEvidence() {
-      await Promise.all([reference.identity(), walletChain.identity()])
-      const [refHeight, walletHeight, st] = await Promise.all([
+      await verifiedIdentity()
+      const [refHeight, walletHeight, st, feeRate] = await Promise.all([
         reference.height(true), walletChain.height(true),
         wallet.call<{ synced: boolean; btc: { vanilla: { spendable: number } }; asset: { spendable: number } }>(
-          'status', { assetId })
+          'status', { assetId }),
+        feeEstimate()
       ])
       // payment checks need real balances, not the placeholders before the first sync
       requireCheck(st.synced, 'wallet-sync', 'Wallet is still syncing; try again in a few seconds.', 'unavailable')
@@ -139,7 +160,7 @@ export function createWdkBackend(): RgbBackend & { wallet: WalletService } {
         btcSats: st.btc.vanilla.spendable,
         checkedAt: Math.floor(Date.now() / 1000),
         source: rgbConfig.explorerApi,
-        recommendedFeeRate: await reference.recommendedFee()
+        recommendedFeeRate: feeRate
       }
     },
 

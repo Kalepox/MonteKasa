@@ -20,6 +20,24 @@ if (!DATA || TOKEN.length < 32) throw new Error('WALLET_DATA_DIR and a WALLET_TO
 fs.mkdirSync(DATA, { recursive: true })
 const SEED_FILE = path.join(DATA, 'seed.enc')
 
+// One service per wallet folder. Two services on the same wallet both processed an incoming
+// transfer and booked it twice. A lock left behind by a dead process is taken over.
+const LOCK_FILE = path.join(DATA, 'service.lock')
+const alive = (pid) => {
+  try { process.kill(pid, 0); return true } catch (e) { return e.code === 'EPERM' }
+}
+try {
+  const other = Number(fs.readFileSync(LOCK_FILE, 'utf8'))
+  if (other && other !== process.pid && alive(other)) {
+    console.error(`Another wallet service (pid ${other}) is already using this wallet. Close the other app first.`)
+    process.exit(2)
+  }
+} catch { /* no lock yet */ }
+fs.writeFileSync(LOCK_FILE, String(process.pid), { mode: 0o600 })
+const releaseLock = () => {
+  try { if (Number(fs.readFileSync(LOCK_FILE, 'utf8')) === process.pid) fs.unlinkSync(LOCK_FILE) } catch { /* gone */ }
+}
+
 const CONFIG = {
   network: 'signet', // Mutinynet, as UTEXO supports it
   indexerUrl: process.env.WALLET_INDEXER ?? 'https://esplora.signet.kaleidoswap.com',
@@ -112,9 +130,16 @@ async function syncOnce() {
   }
 }
 
+// While the merchant is reviewing or sending a payment, timer syncs step aside: rgb-lib's calls block
+// the whole service while they run, so a sync in progress made reviews wait seconds.
+const QUIET_AFTER_ACTIVITY_MS = 10_000
+let lastActivity = 0
+
 // queued like any API call, so it never runs at the same time as one; at most one waits in line
-function requestSync() {
+function requestSync({ fromTimer = false } = {}) {
+  if (fromTimer && Date.now() - lastActivity < QUIET_AFTER_ACTIVITY_MS) return
   if (stopping || syncQueued || !account) return
+
   syncQueued = true
   serial(syncOnce)
 }
@@ -126,7 +151,7 @@ function startSync() {
   tick = 0
   syncError = null
   requestSync() // first sync right after unlock, in the background
-  loop = setInterval(requestSync, SYNC_EVERY_MS)
+  loop = setInterval(() => requestSync({ fromTimer: true }), SYNC_EVERY_MS)
 }
 
 function stopSync() {
@@ -173,13 +198,27 @@ const api = {
     let spendable = 0
     // getTokenBalance reads the local database and returns a plain number (BigInt)
     try { spendable = Number(await a.getTokenBalance(assetId)) } catch (e) { if (!notFound(e)) throw e }
+    // "future": settled plus transfers already on their way (display only, never for spending).
+    // A transfer that fails drops out of this sum by itself.
+    let future = spendable
+    try {
+      const amount = (x) => Number(x?.Fungible ?? 0)
+      for (const t of await a.listTransfers(assetId)) {
+        if (t.status === 'Settled' || t.status === 'Failed') continue
+        if (t.kind === 'ReceiveBlind' || t.kind === 'ReceiveWitness')
+          future += (t.assignments ?? []).reduce((s, x) => s + amount(x), 0) // known once the data arrived
+        else if (t.kind === 'Send') future -= amount(t.requestedAssignment)
+      }
+    } catch (e) {
+      if (!notFound(e)) throw e
+    }
     return {
       synced: Boolean(view),
       lastSync: view?.at ?? null,
       syncError,
       address: view?.address ?? null,
       btc: view?.btc ?? EMPTY_BTC,
-      asset: { settled: spendable, spendable }
+      asset: { settled: spendable, spendable, future: Math.max(0, future) }
     }
   },
 
@@ -238,6 +277,12 @@ const api = {
 // one call at a time: rgb-lib is not built for concurrent use
 let queue = Promise.resolve()
 const serial = (fn) => (queue = queue.then(fn, fn))
+// Pure reads skip the queue so they never wait behind a whole sync or send. rgb-lib's calls are
+// synchronous, so a read still can't run *inside* another native call; it just doesn't wait for the
+// rest of a queued job. Anything that writes (send, UTXOs, invoices, unlock, sync) stays serial.
+const READ_ONLY = new Set(['state', 'status', 'listTransfers', 'decodeInvoice'])
+// calls that mean "the merchant is doing something right now" (a payment review starts by decoding)
+const ACTIVITY = new Set(['decodeInvoice', 'send', 'createInvoice'])
 
 // BigInt -> number (amounts are far below 2^53)
 const json = (v) => JSON.stringify(v, (_k, x) => (typeof x === 'bigint' ? Number(x) : x))
@@ -258,21 +303,32 @@ const server = http.createServer((req, res) => {
   if (!authorized(req.headers.authorization)) return reply(401, { error: 'unauthorized' })
   let body = ''
   req.on('data', (c) => { body += c; if (body.length > 1e6) req.destroy() })
-  req.on('end', () =>
-    serial(async () => {
+  req.on('end', () => {
+    let method, params
+    try {
+      ;({ method, params } = JSON.parse(body || '{}'))
+    } catch {
+      return reply(400, { error: 'invalid JSON' })
+    }
+    if (!Object.hasOwn(api, method)) return reply(400, { error: `unknown method ${method}` })
+    if (ACTIVITY.has(method)) lastActivity = Date.now()
+    const run = async () => {
       if (stopping) return reply(503, { error: 'Wallet service is stopping' })
+
       try {
-        const { method, params } = JSON.parse(body || '{}')
-        if (!Object.hasOwn(api, method)) return reply(400, { error: `unknown method ${method}` })
         reply(200, { result: await api[method](params ?? {}) })
       } catch (e) {
-        reply(500, { error: String(e?.message ?? e) }) // never echoes params (passwords, mnemonics)
+        // include the underlying cause (rgb-lib's real reason); never echoes params (passwords, mnemonics)
+        const cause = e?.cause?.message ?? e?.cause
+        reply(500, { error: String(e?.message ?? e) + (cause ? `: ${String(cause)}` : '') })
       }
-    })
-  )
+    }
+    if (READ_ONLY.has(method)) void run()
+    else serial(run)
+  })
 })
 
-// The IPC channel belongs to Electron. Its closure also covers development
+         // The IPC channel belongs to Electron. Its closure also covers development
 // restarts and crashes, which can bypass Electron's normal quit events.
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type -- Plain JavaScript service.
 function shutdown() {
@@ -282,11 +338,15 @@ function shutdown() {
   stopSync()
   // Finish the current serialized operation before disposing native state.
   // A stalled operation must not leave the service running indefinitely.
-  const timeout = setTimeout(() => process.exit(1), 5000)
+  const timeout = setTimeout(() => {
+    releaseLock()
+    process.exit(1)
+  }, 5000)
   // eslint-disable-next-line @typescript-eslint/explicit-function-return-type -- Plain JavaScript service.
   const finish = () => {
     clearTimeout(timeout)
-    closeWallet()
+    try { closeWallet() } catch { /* exiting anyway */ }
+    releaseLock()
     process.exit(0)
   }
   void queue.then(finish, finish)
@@ -297,3 +357,5 @@ process.once('disconnect', shutdown)
 // The parent may have exited while the native dependencies were loading.
 if (process.connected === false) shutdown()
 else server.listen(0, '127.0.0.1', () => console.log(JSON.stringify({ ready: true, port: server.address().port })))
+
+

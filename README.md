@@ -41,8 +41,8 @@ on the merchant's laptop; keys never leave it; only settlement touches the netwo
 | Layer | Technology |
 |---|---|
 | Desktop app | Electron 39 + TypeScript (electron-vite), UI in plain HTML/CSS/JS |
-| RGB payments | KaleidoSwap **RGB Lightning Node** (Docker) via `kaleido-sdk` 0.1.23, on **Mutinynet** (Bitcoin signet) |
-| Wallet (during event) | Tether **WDK** – `@utexo/wdk-wallet-rgb` (planned, see below) |
+| Wallet (current) | Tether **WDK** – `@tetherto/wdk` + `@utexo/wdk-wallet-rgb`, in a local Node 22 service (`wallet-service/`), on **Mutinynet** (Bitcoin signet) |
+| RGB payments (fallback) | KaleidoSwap **RGB Lightning Node** (Docker) via `kaleido-sdk` 0.1.23 |
 | Local AI | **QVAC SDK** (planned, see below) |
 | Storage | SQLite via `better-sqlite3`, with schema migrations |
 | Tests | Vitest |
@@ -70,8 +70,8 @@ Built **before 17 October 2026** (full history in the git log, from 8 October):
 **Not built yet – the hackathon work**
 - RGB: Complete RGB Transactions through UI between 2 parties, BTC fuel additon through UI
 - QVAC: Invoice extraction from PDFs (currently simulated) and the three agents for financial assistance.
-- WDK wallet will be created inside the app (no terminal, no Docker) – only if issuing our own test asset on
-  Mutinynet works with `wdk-wallet-rgb`; otherwise the KaleidoSwap node stays the backend.
+- WDK wallet created inside the app (no terminal, no Docker). The WDK backend works now (see
+  [WDK Tether wallet setup](#wdk-tether-wallet-setup-mutinynet)); the onboarding screens are still to be wired up.
 - EUR price feed, Commercialista tax figures, in-app onboarding / lock screen, the Wildcard agent.
 
 ---
@@ -135,9 +135,19 @@ The status pill says **"Mock node"**. To try the whole flow:
    ```
 3. The invoice turns **Overpaid** → click it → paste any `rgb:` text → **Approve refund**.
 
-### 5. Optional: use an external Kaleido node
-With your node running and unlocked (see below): `RGB_BACKEND=kaleido npm run dev`
-(PowerShell: `$env:RGB_BACKEND="kaleido"; npm run dev`).
+### 4. Start with the WDK wallet (what we use right now)
+One-time setup first: [WDK Tether wallet setup](#wdk-tether-wallet-setup-mutinynet). Then:
+
+| macOS / Linux | Windows (PowerShell) |
+|---|---|
+| `RGB_BACKEND=wdk WALLET_NODE=$(nvm which 22) npm run dev` | `$env:RGB_BACKEND="wdk"; $env:WALLET_NODE="<path to Node 22 node.exe>"; npm run dev` |
+
+`WALLET_NODE` must point to a **Node 22** binary: the app runs on Electron's Node, but the wallet service is
+started as a separate Node 22 process. `$(nvm which 22)` prints that path.
+
+### 5. Start with the KaleidoSwap node (fallback)
+With your node running and unlocked (see [below](#your-own-test-wallet-mutinynet-kaleidoswap-node-fallback)): `npm run dev`
+(PowerShell: `Remove-Item Env:RGB_MOCK -ErrorAction SilentlyContinue; npm run dev`).
 The pill should say **"Mutinynet connected"**.
 
 | Pill | Meaning |
@@ -215,7 +225,7 @@ small Bitcoin outputs (**UTXOs**). An **invoice** is an `rgb:…` string; a paym
   `executeSend`, `setReceiveAsset`, `openM`, `closeM`, `toast`.
 - **Agents (QVAC):** read data through `src/main/db` (`listInvoices`, `listPayments`, `paymentsForInvoice`,
   `listProposals`) from the main process – read-only. Amounts are raw units (`toUsdt()` in `core/units.ts`).
-- **Database file:** `<app data>/kasa-wdk.db` (`kasa.db` for Kaleido, `kasa-mock.db` in mock mode) – macOS
+- **Database file:** `<app data>/kasa.db` (`kasa-mock.db` in mock mode, `kasa-wdk.db` with the WDK backend) – macOS
   `~/Library/Application Support/<app>/`, Windows `%APPDATA%\<app>\`, Linux `~/.config/<app>/`.
 
 ## Payment checks and assistant explanations
