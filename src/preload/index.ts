@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { IpcRendererEvent } from 'electron'
 import type { SecurityAPI } from '../shared/security'
 import type { AgentAPI, AgentEvent } from '../shared/agent'
 
@@ -31,7 +32,10 @@ const kasa = {
   invoicePdf: (id: string) => ipcRenderer.invoke('kasa:invoicePdf', id),
   createInvoice: (client: string, amount: number | string) =>
     ipcRenderer.invoke('kasa:createInvoice', client, amount),
-  receive: (fresh = false) => ipcRenderer.invoke('kasa:receive', fresh),
+  receive: (fresh = false, amount?: string | number) =>
+    ipcRenderer.invoke('kasa:receive', fresh, amount),
+  emailInvoice: (to: string | undefined, subject: string, body: string) =>
+    ipcRenderer.invoke('kasa:emailInvoice', to, subject, body),
   send: (invoice: string, amount: number) => ipcRenderer.invoke('kasa:send', invoice, amount),
   approve: (id: string, refundInvoice: string) =>
     ipcRenderer.invoke('kasa:approve', id, refundInvoice),
@@ -43,6 +47,14 @@ const kasa = {
     ipcRenderer.on('kasa:changed', l)
     return () => {
       ipcRenderer.removeListener('kasa:changed', l)
+    }
+  },
+  onPayment: (cb: (p: { amount: number; client?: string; invoiceId?: string }) => void) => {
+    const l = (_e: IpcRendererEvent, p: { amount: number; client?: string; invoiceId?: string }): void =>
+      cb(p)
+    ipcRenderer.on('kasa:payment', l)
+    return () => {
+      ipcRenderer.removeListener('kasa:payment', l)
     }
   }
 }
