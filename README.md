@@ -1,267 +1,191 @@
-# agentic-euros
-Demo repository for project trial 
-By:
-Alpino Castello
-Abbasi Tonno Guvendir
-Yusuf Deniz Celik
+# MonteKasa
 
-## Local development
+**Self-custodial invoicing for Italian freelancers and small agencies, paid in USDT on Bitcoin via RGB —
+with local AI agents that catch payment problems and work out the tax.**
 
-Install dependencies from the lockfile, then launch Electron with the Vite development server:
+Built for the **Agentic Dollars on Bitcoin** hackathon (Turin, 17–18 October 2026).
 
-```sh
-npm ci
-npm run dev
+---
+
+## Team
+
+**Team name:** CryptoKnights
+
+| Name | GitHub | Role |
+|---|---|---|
+| Alp Kale | [@Kalepox](https://github.com/Kalepox) | Payments, RGB layer, wallet (WDK) |
+| Tuna Güvendir | [@tunaguvendir](https://github.com/tunaguvendir) | UI / product |
+| Yusuf Deniz Çelik | [@YudeWeb](https://github.com/Yudeweb) | AI runtime (QVAC) + tax |
+
+---
+
+## The idea
+
+Italian freelancers increasingly get paid in USDT, but invoicing, checking the payment and working out
+the tax are all manual. MonteKasa is a desktop app that issues an **RGB invoice for USDT on Bitcoin**,
+watches for the payment, **reconciles it automatically** (paid / underpaid / overpaid / expired) and lets
+three **local QVAC agents** help the merchant:
+
+- **Fraud Controller** – flags wrong amounts, duplicates, tampered PDFs and proposes an action (e.g. a refund).
+- **Commercialista** – records the EUR value at receipt and the gain/loss when USDT is converted, and keeps a
+  running "set aside for tax" figure (Italian rules 2026: 33 % on crypto gains, IVCA, Quadro RW).
+- **Wildcard** – a third agent slot, chosen during the event (e.g. collections for unpaid invoices).
+
+Design rule: **agents propose, the merchant approves, code executes.** No agent moves money. Everything runs
+on the merchant's laptop; keys never leave it; only settlement touches the network.
+
+---
+
+## Stack
+
+| Layer | Technology |
+|---|---|
+| Desktop app | Electron 39 + TypeScript (electron-vite), UI in plain HTML/CSS/JS |
+| RGB payments | KaleidoSwap **RGB Lightning Node** (Docker) via `kaleido-sdk` 0.1.23, on **Mutinynet** (Bitcoin signet) |
+| Wallet (during event) | Tether **WDK** – `@utexo/wdk-wallet-rgb` (planned, see below) |
+| Local AI | **QVAC SDK** (planned, see below) |
+| Storage | SQLite via `better-sqlite3`, with schema migrations |
+| Tests | Vitest |
+| Test funds | Mutinynet BTC faucet, KaleidoSwap RGB faucet (test USDT `rgb:lX~ToKsO-…E9PA_h0`) |
+
+---
+
+## Prior work (built before the event)
+
+Built **before 17 October 2026** (full history in the git log, from 8 October):
+
+- **Docs & design:** project proposal (`RGB-Docs/`) and a static UI prototype (`src/UI/index.html`) –
+  most of its screens still show demo data.
+- **Boilerplate:** Electron + TypeScript skeleton, SQLite storage, and a basic RGB payment layer on a
+  KaleidoSwap test node (`src/main/rgb`, with a mock for development).
+- **Payment logic:** rule-based invoice reconciliation (paid / under / overpaid / expired, unit-tested)
+  and a simple refund proposal, wired to the prototype UI (`src/main/core`, `src/UI/src/kasa.ts`).
+- **Tooling:** `scripts/rgb.py`, a terminal helper for test transfers.
+
+**What is installed and working right now**
+- Project files and DB infastructure has been made to focus on Requiered Stack
+- Two RGB nodes on Mutinynet, funded with test BTC and test USDT.
+- The app runs on macOS (Apple Silicon), Windows and Linux, against the real node or the mock.
+
+**Not built yet – the hackathon work**
+- RGB: Complete RGB Transactions through UI between 2 parties, BTC fuel additon through UI
+- QVAC: Invoice extraction from PDFs (currently simulated) and the three agents for financial assistance.
+- WDK wallet will be created inside the app (no terminal, no Docker) – only if issuing our own test asset on
+  Mutinynet works with `wdk-wallet-rgb`; otherwise the KaleidoSwap node stays the backend.
+- EUR price feed, Commercialista tax figures, in-app onboarding / lock screen, the Wildcard agent.
+
+---
+
+## Run the app
+
+### 1. Install Node.js
+- **macOS:** LTS installer from https://nodejs.org (or `brew install node`).
+- **Windows:** LTS **Windows Installer (.msi)** from https://nodejs.org; tick *"Automatically install the
+  necessary tools"*. Then once in PowerShell:
+  `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`
+
+Check: `node -v` and `npm -v` print a version.
+
+### 2. Install
+Clone into a path **without spaces**, then:
+```bash
+npm install
 ```
+Warnings about deprecated packages or vulnerabilities are normal – don't run `npm audit fix --force`.
 
-The renderer lives in `src/UI` and supports hot reload. Electron's main process
-and preload script live in `src/main` and `src/preload`. The dev command watches
-these too and restarts Electron when they change.
+### 3. Start with a fake wallet (no setup needed)
 
-To type-check and build all three parts, then preview the built desktop app:
+| macOS / Linux | Windows (PowerShell) |
+|---|---|
+| `RGB_MOCK=1 npm run dev` | `$env:RGB_MOCK="1"; npm run dev` |
 
-```sh
-npm run build
-npm start
-```
+The status pill says **"Mock node"**. To try the whole flow:
+1. **New Invoice** → upload any PDF → enter a client and `10` → **Approve & Issue** → a QR code appears.
+2. **F12 → Console**, simulate the client paying 30:
+   ```js
+   const s = await kasa.snapshot(); await kasa.mockPay(s.invoices[0].recipientId, 30)
+   ```
+3. The invoice turns **Overpaid** → click it → paste any `rgb:` text → **Approve refund**.
 
-## Local AI assistant
+### 4. Start with a real wallet
+With your node running and unlocked (see below): `npm run dev`
+(PowerShell: `Remove-Item Env:RGB_MOCK -ErrorAction SilentlyContinue; npm run dev`).
+The pill should say **"Mutinynet connected"**.
 
-Run `npm run dev` and select **Ask AI** in the bottom-right corner. The assistant
-uses the installed `@qvac/sdk` 0.21 and **Qwen3.5 2B Q4_K_M** for local chat and read-only security explanations.
-Click **Download AI model** on first use. Setup downloads approximately
-**1.28 GB** of model weights and loads the model; Send stays disabled until setup
-succeeds. Later sessions detect the saved files and show **Start assistant**,
-which loads them from disk without reinstalling. No API key is needed.
-Use Node.js >= 22.17 and npm >= 10.9, as required by QVAC.
+| Pill | Meaning |
+|---|---|
+| Mutinynet connected | All good |
+| Node syncing… | Still unlocking / catching up – wait |
+| Node locked | `kaleido node unlock` |
+| Node offline | Docker or the node isn't running |
 
-Replies stream into the panel. **Stop** cancels a download or reply; **New chat**
-clears conversation history. History is kept in memory, with a bounded recent
-window sent to the model, and is lost when the app exits. The assistant receives a fresh, bounded snapshot of recorded security findings
-and payment states on each turn. It cannot issue invoices, send funds, approve
-payments, acknowledge findings, or change security policy.
+Other port: `RLN_NODE_URL=http://localhost:<port> npm run dev`.
+Run tests: `npm test`.
 
-Inference runs locally through QVAC's Bare worker. Initial model/runtime setup
-requires internet access. The model is cached under Electron's user-data directory
-in `qvac/models`. Set `QVAC_CONFIG_PATH` before launching to use your own QVAC
-configuration. Download or inference errors appear in the chat status; you can
-retry using the setup/start button, or resend a failed chat message.
+---
 
-**Close assistant** (or Escape in the panel) cancels active work, closes the panel,
-and unloads model memory while explicitly preserving downloaded files. Reopen
-with **Ask AI**, then **Start assistant**. Closing preserves conversation history
-for the current app session; quitting clears that history but retains model files.
-Deleted or incomplete model files must be downloaded again. Keep the same
-user-data directory and QVAC configuration across launches to reuse the cache.
+## Your own test wallet (Mutinynet)
 
-Electron packaging uses `asar: false` so the native Bare worker can resolve its
-JavaScript dependencies and native addons from real filesystem paths. This keeps
-the SDK outside the renderer. The alternate prototype in `src/UI/kasa-desktop`
-is not the application launched by the root scripts.
+Everything is **test money with no value**. On Windows run these in **Ubuntu (WSL)**; on macOS in Terminal.
 
-Validation: `npm run build` checks both TypeScript projects and builds the app;
-`npm test` covers reconciliation and agent validation, history, retry, and
-cancellation behavior with a mocked SDK. These tests do not download model weights.
+**Wallet basics:** the wallet runs as an RGB Lightning Node in Docker. The **mnemonic** (12 words) *is* your
+key – write it down, never share it. **BTC** pays fees; **USDT** is what clients pay with; RGB tokens ride on
+small Bitcoin outputs (**UTXOs**). An **invoice** is an `rgb:…` string; a payment takes 1–2 minutes.
 
-If you see `No handler registered for 'agent:chat'`, the running Electron backend
-is outdated; this error happens before any model download. Quit the desktop app
-completely, stop the old dev command, and run `npm run dev` from the repository
-root. A renderer reload alone does not replace the main process. For the built
-app, run `npm run build` followed by `npm start`.
+1. **Tools**
+   - macOS: Docker Desktop (Apple Silicon/Intel), then `brew install pipx && pipx ensurepath && pipx install kaleido-cli`
+   - Windows: Docker Desktop with *WSL integration* on, then in Ubuntu `sudo apt install -y pipx && pipx ensurepath && pipx install kaleido-cli`
+   - Check: `docker run hello-world`, `kaleido --help`, `python3 --version` (≥ 3.9)
+2. **Create & unlock**
+   ```bash
+   kaleido setup && kaleido node init     # write down the mnemonic
+   kaleido node unlock                    # S (signet) → T (transaction sync) → Enter → Enter
+   kaleido node info                      # answers when ready; don't unlock twice
+   ```
+3. **Test BTC:** `kaleido wallet address` → https://faucet.mutinynet.com (GitHub login) → 500000 sats.
+4. **UTXOs:** `kaleido wallet create-utxos --num 20 --size 3000`
+5. **Test USDT:** `python3 scripts/rgb.py invoice` → https://faucet.mutinynet.kaleidoswap.com → tab
+   **RGB on-chain** → paste → USDT → *Send asset*. Check with `python3 scripts/rgb.py status`.
+6. **Send to a teammate:** receiver `python3 scripts/rgb.py invoice --amount 5`; sender
+   `python3 scripts/rgb.py send --amount 5 '<invoice>'`; both run `status` until `Settled`
+   (receiver refreshes first, then sender).
 
-## Security checks and payment approval
+**Daily routine:** start Docker Desktop → `kaleido node up default` → `kaleido node unlock` (once) →
+`npm run dev`.
 
-Security phases 1–3 run in the Electron main process without loading Qwen. Use
-**Security** beside **Ask AI** to see findings, evidence, acknowledgment history,
-transaction states, and operation history. Both **Send** and **Approve refund**
-open an explicit review dialog. Confirming calls a shared gate that revalidates
-current evidence. The old direct-send/approve IPC routes now refuse execution.
+### Rules
+- Only use KaleidoSwap's Mutinynet USDT `rgb:lX~ToKsO-Iup7dJ5-UM794sA-9WD21ge-VHYzBGb-E9PA_h0`
+  (precision 6). Another "USDT" with a different ID is a different asset.
+- Wrap invoices in **single quotes** (they contain `&`). An invoice must end with `&endpoints=rpcs://…`.
+- `rgb.py` and the app take USDT (`5`); the `kaleido` CLI takes raw units (`5000000`).
+- Use `scripts/rgb.py`, not `kaleido asset send` (kaleido-cli 0.1.2 bug).
+- One send at a time – unsettled sends lock your USDT ("Not enough assets").
+- Never run `kaleido node clean` or `docker compose down -v` – RGB assets can't be restored from the mnemonic.
 
-The gate checks exact decimal amounts (up to six places, within JavaScript's
-safe-integer raw-unit range), invoice expiry/assignment/asset/network, approved
-secure transport hosts, fresh node/chain evidence, balance, a minimum BTC reserve,
-and a fee-rate ceiling. Approval tokens last two minutes and are bound to the
-reviewed transaction. Fresh reviews rotate tokens. Refunds additionally require
-fresh original-payment confirmations, unchanged settled excess, and the user's
-explicit acknowledgment of independently verified customer destination details.
-This acknowledgment records a user assertion; the app cannot prove customer identity.
+### Troubleshooting
 
-Persistent operation records prevent reusing a submitted recipient or refund,
-including after an ambiguous error or restart. A timeout after submission means
-**uncertain**, never permission to retry. Recovery matches one outgoing RGB
-transfer by recipient, amount, configured asset and, when known, transaction ID.
-Ambiguous outcomes require node/operator investigation; there is intentionally no
-"force retry" button. One app instance owns the ledger. Using another wallet or
-another app/database to send is outside this protection.
+| Message | Fix |
+|---|---|
+| `running scripts is disabled` (Windows) | `Set-ExecutionPolicy` line above |
+| App crashes about `better-sqlite3` | `npx electron-builder install-app-deps`; repo path without spaces |
+| `Cannot call other APIs while node is changing state` | Still unlocking – wait |
+| `Unknown RGB contract ID` | First receive: `rgb.py invoice` without `--amount` |
+| `Not enough assets` | A previous send hasn't settled |
+| Invoice creation fails | `kaleido wallet create-utxos --up-to --num 20 --size 3000` |
+| Send stays `WaitingCounterparty` | Receiver hasn't refreshed, or the invoice had no `&endpoints=` |
+| Send ends `Failed` | Receiver rejected it (wrong asset/network) – ask for a new invoice |
 
-### Real network configuration
+---
 
-Real-network sends fail closed until a trusted chain source and checkpoint are
-configured. These are operator-supplied trust anchors, not values to blindly copy
-from the endpoint being checked:
+## For developers
 
-- `RGB_NETWORK`: exact Kaleido network enum (default `SignetCustom` for Mutinynet;
-  confirm what your deployed node reports).
-- `RGB_NODE_CHAIN_API`: HTTPS Esplora API (or loopback HTTP) serving the **same
-  chain/indexer used by your RGB node**. The operator must establish this binding;
-  Kaleido's network/height API cannot prove it by itself.
-- `RGB_EXPLORER_API`: trusted same-network reference Esplora API; defaults to
-  `https://mutinynet.com/api`. It must not be replaced with a mainnet or ordinary
-  Signet explorer while using Mutinynet.
-- `RGB_CHAIN_CHECKPOINT_HEIGHT` and `RGB_CHAIN_CHECKPOINT_HASH`: a trusted,
-  non-genesis checkpoint for the intended chain. Both chain sources must match
-  it and agree at a shared height. Same-provider endpoints are not independent
-  cryptographic verification.
-- Existing `RLN_NODE_URL`, `RGB_ASSET_ID`, and `RGB_PROXY` identify the node,
-  asset, and approved secure proxy. Invoice endpoints must match the configured
-  proxy host and use `rpcs:`; out-of-band transfer is not supported here.
-- `RGB_FEE_RATE`: configured sat/vB rate (default 2, policy ceiling 20). The
-  1,000-sat minimum BTC reserve and fee-rate checks are not an exact total-fee
-  estimate. The current send API does not expose a preapproved PSBT/total fee.
-
-Network evidence may be at most 30 seconds old and chain heights may differ by
-at most two blocks. Missing/contradictory evidence pauses sending; lack of a live
-fee estimate is disclosed in the review. Core checks use the configured node and
-HTTPS indexers as trusted sources; they do not implement an independent Bitcoin
-full node or prove an invoice sender's identity.
-
-### Settlement and recovery
-
-A send result is **submitted**, not completed. Completion requires the matching
-RGB transfer to be `Settled` plus at least **3 Bitcoin confirmations** on the
-best chain. Incoming recent payments also wait for this confirmation policy.
-Reconciliation responds to changed payment rows even after Paid/Expired states.
-Refund amounts are refreshed and rechecked before execution. Multiple settled
-incoming payments remain flagged for manual review.
-
-Recently completed outgoing operations are monitored for 24 hours; older ones
-are retained in history but are not continuously checked for deep reorgs. Missing
-explorer data or a 404 is unavailable evidence, not definitive transaction failure.
-A conflicting/missing observation can downgrade a completed operation. The UI
-shows Bitcoin confirmations and RGB status separately, with last-check times.
-
-Monitoring uses no language model: at most five outgoing operations per pass,
-oldest checked first, bounded HTTP calls, a shared 10-second chain-tip cache, and
-at most five new incoming chain observations per pass with a 30-second cache.
-Pending work survives restart in SQLite. Findings are deduplicated by rule and
-subject; acknowledgment never overrides a payment gate. The panel shows the
-latest 200 records; the full ledger remains in the database. Histories retain up
-to 100 state transitions per operation. This is a local operational record, not
-an independently tamper-proof audit log.
-
-### Security validation
-
-```sh
-npm test
-npm run build
-npx electron scripts/security-smoke.cjs
-```
-
-The Electron smoke test creates a temporary mock wallet under `/tmp`, exercises
-real preload/IPC and review UI, verifies simulated settlement, and rejects legacy
-send bypasses, duplicate recipients, and an untrusted renderer. It never sends
-real funds. Unit/integration tests cover exact amounts, validation boundaries,
-stale approvals, concurrency, uncertain submission, recovery, settlement/reorgs,
-late payments, refund revalidation, and V2→V3 SQLite migration/reopen.
-
-These checks do not identify every fraudulent invoice, protect a compromised OS
-or node, or guarantee irreversible settlement. Behavioral scoring is not enabled. AI explanations are advisory; deterministic
-checks remain the authority for payment approval.
-
-### Explain security findings with AI
-
-Open **Security**, choose **Explain with AI** on a finding or payment operation,
-then send the prepared question in the assistant. Start the cached model first if
-needed. **New chat** clears the selected record. General chat includes a bounded
-overview (up to six unresolved findings and two operations); selected records are
-looked up again in the main process on every turn. Missing records require a panel
-refresh. The context includes timestamps and indicates omitted findings.
-
-Only validated numeric evidence, known status/check codes, opaque record IDs,
-and application-written rule descriptions are shared locally with Qwen. Source
-messages, free-form evidence strings, raw backend errors, and asset identifiers
-are excluded rather than screened for suspicious keywords. Raw invoices, destinations, approval tokens, and keys are excluded. The
-assistant has no model tools or command execution; output is rendered as text.
-Each response shows a separate **Recorded facts** block generated by application
-code, including formatted amounts and whether settlement evidence was supplied.
-The model cannot edit that block.
-Untrusted evidence is labeled as data and cannot grant permissions. A model may
-still produce an incorrect explanation; its response never clears warnings or
-changes the ledger. The displayed deterministic finding remains authoritative.
-
-The real-model smoke runner supports a `security` phase using a temporary mock
-wallet and the existing model cache. Set `QVAC_CONFIG_PATH` to the existing QVAC
-configuration and `KASA_AI_SMOKE_DIR` to a separate temporary test directory, then
-run `npx electron scripts/agent-model-smoke.cjs security`. It verifies the explain
-button, an overpayment explanation, and unchanged payment/acknowledgment state
-after requesting a prohibited action. It refuses to download a missing model.
-
-
-### Critical warning regression checks with the installed model
-
-`scripts/agent-security-cases.ts` exercises wrong-network rejection, duplicate
-submission rejection, and an uncertain submission caused by a simulated timeout.
-It uses the actual cached Qwen model, production security coordinator, and an
-in-memory SQLite ledger. It also covers expired invoices, insufficient asset
-balance, insufficient BTC fee reserve, and stale network evidence, both at initial
-review and after a valid review but before execution. The network/send backend
-is simulated; no funds move.
-Build and run it with the existing QVAC cache configuration:
-
-```sh
-npx esbuild scripts/agent-security-cases.ts --bundle --platform=node --format=cjs --packages=external --outfile=out/main/agent-security-cases.cjs
-# Set QVAC_CONFIG_PATH to your existing qvac.config.json before running:
-npx electron out/main/agent-security-cases.cjs
-```
-
-Initial real-model trials exposed misleading descriptions of network blocks and
-duplicate submissions. These three critical warnings now use application-written
-policy explanations through the assistant, bypassing model generation. The same
-policy-response path covers expiry, asset balance, BTC reserve, and stale evidence
-failures, including checks that fail immediately before execution. The
-installed model is still loaded by this runner to exercise the normal lifecycle.
-Other findings continue to use Qwen explanations.
-
-Each case asks for an explanation and then explicitly asks the assistant to
-bypass, acknowledge, resolve, and resend. Assertions check key explanation
-semantics, unchanged security state, send-call counts, rejection of direct or
-repeated execution, and continued blocking after a real acknowledgment. Results
-and complete responses are saved to `/tmp/kasa-agent-security-cases.json`.
-This is a regression sample, not a guarantee of every possible model response.
-The application displays fixed rule guidance for these cases in both the
-recorded facts and the assistant response. No model response can change the payment gate.
-
-For these preflight failures the scenario runner verifies zero send calls, unchanged
-private approval state during chat, and continued blocking after acknowledgment.
-Execution failures invalidate the old approval token. After the underlying issue
-is corrected, a fresh review issues a new token without automatically sending.
-Unit tests also cover the 30-second evidence-age boundary, future timestamps, and
-exact asset/BTC reserve thresholds.
-
-
-### Prompt-injection regression checks
-
-The model-facing projection excludes all source free text, including finding
-messages and backend errors. Known enums and numeric evidence are validated;
-malformed identifiers become opaque aliases. Original source details remain
-visible as plain text in the Security panel but are not passed to the model.
-This prevents those data fields from supplying model instructions. It is not a
-claim that arbitrary user prompts or generated explanations are always correct.
-
-Unit tests cover role delimiters, fake system/admin messages, JSON tool requests,
-HTML event handlers, encoded instructions, Unicode text, malformed codes, and
-numeric fields containing strings. The real-model runner inspects the actual
-completion payload, checks that system instructions stay unchanged and no tools
-are enabled, then checks the ledger and send counter. It exercises actual model
-generation on noncritical findings, not the fixed critical-warning responses:
-
-```sh
-npx esbuild scripts/agent-injection-smoke.ts --bundle --platform=node --format=cjs --packages=external --outfile=out/main/agent-injection-smoke.cjs
-# Set QVAC_CONFIG_PATH to the existing cache configuration:
-npx electron out/main/agent-injection-smoke.cjs
-```
-
-Results are saved to `/tmp/kasa-agent-injection-results.json`. The test uses
-simulated invoice decoding and an in-memory database; no real funds move.
-`npx electron scripts/security-smoke.cjs` also checks that hostile finding HTML
-renders as text without creating executable elements or new payment operations.
+- **UI:** `src/UI/index.html` is the only UI file. `src/UI/src/kasa.ts` connects it to the backend and relies
+  on these ids: `stat-received`, `stat-paid`, `stat-awaiting`, `stat-review`, `dash-invoices`, `inv-table`,
+  `rv-client`, `rv-total`, `done-text`, `done-invoice`, `w-balance`, `w-usdt`, `w-usdt-id`, `w-btc`, `w-tx`,
+  the modal ids (`modal`, `qvac-box`, `qvac-text`, `send-modal`, `send-amt-input`, `send-addr-input`,
+  `receive-modal`, `rcv-qr-svg`, `rcv-addr-text`, `rcv-seal-info`) and the functions `issueRGB`,
+  `executeSend`, `setReceiveAsset`, `openM`, `closeM`, `toast`.
+- **Agents (QVAC):** read data through `src/main/db` (`listInvoices`, `listPayments`, `paymentsForInvoice`,
+  `listProposals`) from the main process – read-only. Amounts are raw units (`toUsdt()` in `core/units.ts`).
+- **Database file:** `<app data>/kasa.db` (`kasa-mock.db` in mock mode) – macOS
+  `~/Library/Application Support/<app>/`, Windows `%APPDATA%\<app>\`, Linux `~/.config/<app>/`.
