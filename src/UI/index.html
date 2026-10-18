@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Vault – RGB Invoicing</title>
+  <title>MonteKasa – RGB Invoicing</title>
   <script>
     (function() {
       try {
@@ -134,9 +134,10 @@
 
     /* ─── Layout ─────────────────────────────────────────────── */
     .shell { display: grid; grid-template-columns: var(--sw) 1fr; height: 100vh; position: relative; z-index: 1; }
-    .sidebar { background: var(--sidebar-bg); backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px); border-right: 1px solid var(--sidebar-border); display: flex; flex-direction: column; overflow: hidden; }
+    .sidebar { background: var(--sidebar-bg); border-right: 1px solid var(--sidebar-border); display: flex; flex-direction: column; overflow: hidden; }
     .brand { padding: 40px 16px 16px; border-bottom: 1px solid var(--border); -webkit-app-region: drag; }
-    .brand-name { font-size: 17px; font-weight: 700; letter-spacing: -0.4px; color: var(--t1); }
+    .brand-name { font-size: 17px; font-weight: 700; letter-spacing: -0.4px; color: var(--t1); display: flex; align-items: center; gap: 8px; }
+    .brand-logo { width: 26px; height: 20px; flex-shrink: 0; }
     .brand-tag { font-size: 10px; color: var(--t3); margin-top: 1px; font-weight: 500; letter-spacing: 0.2px; }
 
     /* wallet pill */
@@ -163,16 +164,15 @@
     .sco   { font-size: 10px; color: var(--t3); }
 
     /* ─── Main ─────────────────────────────────────────────── */
-    .main { display: flex; flex-direction: column; overflow: hidden; min-width: 0; background: var(--main-bg); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
-    .topbar { padding: 40px 24px 12px; border-bottom: 1px solid var(--topbar-border); background: var(--topbar-bg); backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px); display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    .main { display: flex; flex-direction: column; overflow: hidden; min-width: 0; background: var(--main-bg); }
+    .topbar { padding: 40px 24px 12px; border-bottom: 1px solid var(--topbar-border); background: var(--topbar-bg); display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
     .topbar .tb-title { font-size: 15px; font-weight: 700; flex: 1; -webkit-app-region: drag; }
     .topbar button, .topbar select, .topbar input { -webkit-app-region: no-drag !important; }
     .tb-sub   { font-size: 11px; color: var(--t3); margin-top: 2px; font-weight: 400; }
 
     /* ─── Signature Background ─────────────────────────────────────────────── */
     .aura-bg { position: fixed; inset: 0; z-index: 0; background: var(--c0); overflow: hidden; pointer-events: none; }
-    .aura-bg::after { content: ''; position: absolute; inset: 0; opacity: 0.05; background-image: radial-gradient(var(--t1) 1px, transparent 1px); background-size: 24px 24px; animation: panGrid 60s linear infinite; }
-    @keyframes panGrid { 0% { transform: translateY(0); } 100% { transform: translateY(24px); } }
+    .aura-bg::after { content: ''; position: absolute; inset: 0; opacity: 0.05; background-image: radial-gradient(var(--t1) 1px, transparent 1px); background-size: 24px 24px; }
 
     .qlog-line::after { content:'_'; animation: blink 1s step-end infinite; }
     @keyframes blink { 50% { opacity: 0; } }
@@ -386,7 +386,10 @@
     .whl  { font-size:11px; color:#9ca3af; text-transform:uppercase; letter-spacing:1px; font-weight:700; margin-bottom:8px; }
     .whb  { font-size:42px; font-weight:800; letter-spacing:-1.5px; color:#ffffff; line-height:1; }
     .whf  { font-size:13px; color:#6b7280; font-weight:500; margin-top:6px; }
-    .wha-box { margin-top:20px; display:inline-flex; align-items:center; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.05); border-radius:6px; padding:8px 12px; gap:12px; }
+    :root[data-theme="light"] .whero:not([style]) { background: linear-gradient(135deg, #ffffff, #f1f4f8); border-color: var(--borderB); box-shadow: 0 8px 24px rgba(15,23,42,0.08); }
+    :root[data-theme="light"] .whero:not([style]) .whl { color: var(--t3); }
+    :root[data-theme="light"] .whero:not([style]) .whb { color: var(--t1); }
+    :root[data-theme="light"] .whero:not([style]) .whf { color: var(--t3); }
     .cpic { cursor:pointer; color:var(--t3); font-size:12px; transition:color 0.1s; }
     .cpic:hover { color:var(--blue); }
 
@@ -907,7 +910,7 @@
     <div id="lock-keypad-panel" style="display:flex; flex-direction:column; align-items:center; gap:18px;">
       <div style="width:60px; height:60px; border-radius:50%; background:var(--c3); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; color:var(--t1);"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
       <div style="text-align:center;">
-        <div style="font-size:16px; font-weight:700; color:var(--t1);">Vault Kilitli</div>
+        <div style="font-size:16px; font-weight:700; color:var(--t1);">MonteKasa Locked</div>
         <div style="font-size:11.5px; color:var(--t3); margin-top:3px;">Enter PIN to continue</div>
       </div>
       <div id="lock-dots" style="display:flex; gap:10px; min-height:14px;"></div>
@@ -923,7 +926,14 @@
   <!-- ═══ SIDEBAR ═══ -->
   <aside class="sidebar">
     <div class="brand">
-      <div class="brand-name">Vault</div>
+      <div class="brand-name">
+        <!-- mountain mark: two peaks with a snow cap -->
+        <svg class="brand-logo" viewBox="0 0 32 24" aria-hidden="true">
+          <path d="M1 22 L11 6 L16 13 L21 4 L31 22 Z" fill="currentColor"/>
+          <path d="M21 4 L24.6 10.5 L22.6 9.4 L21 11 L19.3 9.6 L17.6 10.2 Z" fill="var(--c0, #fff)"/>
+        </svg>
+        <span>MonteKasa</span>
+      </div>
     </div>
     <nav>
       <div class="nlbl">Overview</div>
@@ -933,11 +943,11 @@
       <div class="ni" onclick="go('bitcoin')"><span class="nic"><svg viewBox="0 0 24 24"><path d="M9 4v2m6-2v2M9 18v2m6-2v2M7 6h6a3 3 0 0 1 3 3 3 3 0 0 1-3 3M7 12h7a3 3 0 0 1 3 3 3 3 0 0 1-3 3H7V6z"/><line x1="7" y1="12" x2="14" y2="12"/></svg></span>Buy Bitcoin</div>
       
       <div class="nlbl">Intelligence</div>
-      <button type="button" id="security-toggle" class="ni" onclick="go('security')"><span class="nic"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>Security<span id="security-count" aria-live="polite"></span></button>
+      <button type="button" id="security-toggle" class="ni" onclick="go('security')"><span class="nic"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>Fraud Check<span id="security-count" aria-live="polite"></span></button>
       <div class="ni" onclick="go('tax')"><span class="nic"><svg viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg></span>Tax &amp; VAT Estimator</div>
-      <div class="ni" onclick="go('compliance')"><span class="nic"><svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>Compliance Audit</div>
 
       <div class="nlbl">System</div>
+      <div class="ni" onclick="go('walletsec')"><span class="nic"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>Security</div>
       <div class="ni" onclick="go('settings')"><span class="nic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>Settings</div>
     </nav>
 
@@ -974,8 +984,6 @@
               <span class="net-dot"></span>
               <span>Testnet Connected</span>
             </div>
-            <button class="btn btn-s sm" onclick="openSend()">&#x2191; Send</button>
-            <button class="btn btn-p sm" onclick="openRecv()">&#x2193; Request</button>
             <button class="btn btn-s sm" onclick="go('new')"><span>+</span> New Invoice</button>
           </div>
           <button class="cmd-trigger-btn" onclick="openCmdPalette()" title="Spotlight Search (Cmd+K)">
@@ -1005,14 +1013,6 @@
           <div class="wh-info">
             <div class="whl">Total Balance</div>
             <div class="whb" id="w-balance">0.00 USDT</div>
-            <div class="wha-box">
-              <span style="font-size:10px;color:#6b7280;font-weight:700;">WALLET</span>
-              <span id="w-addr" style="font-family:'JetBrains Mono', monospace; font-size:12.5px; color:#d1d5db; min-width:200px;" data-full="bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh2k4a9x7" data-mask="bc1q &bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull; a9x7">bc1q &bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull; a9x7</span>
-              <div style="display:flex; gap:8px;">
-                <span class="cpic" title="Show/Hide" onclick="toggleAddr()" style="color:#9ca3af; cursor:pointer; display:inline-flex;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span>
-                <span class="cpic" title="Copy" onclick="toast('cp','&#x2713;','Copied','Address copied to clipboard','green')" style="color:#9ca3af; font-size:14px; cursor:pointer;">&#x29C9;</span>
-              </div>
-            </div>
           </div>
           <div class="wh-acts">
             <button class="btn btn-p" onclick="openSend()" style="justify-content:center; padding:12px; font-size:13px; font-weight:700; border-radius:8px;">&#x2191; Send</button>
@@ -1034,11 +1034,8 @@
         <div class="sgrid">
           <div class="sc"><div class="sc-l">Received</div><div class="sc-v cb" id="stat-received">4,850 USDT</div></div>
           <div class="sc"><div class="sc-l">Paid Invoices</div><div class="sc-v cg" id="stat-paid">7</div></div>
-          <div class="sc"><div class="sc-l">Awaiting Payment</div><div class="sc-v cr" id="stat-awaiting">2</div></div>
-          <div class="sc qvac-hook">
-            <div class="qvac-label">QVAC: Flags</div>
-            <div class="sc-l">Pending Review</div><div class="sc-v ca" id="stat-review">2</div>
-          </div>
+          <div class="sc"><div class="sc-l">Total Tax</div><div class="sc-v" id="stat-tax" title="Filled in by the Commercialista tax calculation">—</div></div>
+          <div class="sc"><div class="sc-l">Total Sent</div><div class="sc-v" id="stat-sent">0.00 USDT</div></div>
         </div>
 
         <div style="display:grid; grid-template-columns:1.3fr 1fr; gap:20px; margin-bottom:20px;">
@@ -1228,14 +1225,6 @@
         </div>
       </div>
       <div class="vb">
-        <!-- Invoices Overview Stats Cards -->
-        <div class="sgrid" style="margin-bottom:20px;">
-          <div class="sc"><div class="sc-l">Total Invoiced</div><div class="sc-v cb" id="inv-stat-total">3,850 USDT</div></div>
-          <div class="sc"><div class="sc-l">Total Settled</div><div class="sc-v cg" id="inv-stat-settled">2,550 USDT</div></div>
-          <div class="sc"><div class="sc-l">Awaiting Settlement</div><div class="sc-v cr" id="inv-stat-awaiting">1,300 USDT</div></div>
-          <div class="sc"><div class="sc-l">Avg Settlement Time</div><div class="sc-v ca" id="inv-stat-avgtime">1.4 Days</div></div>
-        </div>
-
         <div class="tcard">
           <div class="fbr">
             <span class="ft on" onclick="ft(this)">All (<span id="ft-count-all">10</span>)</span>
@@ -1255,8 +1244,11 @@
             </tbody>
           </table>
         </div>
+        <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+          <button class="btn btn-s sm" onclick="exportInvoiceDetailsCSV()">All Details (CSV)</button>
+        </div>
 
-        <div class="sh"><span class="sh-t">Recent RGB Transactions</span></div>
+        <div class="sh"><span class="sh-t">Recent Transactions</span></div>
         <div class="tcard">
           <table>
             <thead><tr><th>RGB Txid</th><th>Direction</th><th>Amount</th><th>Invoice</th><th>Block</th></tr></thead>
@@ -1266,6 +1258,9 @@
               <tr><td class="mono" style="color:var(--t3);">7b2a&hellip;31ad</td><td style="color:var(--red);font-size:12px;font-weight:600;">&#x2191; Sent</td><td class="mono" style="color:var(--t1);font-weight:600;">-80 USDT</td><td class="mono">refund</td><td class="mono" style="color:var(--t3);">#803,055</td></tr>
             </tbody>
           </table>
+        </div>
+        <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+          <button class="btn btn-s sm" onclick="exportAllTransactionsCSV()">All Details (CSV)</button>
         </div>
       </div>
     </div>
@@ -1336,15 +1331,16 @@
         </div>
         <div class="mbdy">
           <div style="display:flex; gap:8px; margin-bottom:16px;">
+            <span class="ft on" onclick="setCashflowRange(this,1)">24H</span>
             <span class="ft" onclick="setCashflowRange(this,7)">7D</span>
-            <span class="ft on" onclick="setCashflowRange(this,14)">14D</span>
+            <span class="ft" onclick="setCashflowRange(this,14)">14D</span>
             <span class="ft" onclick="setCashflowRange(this,30)">30D</span>
           </div>
 
           <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:18px;">
             <div class="sc"><div class="sc-l">Total Received</div><div class="sc-v cg" id="cf-modal-total" style="font-size:18px;">&mdash;</div></div>
             <div class="sc"><div class="sc-l">Transactions</div><div class="sc-v" id="cf-modal-count" style="font-size:18px;">&mdash;</div></div>
-            <div class="sc"><div class="sc-l">Daily Average</div><div class="sc-v" id="cf-modal-avg" style="font-size:18px;">&mdash;</div></div>
+            <div class="sc"><div class="sc-l" id="cf-modal-avg-label">Daily Average</div><div class="sc-v" id="cf-modal-avg" style="font-size:18px;">&mdash;</div></div>
           </div>
 
           <div class="tcard" style="padding:18px; margin-bottom:18px;">
@@ -1427,13 +1423,21 @@
 
     <div id="view-security" class="view">
       <div class="topbar">
-        <div style="flex:1"><div class="tb-title">Security</div><div class="tb-sub">Payment checks, supporting evidence and operation history</div></div>
+        <div style="flex:1"><div class="tb-title">Fraud Check</div><div class="tb-sub">Payment detections, supporting evidence and operation history</div></div>
       </div>
       <div class="scroll security-page">
         <p class="security-note">Checks detect specific conditions, not every kind of fraud.</p>
         <label class="security-filter"><input id="security-show-resolved" type="checkbox"> Show resolved notices <span id="security-resolved-count" aria-live="polite">(0)</span></label>
         <div class="security-content"></div>
       </div>
+    </div>
+
+    <!-- Security: the wallet itself (lock, recovery words, password, unlock attempts). Filled by src/wallet-security.ts -->
+    <div id="view-walletsec" class="view">
+      <div class="topbar">
+        <div style="flex:1"><div class="tb-title">Security</div><div class="tb-sub">Wallet lock, recovery words, password and unlock attempts</div></div>
+      </div>
+      <div class="scroll"><div id="walletsec-root" class="ws-grid"></div></div>
     </div>
 
     <!-- Commercialista: guided setup and saved-record workspace. -->
@@ -1878,45 +1882,6 @@
       </div>
     </div>
 
-    <!-- ──────────────── COMPLIANCE AUDIT ──────────────── -->
-    <div id="view-compliance" class="view">
-      <div class="topbar">
-        <div style="flex:1"><div class="tb-title">Compliance Audit</div><div class="tb-sub">KYC/KYB &amp; Sanctions Screening</div></div>
-        <div class="tb-actions">
-          <button class="cmd-trigger-btn" onclick="openCmdPalette()" title="Spotlight Search (Cmd+K)">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.8;"><circle cx="11" cy="11" r="7.5"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
-            <span>Spotlight</span>
-            <kbd class="apple-kbd-sm">⌘K</kbd>
-          </button>
-        </div>
-      </div>
-      <div class="vb">
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px;">
-          <div style="background:var(--c2); border:1px solid var(--borderB); border-radius:var(--r4); padding:16px;">
-            <div style="font-size:11px; font-weight:700; color:var(--blue); text-transform:uppercase; margin-bottom:8px;">KYB Checks Passed</div>
-            <div style="font-size:24px; font-weight:700; color:var(--t1); margin-bottom:4px;">100%</div>
-            <div style="font-size:12px; color:var(--t3);">All 12 active business counterparts verified.</div>
-          </div>
-          <div style="background:var(--c2); border:1px solid var(--borderB); border-radius:var(--r4); padding:16px;">
-            <div style="font-size:11px; font-weight:700; color:var(--green); text-transform:uppercase; margin-bottom:8px;">Sanctions Status</div>
-            <div style="font-size:24px; font-weight:700; color:var(--t1); margin-bottom:4px;">Clear</div>
-            <div style="font-size:12px; color:var(--t3);">No interactions with OFAC blacklisted addresses.</div>
-          </div>
-        </div>
-        <div class="sh"><span class="sh-t">Audit Trail</span></div>
-        <div class="tcard">
-          <table>
-            <thead><tr><th>Audit Type</th><th>Target</th><th>Date Scanned</th><th>Result</th></tr></thead>
-            <tbody>
-              <tr><td style="font-weight:500;">VIES VAT Validation</td><td>Studio Mancini (Self)</td><td class="mono">Oct 1 2026</td><td><span class="badge b-paid" style="color:var(--green);border-color:var(--green);">Valid</span></td></tr>
-              <tr><td style="font-weight:500;">Wallet OFAC Check</td><td>bc1q...x7 (Treasury)</td><td class="mono">Oct 1 2026</td><td><span class="badge b-paid" style="color:var(--green);border-color:var(--green);">Clean</span></td></tr>
-              <tr><td style="font-weight:500;">UBO Verification</td><td>Arco Holdings Ltd</td><td class="mono">Sep 15 2026</td><td><span class="badge b-paid" style="color:var(--green);border-color:var(--green);">Verified</span></td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
     <!-- ──────────────── BUY BITCOIN ──────────────── -->
     <div id="view-bitcoin" class="view">
       <div class="topbar">
@@ -2111,7 +2076,7 @@
               <div class="sgb">
                 <div class="fg"><label class="fl">Network</label><select class="fi"><option>Testnet</option><option>Regtest</option><option>Mainnet</option></select></div>
                 <div class="fg"><label class="fl">RGB20 Asset (USDT)</label><input class="fi" value="rgb:2WBcas9…TmGEn5x" readonly/></div>
-                <div class="reason-bar rb-ok" style="margin-top:0;"><span class="rb-ic">&#x2713;</span><span>Private keys stored locally &mdash; Vault never holds funds</span></div>
+                <div class="reason-bar rb-ok" style="margin-top:0;"><span class="rb-ic">&#x2713;</span><span>Private keys stored locally &mdash; MonteKasa never holds funds</span></div>
               </div>
             </div>
             <div class="sg">
@@ -2148,7 +2113,7 @@
             </div>
 
             <div style="margin-top:20px; padding:12px; background:rgba(34,197,94,0.06); border:1px solid rgba(34,197,94,0.2); border-radius:var(--r3); font-size:11px; color:var(--green);">
-              Zero Telemetry: Vault operates strictly offline without external tracking servers.
+              Zero Telemetry: MonteKasa operates strictly offline without external tracking servers.
             </div>
           </div>
 
@@ -2219,7 +2184,7 @@
             </div>
 
             <div style="margin-top:16px; font-size:11px; color:var(--t3); line-height:1.5;">
-              This entity card will appear on all commercial invoices and tax statements generated by your Vault node.
+              This entity card will appear on all commercial invoices and tax statements generated by your MonteKasa wallet.
             </div>
           </div>
 
@@ -2411,7 +2376,7 @@
             <div style="font-size:10px; color:var(--t3); font-weight:700; text-transform:uppercase;">Asset Protocol</div>
             <div style="font-size:12.5px; font-weight:700; color:var(--t1);">Tether USD &middot; RGB20 Consignment</div>
           </div>
-          <span class="badge b-paid" style="font-size:9px;">OFF-CHAIN</span>
+          <span class="badge b-paid" style="font-size:9px;">ON-CHAIN</span>
         </div>
 
         <div style="height:1px; background:var(--border); margin:0 -16px 14px -16px;"></div>
@@ -2422,23 +2387,10 @@
               <span>Recipient RGB Invoice String / Blinded Seal</span>
               <span style="color:var(--t2); cursor:pointer; display:flex; align-items:center; gap:4px; font-weight:600; font-size:10.5px; text-decoration:underline;" onclick="autofillSendAddress()">Paste</span>
             </div>
-            <input id="send-addr-input" class="fi" style="width:100%; font-family:'JetBrains Mono',monospace; font-size:11px; background:var(--c2); border:1px solid var(--borderB); padding:9px 11px; color:var(--t1);" value="rgb:invoice:1qr89xj7vertex672k9x2m4/usdt" placeholder="rgb:invoice:... veya bc1q..." oninput="this.style.borderColor='var(--borderB)'"/>
-            <div id="send-recent-wrap" style="margin-top:10px; display:none;">
-              <div style="font-size:9px; color:var(--t3); text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-bottom:6px;">Recent Recipients</div>
-              <div id="send-recent-list" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
-            </div>
+            <input id="send-addr-input" class="fi" style="width:100%; font-family:'JetBrains Mono',monospace; font-size:11px; background:var(--c2); border:1px solid var(--borderB); padding:9px 11px; color:var(--t1);" value="" placeholder="Paste the recipient's rgb: invoice" oninput="this.style.borderColor='var(--borderB)'"/>
           </div>
         </div>
 
-      </div>
-
-      <!-- Network Fee (fixed) -->
-      <div style="display:flex; justify-content:space-between; align-items:center; background:var(--c2); border:1px solid var(--borderB); border-radius:6px; padding:10px 14px; margin-bottom:18px;">
-        <div>
-          <div style="font-size:10px; color:var(--t3); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">Network Fee</div>
-          <div style="font-size:9.5px; color:var(--t3); margin-top:2px;">Fixed rate &middot; RGB off-chain transfer</div>
-        </div>
-        <span id="send-fee-summary" class="mono" style="color:var(--t1); font-weight:700; font-size:13px;">124 sats (~€0.09)</span>
       </div>
 
       <!-- Network details summary -->
@@ -2475,12 +2427,8 @@
           <span id="send-success-to" class="mono" style="color:var(--t2);">&mdash;</span>
         </div>
         <div style="display:flex; justify-content:space-between; font-size:12px; padding:5px 0;">
-          <span style="color:var(--t3);">Network fee</span>
-          <span id="send-success-fee" class="mono" style="color:var(--t2);">&mdash;</span>
-        </div>
-        <div style="display:flex; justify-content:space-between; font-size:12px; padding:5px 0;">
           <span style="color:var(--t3);">Transaction ID</span>
-          <span id="send-success-txid" class="mono" style="color:var(--t2);">&mdash;</span>
+          <span id="send-success-txid" class="mono" style="color:var(--t2); word-break:break-all; text-align:right; max-width:70%;">&mdash;</span>
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; padding:5px 0;">
           <span style="color:var(--t3);">Status</span>
@@ -2727,15 +2675,6 @@
     'INV-0008':{ date:'Sep 25 2026', due:'Sep 30 2026', badge:'b-overpaid',bt:'Overpaid',amt:'500.00',   to:'<strong>Vertex Global</strong><br>Tech Park, Berlin<br>Germany<br>VAT: DE112233445' },
     'INV-0007':{ date:'Sep 20 2026', due:'Sep 27 2026', badge:'b-flagged', bt:'Flagged', amt:'350.00',   to:'<strong>Nova Works</strong><br>300 Main St, Austin<br>United States<br>VAT: US987654321' }
   };
-  function toggleAddr() {
-    const el = document.getElementById('w-addr');
-    if (el.textContent.includes('•')) {
-      el.textContent = el.getAttribute('data-full');
-    } else {
-      el.textContent = el.getAttribute('data-mask');
-    }
-  }
-
   function closeM() { document.getElementById('modal').classList.remove('on'); }
 
   /* new invoice */
@@ -3054,16 +2993,23 @@ function startManualInvoice() {
   }
 
 
-  setTimeout(() => toast('boot', '&#x2713;', 'Vault ready', 'WDK synced \u00B7 On-device model loaded', 'blue'), 600);
+  setTimeout(() => toast('boot', '&#x2713;', 'MonteKasa ready', 'WDK synced \u00B7 On-device model loaded', 'blue'), 600);
 
   /* ════ 1. SEMANTIC SPOTLIGHT SEARCH (QVAC EMBEDDINGS) ════ */
   const cmdPaletteItems = [
     {
-      title: 'Security', category: 'Navigation', badge: 'Payment checks',
+      title: 'Fraud Check', category: 'Navigation', badge: 'Payment checks',
       sub: 'Recorded findings, supporting evidence and payment history',
       icon: '<svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
       action: () => go('security'),
-      tags: ['security', 'checks', 'warnings', 'payments', 'findings']
+      tags: ['fraud', 'checks', 'warnings', 'payments', 'findings']
+    },
+    {
+      title: 'Security', category: 'Navigation', badge: 'Wallet',
+      sub: 'Lock, recovery words, password and unlock attempts',
+      icon: '<svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
+      action: () => go('walletsec'),
+      tags: ['security', 'password', 'mnemonic', 'recovery', 'seed', 'lock', 'attempts']
     },
     {
       title: 'Dashboard & Treasury', category: 'Navigation', badge: 'Overview',
@@ -3443,7 +3389,25 @@ function startManualInvoice() {
   // window.__realPayments is populated by kasa.ts (renderCashflow) from the live snapshot
   // whenever real payment data exists. Until then we fall back to a clearly-labelled demo series.
   window.__realPayments = window.__realPayments || null;
-  let cashflowRangeDays = 14;
+  let cashflowRangeDays = 1; // the detail window opens on the last 24 hours
+
+  // Real payments of the last 24 hours, one point per hour (net: incoming minus outgoing).
+  function hourlyCashflowSeries() {
+    const hour = 3600000;
+    const thisHour = Math.floor(Date.now() / hour) * hour;
+    const out = [];
+    for (let i = 23; i >= 0; i--) {
+      const start = thisHour - i * hour;
+      const items = (window.__realPayments || []).filter(p => {
+        if (p.status === 'failed' || !p.received) return false;
+        const ts = p.blockTime ? p.blockTime * 1000 : Date.now(); // still confirming: counts now
+        return ts >= start && ts < start + hour;
+      });
+      const amount = items.reduce((a, p) => a + (p.direction === 'out' ? -p.received : p.received), 0);
+      out.push({ date: new Date(start), amount, items, demo: false, hourly: true });
+    }
+    return out;
+  }
 
   function buildSparkGeometry(values, w, h, padTop) {
     padTop = padTop || 6;
@@ -3486,6 +3450,7 @@ function startManualInvoice() {
   }
 
   function getCashflowSeries(days) {
+    if (days === 1) return hourlyCashflowSeries();
     if (window.__realPayments && window.__realPayments.length) {
       const now = Date.now();
       const byDay = {};
@@ -3514,6 +3479,7 @@ function startManualInvoice() {
     const series = getCashflowSeries(14);
     const values = series.map(s => s.amount);
     const geo = buildSparkGeometry(values, 300, 70, 6);
+
     const lineEl = document.getElementById('cf-spark-line');
     const areaEl = document.getElementById('cf-spark-area');
     if (lineEl) { lineEl.setAttribute('points', geo.line); animateDraw(lineEl); }
@@ -3570,17 +3536,34 @@ function startManualInvoice() {
     const count = series.reduce((a, s) => a + (s.items ? s.items.length : (s.amount > 0 ? 1 : 0)), 0);
     document.getElementById('cf-modal-total').textContent = Math.round(total).toLocaleString('en-US') + ' USDT';
     document.getElementById('cf-modal-count').textContent = String(count);
-    document.getElementById('cf-modal-avg').textContent = Math.round(total / days).toLocaleString('en-US') + ' USDT';
-    document.getElementById('cf-modal-sub').textContent = (series[0] && series[0].demo ? 'Demo data — ' : '') + `Received over the last ${days} days`;
+    const hourly = !!(series[0] && series[0].hourly);
+    document.getElementById('cf-modal-avg').textContent = Math.round(total / series.length).toLocaleString('en-US') + ' USDT';
+    document.getElementById('cf-modal-avg-label').textContent = hourly ? 'Hourly Average' : 'Daily Average';
+    document.getElementById('cf-modal-sub').textContent = (series[0] && series[0].demo ? 'Demo data — ' : '') + (hourly ? 'Net movement over the last 24 hours' : `Received over the last ${days} days`);
 
     const listEl = document.getElementById('cf-modal-list');
+    const empty = '<tr><td colspan="3" style="padding:14px;text-align:center;color:var(--t3);">No movements in this period</td></tr>';
+    if (hourly) {
+      // every transaction of the last 24 hours, newest first
+      const txs = series.flatMap(b => b.items).sort((a, b) => (b.blockTime || Infinity) - (a.blockTime || Infinity));
+      listEl.innerHTML = txs.length ? txs.map(p => {
+        const out = p.direction === 'out';
+        const when = new Date(p.blockTime ? p.blockTime * 1000 : Date.now());
+        return `<tr>
+        <td class="mono" style="color:var(--t3); font-size:11px;">${when.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</td>
+        <td style="font-size:12px;">${p.invoiceId ? 'Invoice ' + p.invoiceId.slice(0, 8) : (out ? 'Sent payment' : 'Received payment')}${p.blockTime ? '' : ' (confirming)'}</td>
+        <td class="mono" style="text-align:right; color:var(${out ? '--red' : '--green'}); font-weight:700;">${out ? '−' : '+'}${p.received.toLocaleString('en-US')} USDT</td>
+      </tr>`;
+      }).join('') : empty;
+      return;
+    }
     const rows = [...series].reverse().filter(s => s.amount > 0).slice(0, 10);
     listEl.innerHTML = rows.length ? rows.map(s => `
       <tr>
         <td class="mono" style="color:var(--t3); font-size:11px;">${s.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
         <td style="font-size:12px;">${s.demo ? 'Received payment' : (s.items[0] && s.items[0].invoiceId ? 'Invoice ' + s.items[0].invoiceId.slice(0, 8) : 'Received payment')}</td>
         <td class="mono" style="text-align:right; color:var(--green); font-weight:700;">+${s.amount.toLocaleString('en-US')} USDT</td>
-      </tr>`).join('') : '<tr><td colspan="3" style="padding:14px;text-align:center;color:var(--t3);">No movements in this period</td></tr>';
+      </tr>`).join('') : empty;
   }
 
   // TODO(backend): replace with window.kasa.createWallet() once the WDK wallet service is wired up
@@ -3630,7 +3613,6 @@ function startManualInvoice() {
       receiptNo,
       amount: document.getElementById('send-success-amt')?.textContent || '—',
       to: document.getElementById('send-success-to')?.textContent || '—',
-      fee: document.getElementById('send-success-fee')?.textContent || '—',
       txid: document.getElementById('send-success-txid')?.textContent || '—',
       date: new Date()
     };
@@ -3675,13 +3657,12 @@ function startManualInvoice() {
             <tr><th>Date &amp; Time</th><td>${r.date.toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'medium' })}</td></tr>
             <tr><th>Amount</th><td>${r.amount}</td></tr>
             <tr><th>Recipient</th><td>${r.to}</td></tr>
-            <tr><th>Network Fee</th><td>${r.fee}</td></tr>
             <tr><th>Transaction ID</th><td>${r.txid}</td></tr>
             <tr><th>Settlement</th><td>RGB / Bitcoin UTXO-anchored (self-custodial)</td></tr>
           </table>
           <div class="qr">${r.qrImg || ''}</div>
           <div class="foot">
-            This receipt was generated automatically by Vault on the device that initiated the transfer.
+            This receipt was generated automatically by MonteKasa on the device that initiated the transfer.
             It documents the transaction as recorded locally and is intended as a payment confirmation for your
             own bookkeeping. It is not a certified fiscal or legal document &mdash; please have your accountant
             or legal counsel review the final formatting before using it for statutory tax or audit purposes.
@@ -3719,6 +3700,7 @@ function startManualInvoice() {
     const addrLabel = document.getElementById('rcv-addr-label');
     const addrText = document.getElementById('rcv-addr-text');
     const sealInfo = document.getElementById('rcv-seal-info');
+    if (!tabUsdt || !tabBtc) return; // only USDT can be received (kasa.ts handles it)
 
     if (asset === 'usdt') {
       tabUsdt.style.background = 'var(--nav-active-bg)';
@@ -3868,7 +3850,6 @@ function startManualInvoice() {
       const shortAddr = addrVal.length > 26 ? addrVal.slice(0, 14) + '…' + addrVal.slice(-9) : addrVal;
       document.getElementById('send-success-amt').textContent = amtVal.toFixed(2) + ' USDT';
       document.getElementById('send-success-to').textContent = shortAddr;
-      document.getElementById('send-success-fee').textContent = feeSummary;
       document.getElementById('send-success-txid').textContent = randTxid;
 
       document.getElementById('send-mhdr').style.display = 'none';
@@ -4106,12 +4087,6 @@ function startManualInvoice() {
     </div>
     
     <div class="mbdy" style="background:var(--c0); padding:20px 24px;">
-      <!-- Asset Selector -->
-      <div style="display:flex; background:var(--overlay-weak); border:1px solid var(--borderB); border-radius:6px; padding:3px; margin-bottom:16px;">
-        <button id="rcv-tab-usdt" class="btn" style="flex:1; justify-content:center; font-size:11px; padding:6px; border-radius:4px; background:var(--nav-active-bg); color:var(--nav-active-text);" onclick="setReceiveAsset('usdt')">₮ Tether USD (RGB20)</button>
-        <button id="rcv-tab-btc" class="btn" style="flex:1; justify-content:center; font-size:11px; padding:6px; border-radius:4px; background:transparent; color:var(--t3);" onclick="setReceiveAsset('btc')">₿ Bitcoin (SegWit)</button>
-      </div>
-
       <!-- Requested Amount -->
       <div class="fg" style="margin-bottom:16px;">
         <label class="fl">Amount (optional — leave blank for any amount)</label>
@@ -4172,6 +4147,7 @@ function startManualInvoice() {
 
 <script type="module" src="/src/kasa.ts"></script>
 <script type="module" src="/src/wallet-gate.ts"></script>
+<script type="module" src="/src/wallet-security.ts"></script>
 <script type="module" src="/src/agent.ts"></script>
 <script type="module" src="/src/commercialista-nav.ts"></script>
 <script type="module" src="/src/tax-profile.ts"></script>

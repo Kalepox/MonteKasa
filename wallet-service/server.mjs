@@ -157,6 +157,43 @@ function stopSync() {
   syncQueued = false
 }
 
+// ---------- security log + password attempts ----------
+// Unlock / reveal / password events for the Security page, kept next to the seed (no secrets in it).
+// After 5 wrong passwords in a row, password checks pause for 30 s (slows down guessing).
+const EVENTS_FILE = path.join(DATA, 'security-events.json')
+const MAX_EVENTS = 100
+const FAIL_LIMIT = 5
+const FAIL_PAUSE_MS = 30_000
+let failedStreak = 0
+let pausedUntil = 0
+
+function readEvents() {
+  try { return JSON.parse(fs.readFileSync(EVENTS_FILE, 'utf8')) } catch { return [] }
+}
+function logEvent(type) {
+  const events = [...readEvents(), { type, at: Date.now() }].slice(-MAX_EVENTS)
+  try { fs.writeFileSync(EVENTS_FILE, JSON.stringify(events), { mode: 0o600 }) } catch { /* log is best effort */ }
+}
+// decrypts the seed with a password, counting failures; `what` names the action in the log
+function checkPassword(password, what) {
+  const wait = pausedUntil - Date.now()
+  if (wait > 0) throw new Error(`Too many wrong passwords. Try again in ${Math.ceil(wait / 1000)} s.`)
+  try {
+    const mnemonic = loadSeed(SEED_FILE, String(password ?? ''))
+    failedStreak = 0
+    return mnemonic
+  } catch (e) {
+    if (e?.message !== 'Wrong password') throw e
+    logEvent(`${what}-failed`)
+    if (++failedStreak >= FAIL_LIMIT) {
+      pausedUntil = Date.now() + FAIL_PAUSE_MS
+      failedStreak = 0
+      logEvent('paused')
+    }
+    throw e
+  }
+}
+
 // ---------- the API ----------
 
 const api = {
@@ -168,6 +205,7 @@ const api = {
     const mnemonic = bip39.generateMnemonic()
     saveSeed(SEED_FILE, mnemonic, password)
     await openWallet(mnemonic)
+    logEvent('created')
     return { mnemonic } // shown to the user once for backup; never stored in plain text
   },
 
@@ -177,16 +215,50 @@ const api = {
     if (typeof password !== 'string' || password.length < 8) throw new Error('Password must be 8+ characters')
     saveSeed(SEED_FILE, mnemonic.trim(), password)
     await openWallet(mnemonic.trim())
+    logEvent('restored')
     return { ok: true }
   },
 
   async unlock({ password }) {
     if (!fs.existsSync(SEED_FILE)) throw new Error('No wallet yet: create or restore one first')
-    if (!account) await openWallet(loadSeed(SEED_FILE, password))
+    if (!account) {
+      await openWallet(checkPassword(password, 'unlock'))
+      logEvent('unlock')
+    }
     return { ok: true }
   },
 
-  lock: () => (closeWallet(), { ok: true }),
+  lock: () => {
+    if (account) logEvent('lock')
+    closeWallet()
+    return { ok: true }
+  },
+
+  // shows the recovery words again; always asks for the password, even when unlocked
+  revealMnemonic({ password }) {
+    if (!fs.existsSync(SEED_FILE)) throw new Error('No wallet yet')
+    const mnemonic = checkPassword(password, 'reveal')
+    logEvent('reveal')
+    return { mnemonic }
+  },
+
+  changePassword({ password, newPassword }) {
+    if (!fs.existsSync(SEED_FILE)) throw new Error('No wallet yet')
+    if (typeof newPassword !== 'string' || newPassword.length < 8) throw new Error('New password must be 8+ characters')
+    const mnemonic = checkPassword(password, 'password-change')
+    // write the re-encrypted seed next to the old one first, then swap, so a crash can't lose it
+    const tmp = `${SEED_FILE}.tmp`
+    saveSeed(tmp, mnemonic, newPassword)
+    fs.renameSync(tmp, SEED_FILE)
+    logEvent('password-changed')
+    return { ok: true }
+  },
+
+  securityLog: () => ({
+    events: readEvents().reverse(),
+    pausedUntil: pausedUntil > Date.now() ? pausedUntil : null,
+    failLimit: FAIL_LIMIT
+  }),
 
   // local reads only; `synced: false` until the first background sync after unlock has finished
   async status({ assetId }) {
@@ -276,7 +348,7 @@ const serial = (fn) => (queue = queue.then(fn, fn))
 // Pure reads skip the queue so they never wait behind a whole sync or send. rgb-lib's calls are
 // synchronous, so a read still can't run *inside* another native call; it just doesn't wait for the
 // rest of a queued job. Anything that writes (send, UTXOs, invoices, unlock, sync) stays serial.
-const READ_ONLY = new Set(['state', 'status', 'listTransfers', 'decodeInvoice'])
+const READ_ONLY = new Set(['state', 'status', 'listTransfers', 'decodeInvoice', 'securityLog'])
 // calls that mean "the merchant is doing something right now" (a payment review starts by decoding)
 const ACTIVITY = new Set(['decodeInvoice', 'send', 'createInvoice'])
 

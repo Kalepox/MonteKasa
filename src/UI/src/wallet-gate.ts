@@ -36,7 +36,7 @@ const walletPage = document.querySelector('#view-dashboard .vb') ?? document.get
 let busy = false // a view is mid-action: don't let the poller replace it
 
 function render(html: string): void {
-  root.innerHTML = `<div class="wg-card"><div class="wg-brand">Vault · self-custodial wallet</div>${html}</div>`
+  root.innerHTML = `<div class="wg-card"><div class="wg-brand">MonteKasa · self-custodial wallet</div>${html}</div>`
   root.hidden = false
   // only take focus when the Wallet page is the one on screen
   if (document.getElementById('view-dashboard')?.classList.contains('on'))
@@ -113,7 +113,7 @@ function viewUnlock(): void {
 function viewWelcome(): void {
   render(`
     <h2>Set up your wallet</h2>
-    <p>Vault keeps your money in a self-custodial wallet on this device. Nobody else holds your keys — not even us.</p>
+    <p>MonteKasa keeps your money in a self-custodial wallet on this device. Nobody else holds your keys — not even us.</p>
     <div class="wg-actions">
       <button class="btn btn-p" id="wg-create">Create a new wallet</button>
     </div>

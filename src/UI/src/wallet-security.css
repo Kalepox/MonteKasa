@@ -1,0 +1,50 @@
+/* Security page: cards reuse the wallet panel styles (wallet-gate.css) */
+.ws-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+.ws-card {
+  max-width: none;
+}
+.ws-wide {
+  grid-column: 1 / -1;
+}
+.ws-log {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.ws-log th {
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--t3, #8b8b92);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+}
+.ws-log td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  color: var(--t2, #c4c4c8);
+}
+.ws-log td.mono {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  color: var(--t3, #8b8b92);
+  white-space: nowrap;
+}
+.ws-log tr.ws-bad td:last-child {
+  color: var(--red, #ef4444);
+  font-weight: 600;
+}
+.ws-log tr.ws-ok td:last-child {
+  color: var(--green, #22c55e);
+}
+.ws-empty {
+  text-align: center;
+  color: var(--t3, #8b8b92);
+}
