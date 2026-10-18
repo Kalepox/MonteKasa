@@ -6,11 +6,16 @@ const escape = (value: string): string =>
     /[&<>"']/g,
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!
   )
-const utc = (t: number): string => new Date(t * 1000).toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
+const utc = (t: number): string =>
+  new Date(t * 1000).toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
 const rome = (t: number): string =>
-  new Date(t * 1000).toLocaleString('en-GB', { timeZone: 'Europe/Rome', dateStyle: 'medium', timeStyle: 'medium' })
+  new Date(t * 1000).toLocaleString('en-GB', {
+    timeZone: 'Europe/Rome',
+    dateStyle: 'medium',
+    timeStyle: 'medium'
+  })
 
-// Receipt for one wallet transfer. Times, IDs and amounts come from the ledger; the counterparty
+// Invoice document for one wallet transfer. Times, IDs and amounts come from the ledger; the counterparty
 // address of a linked invoice is the same sample Turin address used on the invoice PDF.
 export function transactionDocumentHtml(p: KasaPayment, snap: KasaSnapshot): string {
   const out = p.direction === 'out'
@@ -33,8 +38,8 @@ export function transactionDocumentHtml(p: KasaPayment, snap: KasaSnapshot): str
   .foot{margin-top:26px;color:#6b7785;font-size:10px;border-top:1px solid #d5dbe2;padding-top:10px}</style></head>
   <body>
   <div class="top"><div><div class="brand">MonteKasa</div><div class="sub">Self-custodial invoicing · USDT on Bitcoin (RGB)</div></div>
-    <div class="doc"><h1>Transaction receipt</h1><div class="sub">${kind}</div><div class="badge">${escape(p.status).toUpperCase()}</div></div></div>
-  <div class="amt">${out ? '−' : '+'}${p.received.toFixed(6)} USDT</div>
+    <div class="doc"><h1>Invoice</h1><div class="sub">${kind}</div><div class="badge">${escape(p.status).toUpperCase()}</div></div></div>
+  <div class="amt">${p.received.toFixed(6)} USDT</div>
   <h2>Transaction</h2>
   <table><tbody>
     ${row('Transaction ID', escape(p.txid ?? '—'), true)}
@@ -45,15 +50,19 @@ export function transactionDocumentHtml(p: KasaPayment, snap: KasaSnapshot): str
     ${row('Status', escape(p.status))}
     ${p.recipientId ? row('Recipient ID', escape(p.recipientId), true) : ''}
   </tbody></table>
-  ${invoice ? `<h2>${out ? 'Related invoice' : 'Paid invoice'}</h2><table><tbody>
+  ${
+    invoice
+      ? `<h2>${out ? 'Related invoice' : 'Paid invoice'}</h2><table><tbody>
     ${row('Invoice', 'INV-' + escape(invoice.id.slice(0, 6).toUpperCase()))}
     ${row('Client', `<b>${escape(invoice.client)}</b>\n${escape(turinAddress(invoice.id))}`)}
     ${row('Invoice amount', invoice.amount.toFixed(6) + ' USDT')}
     ${row('Received on invoice', invoice.received.toFixed(6) + ' USDT')}
     ${row('Invoice status', escape(invoice.state))}
-  </tbody></table>` : ''}
+  </tbody></table>`
+      : ''
+  }
   ${refund ? `<h2>Refund</h2><table><tbody>${row('Proposal', escape(refund.id))}${row('Reason', escape(refund.reason))}</tbody></table>` : ''}
   <div class="foot">Transaction details come from the local ledger at export time and are not an independent settlement proof.
-  The client address is a sample address; this receipt is not a validated tax document.</div>
+  The client address is a sample address; this invoice is not a validated tax document.</div>
   </body></html>`
 }

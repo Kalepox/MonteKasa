@@ -124,6 +124,14 @@ function amountCell(i: KasaInvoice): string {
   return `${fmt(i.received)} USDT${sub}`
 }
 
+// money received through Receive (no New Invoice behind it), newest first
+const paidRequests = (): KasaPayment[] =>
+  snap.payments.filter(
+    (p) => p.direction === 'in' && p.received > 0 && p.status !== 'failed' && !p.invoiceId
+  )
+const requestId = (p: KasaPayment): string =>
+  'REQ-' + (p.txid ? p.txid.slice(0, 6).toUpperCase() : String(p.nodeIdx))
+
 function renderInvoices(): void {
   const empty = (cols: number): string =>
     `<tr><td colspan="${cols}" style="color:var(--t3);text-align:center;padding:18px;">No invoices yet</td></tr>`
@@ -143,6 +151,18 @@ function renderInvoices(): void {
         )
         .join('') || empty(6)
 
+  // paid Receive requests have no invoice row of their own: list them as paid invoices too
+  const requestRows = paidRequests()
+    .map(
+      (
+        p
+      ) => `<tr onclick="exportTransactionPdfByNode(${p.nodeIdx})" style="cursor:pointer;" title="Click to download this invoice as PDF"><td class="mono">${requestId(p)}</td><td style="color:var(--t3);">Payment request</td>
+       <td class="mono" style="color:var(--t1);font-weight:600;">${fmt(p.received)} USDT</td>
+       <td class="mono" style="color:var(--t3);">${p.blockTime ? day(p.blockTime) : '—'}</td>
+       <td class="mono" style="color:var(--t3);">—</td><td><span class="badge ${BADGE.Paid ?? 'b-paid'}">Paid</span></td>
+       <td class="mono" style="font-size:9.5px;color:var(--t3);">${esc((p.txid ?? '').slice(-8))}</td></tr>`
+    )
+    .join('')
   const all = $('inv-table')
   if (all)
     all.innerHTML =
@@ -156,7 +176,7 @@ function renderInvoices(): void {
        <td class="mono" style="color:var(--t3);">${day(i.expiresAt)}</td><td>${badge(i)}</td>
        <td class="mono" style="font-size:9.5px;color:var(--t3);">${esc(i.recipientId.slice(-8))}</td></tr>`
         )
-        .join('') || empty(7)
+        .join('') + requestRows || empty(7)
 
   const activeFilter = document.querySelector('#view-invoices .ft.on')
   if (activeFilter) w.ft(activeFilter)
@@ -187,7 +207,7 @@ function renderInvoices(): void {
   }
 
   // Invoices page: summary cards, record count, and per-status filter tab counts
-  setText('inv-record-count', `${snap.invoices.length} Records`)
+  setText('inv-record-count', `${snap.invoices.length + paidRequests().length} Records`)
   // Invoices page cards: New Invoice invoices only
   const settled = snap.invoices.filter((i) => ['Paid', 'Overpaid', 'Underpaid'].includes(i.state))
   const awaiting = snap.invoices.filter((i) => ['Issued', 'Pending'].includes(i.state))
@@ -209,7 +229,6 @@ function renderInvoices(): void {
       ? `${(settlementDays.reduce((a, b) => a + b, 0) / settlementDays.length).toFixed(1)} Days`
       : '—'
   )
-
 
   const upcoming = $('upcoming-due')
   if (upcoming) {
@@ -236,10 +255,13 @@ function renderInvoices(): void {
       : '<div style="padding:14px;text-align:center;color:var(--t3);font-size:12px;">No invoices awaiting payment</div>'
   }
 
-  setText('ft-count-all', String(snap.invoices.length))
+  setText('ft-count-all', String(snap.invoices.length + paidRequests().length))
   setText('ft-count-issued', String(snap.invoices.filter((i) => i.state === 'Issued').length))
   setText('ft-count-pending', String(snap.invoices.filter((i) => i.state === 'Pending').length))
-  setText('ft-count-paid', String(snap.invoices.filter((i) => i.state === 'Paid').length))
+  setText(
+    'ft-count-paid',
+    String(snap.invoices.filter((i) => i.state === 'Paid').length + paidRequests().length)
+  )
   setText('ft-count-overpaid', String(snap.invoices.filter((i) => i.state === 'Overpaid').length))
   setText(
     'ft-count-flagged',
@@ -497,7 +519,10 @@ w.executeSend = async (): Promise<void> => {
 
     // Switch the Send modal over to the success confirmation view
     setText('send-success-amt', `${fmt(parseFloat(amount))} USDT`)
-    setText('send-success-to', invoice.length > 26 ? `${invoice.slice(0, 14)}…${invoice.slice(-9)}` : invoice)
+    setText(
+      'send-success-to',
+      invoice.length > 26 ? `${invoice.slice(0, 14)}…${invoice.slice(-9)}` : invoice
+    )
     const txidEl = $('send-success-txid')
     if (txidEl) txidEl.innerHTML = r.txid ? txLink(r.txid, r.txid) : '—'
     const mhdr = $('send-mhdr')
@@ -670,6 +695,11 @@ w.exportTransactionPdf = async (index: number): Promise<void> => {
     toastErr('PDF export failed', e)
   }
 }
+w.exportTransactionPdfByNode = async (nodeIdx: number): Promise<void> => {
+  const index = shownMoves.findIndex((p) => p.nodeIdx === nodeIdx)
+  if (index >= 0) return w.exportTransactionPdf(index)
+  toastErr('PDF export failed', new Error('Transaction not found. Refresh and try again.'))
+}
 w.exportAllTransactionsCSV = (): void => {
   try {
     if (!shownMoves.length) throw new Error('There are no transactions to export yet.')
@@ -737,7 +767,13 @@ w.exportInvoiceDetailsCSV = async (): Promise<void> => {
     const current = await window.kasa.snapshot()
     if (!current.invoices.length) throw new Error('There are no invoices to export yet.')
     w.downloadFile('invoice-details.csv', invoiceDetailsCsv(current), 'text/csv;charset=utf-8;')
-    w.toast('inv-csv', '✓', 'CSV exported', `${current.invoices.length} invoices exported.`, 'green')
+    w.toast(
+      'inv-csv',
+      '✓',
+      'CSV exported',
+      `${current.invoices.length} invoices exported.`,
+      'green'
+    )
   } catch (e) {
     toastErr('Export failed', e)
   }
