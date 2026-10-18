@@ -245,13 +245,10 @@ function renderWallet(st: KasaStatus): void {
   setText('w-usdt-id', 'rgb:lX~ToKsO…E9PA_h0 · RGB20')
   setText('send-avail-bal', st.state === 'online' ? `${fmt(st.balance)} USDT` : pending)
 
-  const tx = $('w-tx')
-  if (!tx) return
-  tx.innerHTML =
-    snap.payments
-      // real movements only: no unpaid invoices (0) and no failed transfers
-      .filter((p) => p.received > 0 && p.status !== 'failed')
-      .slice(0, 10)
+  // real movements only: no unpaid invoices (0) and no failed transfers
+  const moves = snap.payments.filter((p) => p.received > 0 && p.status !== 'failed')
+  const txRows = (list: typeof moves): string =>
+    list
       .map((p) => {
         const inv = snap.invoices.find((i) => i.id === p.invoiceId)
         const txid = p.txid ? `${p.txid.slice(0, 4)}…${p.txid.slice(-4)}` : '—'
@@ -265,6 +262,10 @@ function renderWallet(st: KasaStatus): void {
       })
       .join('') ||
     `<tr><td colspan="5" style="color:var(--t3);text-align:center;padding:18px;">No RGB transfers yet</td></tr>`
+  const tx = $('w-tx')
+  if (tx) tx.innerHTML = txRows(moves.slice(0, 10))
+  const latest = $('w-tx-latest')
+  if (latest) latest.innerHTML = txRows(moves.slice(0, 3))
 
   // Feed the real payment history to the Cashflow chart (src/UI/index.html) instead of its demo series
   w.__realPayments = snap.payments
