@@ -16,6 +16,7 @@ import { Agent } from './ai/agent'
 import { freshSecurityContext } from './ai/fresh-security-context'
 import type { SecurityTarget } from '../shared/agent'
 import { invoiceDocumentHtml } from '../shared/invoice-document'
+import { transactionDocumentHtml } from '../shared/transaction-document'
 import { TaxProfileStore } from './tax-profile'
 import { guardDisconnectedOutput } from './core/stdio'
 
@@ -183,10 +184,8 @@ app.whenReady().then(() => {
     }
   })
   handle('kasa:snapshot', () => kasa.snapshot())
-  handle('kasa:invoicePdf', async (_e, id: unknown) => {
-    if (typeof id !== 'string' || id.length > 100) throw new Error('Invalid invoice ID.')
-    const invoice = kasa.snapshot().invoices.find((i) => i.id === id)
-    if (!invoice) throw new Error('Invoice not found.')
+  // prints an HTML document to PDF in a hidden, script-less window
+  const htmlToPdf = async (html: string): Promise<Buffer> => {
     const document = new BrowserWindow({
       show: false,
       webPreferences: {
@@ -198,9 +197,7 @@ app.whenReady().then(() => {
     })
     document.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
     try {
-      await document.loadURL(
-        `data:text/html;charset=utf-8,${encodeURIComponent(invoiceDocumentHtml(invoice))}`
-      )
+      await document.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
       return await document.webContents.printToPDF({
         printBackground: true,
         preferCSSPageSize: true
@@ -208,6 +205,21 @@ app.whenReady().then(() => {
     } finally {
       document.destroy()
     }
+  }
+  handle('kasa:invoicePdf', async (_e, id: unknown) => {
+    if (typeof id !== 'string' || id.length > 100) throw new Error('Invalid invoice ID.')
+    const snapshot = kasa.snapshot()
+    const invoice = snapshot.invoices.find((i) => i.id === id)
+    if (!invoice) throw new Error('Invoice not found.')
+    return htmlToPdf(invoiceDocumentHtml(invoice, snapshot.payments))
+  })
+  handle('kasa:transactionPdf', async (_e, nodeIdx: unknown) => {
+    if (typeof nodeIdx !== 'number' || !Number.isSafeInteger(nodeIdx))
+      throw new Error('Invalid transaction.')
+    const snapshot = kasa.snapshot()
+    const payment = snapshot.payments.find((p) => p.nodeIdx === nodeIdx)
+    if (!payment) throw new Error('Transaction not found.')
+    return htmlToPdf(transactionDocumentHtml(payment, snapshot))
   })
   handle('kasa:createInvoice', (_e, client: string, amount: number) =>
     kasa.createInvoice(client, amount)

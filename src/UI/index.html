@@ -134,7 +134,7 @@
 
     /* ─── Layout ─────────────────────────────────────────────── */
     .shell { display: grid; grid-template-columns: var(--sw) 1fr; height: 100vh; position: relative; z-index: 1; }
-    .sidebar { background: var(--sidebar-bg); backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px); border-right: 1px solid var(--sidebar-border); display: flex; flex-direction: column; overflow: hidden; }
+    .sidebar { background: var(--sidebar-bg); border-right: 1px solid var(--sidebar-border); display: flex; flex-direction: column; overflow: hidden; }
     .brand { padding: 40px 16px 16px; border-bottom: 1px solid var(--border); -webkit-app-region: drag; }
     .brand-name { font-size: 17px; font-weight: 700; letter-spacing: -0.4px; color: var(--t1); }
     .brand-tag { font-size: 10px; color: var(--t3); margin-top: 1px; font-weight: 500; letter-spacing: 0.2px; }
@@ -163,16 +163,15 @@
     .sco   { font-size: 10px; color: var(--t3); }
 
     /* ─── Main ─────────────────────────────────────────────── */
-    .main { display: flex; flex-direction: column; overflow: hidden; min-width: 0; background: var(--main-bg); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
-    .topbar { padding: 40px 24px 12px; border-bottom: 1px solid var(--topbar-border); background: var(--topbar-bg); backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px); display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    .main { display: flex; flex-direction: column; overflow: hidden; min-width: 0; background: var(--main-bg); }
+    .topbar { padding: 40px 24px 12px; border-bottom: 1px solid var(--topbar-border); background: var(--topbar-bg); display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
     .topbar .tb-title { font-size: 15px; font-weight: 700; flex: 1; -webkit-app-region: drag; }
     .topbar button, .topbar select, .topbar input { -webkit-app-region: no-drag !important; }
     .tb-sub   { font-size: 11px; color: var(--t3); margin-top: 2px; font-weight: 400; }
 
     /* ─── Signature Background ─────────────────────────────────────────────── */
     .aura-bg { position: fixed; inset: 0; z-index: 0; background: var(--c0); overflow: hidden; pointer-events: none; }
-    .aura-bg::after { content: ''; position: absolute; inset: 0; opacity: 0.05; background-image: radial-gradient(var(--t1) 1px, transparent 1px); background-size: 24px 24px; animation: panGrid 60s linear infinite; }
-    @keyframes panGrid { 0% { transform: translateY(0); } 100% { transform: translateY(24px); } }
+    .aura-bg::after { content: ''; position: absolute; inset: 0; opacity: 0.05; background-image: radial-gradient(var(--t1) 1px, transparent 1px); background-size: 24px 24px; }
 
     .qlog-line::after { content:'_'; animation: blink 1s step-end infinite; }
     @keyframes blink { 50% { opacity: 0; } }
@@ -386,7 +385,10 @@
     .whl  { font-size:11px; color:#9ca3af; text-transform:uppercase; letter-spacing:1px; font-weight:700; margin-bottom:8px; }
     .whb  { font-size:42px; font-weight:800; letter-spacing:-1.5px; color:#ffffff; line-height:1; }
     .whf  { font-size:13px; color:#6b7280; font-weight:500; margin-top:6px; }
-    .wha-box { margin-top:20px; display:inline-flex; align-items:center; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.05); border-radius:6px; padding:8px 12px; gap:12px; }
+    :root[data-theme="light"] .whero:not([style]) { background: linear-gradient(135deg, #ffffff, #f1f4f8); border-color: var(--borderB); box-shadow: 0 8px 24px rgba(15,23,42,0.08); }
+    :root[data-theme="light"] .whero:not([style]) .whl { color: var(--t3); }
+    :root[data-theme="light"] .whero:not([style]) .whb { color: var(--t1); }
+    :root[data-theme="light"] .whero:not([style]) .whf { color: var(--t3); }
     .cpic { cursor:pointer; color:var(--t3); font-size:12px; transition:color 0.1s; }
     .cpic:hover { color:var(--blue); }
 
@@ -974,8 +976,6 @@
               <span class="net-dot"></span>
               <span>Testnet Connected</span>
             </div>
-            <button class="btn btn-s sm" onclick="openSend()">&#x2191; Send</button>
-            <button class="btn btn-p sm" onclick="openRecv()">&#x2193; Request</button>
             <button class="btn btn-s sm" onclick="go('new')"><span>+</span> New Invoice</button>
           </div>
           <button class="cmd-trigger-btn" onclick="openCmdPalette()" title="Spotlight Search (Cmd+K)">
@@ -1005,14 +1005,6 @@
           <div class="wh-info">
             <div class="whl">Total Balance</div>
             <div class="whb" id="w-balance">0.00 USDT</div>
-            <div class="wha-box">
-              <span style="font-size:10px;color:#6b7280;font-weight:700;">WALLET</span>
-              <span id="w-addr" style="font-family:'JetBrains Mono', monospace; font-size:12.5px; color:#d1d5db; min-width:200px;" data-full="bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh2k4a9x7" data-mask="bc1q &bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull; a9x7">bc1q &bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull; a9x7</span>
-              <div style="display:flex; gap:8px;">
-                <span class="cpic" title="Show/Hide" onclick="toggleAddr()" style="color:#9ca3af; cursor:pointer; display:inline-flex;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span>
-                <span class="cpic" title="Copy" onclick="toast('cp','&#x2713;','Copied','Address copied to clipboard','green')" style="color:#9ca3af; font-size:14px; cursor:pointer;">&#x29C9;</span>
-              </div>
-            </div>
           </div>
           <div class="wh-acts">
             <button class="btn btn-p" onclick="openSend()" style="justify-content:center; padding:12px; font-size:13px; font-weight:700; border-radius:8px;">&#x2191; Send</button>
@@ -1228,14 +1220,6 @@
         </div>
       </div>
       <div class="vb">
-        <!-- Invoices Overview Stats Cards -->
-        <div class="sgrid" style="margin-bottom:20px;">
-          <div class="sc"><div class="sc-l">Total Invoiced</div><div class="sc-v cb" id="inv-stat-total">3,850 USDT</div></div>
-          <div class="sc"><div class="sc-l">Total Settled</div><div class="sc-v cg" id="inv-stat-settled">2,550 USDT</div></div>
-          <div class="sc"><div class="sc-l">Awaiting Settlement</div><div class="sc-v cr" id="inv-stat-awaiting">1,300 USDT</div></div>
-          <div class="sc"><div class="sc-l">Avg Settlement Time</div><div class="sc-v ca" id="inv-stat-avgtime">1.4 Days</div></div>
-        </div>
-
         <div class="tcard">
           <div class="fbr">
             <span class="ft on" onclick="ft(this)">All (<span id="ft-count-all">10</span>)</span>
@@ -1255,8 +1239,11 @@
             </tbody>
           </table>
         </div>
+        <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+          <button class="btn btn-s sm" onclick="exportInvoiceDetailsCSV()">All Details (CSV)</button>
+        </div>
 
-        <div class="sh"><span class="sh-t">Recent RGB Transactions</span></div>
+        <div class="sh"><span class="sh-t">Recent Transactions</span></div>
         <div class="tcard">
           <table>
             <thead><tr><th>RGB Txid</th><th>Direction</th><th>Amount</th><th>Invoice</th><th>Block</th></tr></thead>
@@ -1266,6 +1253,9 @@
               <tr><td class="mono" style="color:var(--t3);">7b2a&hellip;31ad</td><td style="color:var(--red);font-size:12px;font-weight:600;">&#x2191; Sent</td><td class="mono" style="color:var(--t1);font-weight:600;">-80 USDT</td><td class="mono">refund</td><td class="mono" style="color:var(--t3);">#803,055</td></tr>
             </tbody>
           </table>
+        </div>
+        <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+          <button class="btn btn-s sm" onclick="exportAllTransactionsCSV()">All Details (CSV)</button>
         </div>
       </div>
     </div>
@@ -1336,15 +1326,16 @@
         </div>
         <div class="mbdy">
           <div style="display:flex; gap:8px; margin-bottom:16px;">
+            <span class="ft on" onclick="setCashflowRange(this,1)">24H</span>
             <span class="ft" onclick="setCashflowRange(this,7)">7D</span>
-            <span class="ft on" onclick="setCashflowRange(this,14)">14D</span>
+            <span class="ft" onclick="setCashflowRange(this,14)">14D</span>
             <span class="ft" onclick="setCashflowRange(this,30)">30D</span>
           </div>
 
           <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:18px;">
             <div class="sc"><div class="sc-l">Total Received</div><div class="sc-v cg" id="cf-modal-total" style="font-size:18px;">&mdash;</div></div>
             <div class="sc"><div class="sc-l">Transactions</div><div class="sc-v" id="cf-modal-count" style="font-size:18px;">&mdash;</div></div>
-            <div class="sc"><div class="sc-l">Daily Average</div><div class="sc-v" id="cf-modal-avg" style="font-size:18px;">&mdash;</div></div>
+            <div class="sc"><div class="sc-l" id="cf-modal-avg-label">Daily Average</div><div class="sc-v" id="cf-modal-avg" style="font-size:18px;">&mdash;</div></div>
           </div>
 
           <div class="tcard" style="padding:18px; margin-bottom:18px;">
@@ -2727,15 +2718,6 @@
     'INV-0008':{ date:'Sep 25 2026', due:'Sep 30 2026', badge:'b-overpaid',bt:'Overpaid',amt:'500.00',   to:'<strong>Vertex Global</strong><br>Tech Park, Berlin<br>Germany<br>VAT: DE112233445' },
     'INV-0007':{ date:'Sep 20 2026', due:'Sep 27 2026', badge:'b-flagged', bt:'Flagged', amt:'350.00',   to:'<strong>Nova Works</strong><br>300 Main St, Austin<br>United States<br>VAT: US987654321' }
   };
-  function toggleAddr() {
-    const el = document.getElementById('w-addr');
-    if (el.textContent.includes('•')) {
-      el.textContent = el.getAttribute('data-full');
-    } else {
-      el.textContent = el.getAttribute('data-mask');
-    }
-  }
-
   function closeM() { document.getElementById('modal').classList.remove('on'); }
 
   /* new invoice */
@@ -3443,7 +3425,25 @@ function startManualInvoice() {
   // window.__realPayments is populated by kasa.ts (renderCashflow) from the live snapshot
   // whenever real payment data exists. Until then we fall back to a clearly-labelled demo series.
   window.__realPayments = window.__realPayments || null;
-  let cashflowRangeDays = 14;
+  let cashflowRangeDays = 1; // the detail window opens on the last 24 hours
+
+  // Real payments of the last 24 hours, one point per hour (net: incoming minus outgoing).
+  function hourlyCashflowSeries() {
+    const hour = 3600000;
+    const thisHour = Math.floor(Date.now() / hour) * hour;
+    const out = [];
+    for (let i = 23; i >= 0; i--) {
+      const start = thisHour - i * hour;
+      const items = (window.__realPayments || []).filter(p => {
+        if (p.status === 'failed' || !p.received) return false;
+        const ts = p.blockTime ? p.blockTime * 1000 : Date.now(); // still confirming: counts now
+        return ts >= start && ts < start + hour;
+      });
+      const amount = items.reduce((a, p) => a + (p.direction === 'out' ? -p.received : p.received), 0);
+      out.push({ date: new Date(start), amount, items, demo: false, hourly: true });
+    }
+    return out;
+  }
 
   function buildSparkGeometry(values, w, h, padTop) {
     padTop = padTop || 6;
@@ -3486,6 +3486,7 @@ function startManualInvoice() {
   }
 
   function getCashflowSeries(days) {
+    if (days === 1) return hourlyCashflowSeries();
     if (window.__realPayments && window.__realPayments.length) {
       const now = Date.now();
       const byDay = {};
@@ -3514,6 +3515,7 @@ function startManualInvoice() {
     const series = getCashflowSeries(14);
     const values = series.map(s => s.amount);
     const geo = buildSparkGeometry(values, 300, 70, 6);
+
     const lineEl = document.getElementById('cf-spark-line');
     const areaEl = document.getElementById('cf-spark-area');
     if (lineEl) { lineEl.setAttribute('points', geo.line); animateDraw(lineEl); }
@@ -3570,17 +3572,34 @@ function startManualInvoice() {
     const count = series.reduce((a, s) => a + (s.items ? s.items.length : (s.amount > 0 ? 1 : 0)), 0);
     document.getElementById('cf-modal-total').textContent = Math.round(total).toLocaleString('en-US') + ' USDT';
     document.getElementById('cf-modal-count').textContent = String(count);
-    document.getElementById('cf-modal-avg').textContent = Math.round(total / days).toLocaleString('en-US') + ' USDT';
-    document.getElementById('cf-modal-sub').textContent = (series[0] && series[0].demo ? 'Demo data — ' : '') + `Received over the last ${days} days`;
+    const hourly = !!(series[0] && series[0].hourly);
+    document.getElementById('cf-modal-avg').textContent = Math.round(total / series.length).toLocaleString('en-US') + ' USDT';
+    document.getElementById('cf-modal-avg-label').textContent = hourly ? 'Hourly Average' : 'Daily Average';
+    document.getElementById('cf-modal-sub').textContent = (series[0] && series[0].demo ? 'Demo data — ' : '') + (hourly ? 'Net movement over the last 24 hours' : `Received over the last ${days} days`);
 
     const listEl = document.getElementById('cf-modal-list');
+    const empty = '<tr><td colspan="3" style="padding:14px;text-align:center;color:var(--t3);">No movements in this period</td></tr>';
+    if (hourly) {
+      // every transaction of the last 24 hours, newest first
+      const txs = series.flatMap(b => b.items).sort((a, b) => (b.blockTime || Infinity) - (a.blockTime || Infinity));
+      listEl.innerHTML = txs.length ? txs.map(p => {
+        const out = p.direction === 'out';
+        const when = new Date(p.blockTime ? p.blockTime * 1000 : Date.now());
+        return `<tr>
+        <td class="mono" style="color:var(--t3); font-size:11px;">${when.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</td>
+        <td style="font-size:12px;">${p.invoiceId ? 'Invoice ' + p.invoiceId.slice(0, 8) : (out ? 'Sent payment' : 'Received payment')}${p.blockTime ? '' : ' (confirming)'}</td>
+        <td class="mono" style="text-align:right; color:var(${out ? '--red' : '--green'}); font-weight:700;">${out ? '−' : '+'}${p.received.toLocaleString('en-US')} USDT</td>
+      </tr>`;
+      }).join('') : empty;
+      return;
+    }
     const rows = [...series].reverse().filter(s => s.amount > 0).slice(0, 10);
     listEl.innerHTML = rows.length ? rows.map(s => `
       <tr>
         <td class="mono" style="color:var(--t3); font-size:11px;">${s.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
         <td style="font-size:12px;">${s.demo ? 'Received payment' : (s.items[0] && s.items[0].invoiceId ? 'Invoice ' + s.items[0].invoiceId.slice(0, 8) : 'Received payment')}</td>
         <td class="mono" style="text-align:right; color:var(--green); font-weight:700;">+${s.amount.toLocaleString('en-US')} USDT</td>
-      </tr>`).join('') : '<tr><td colspan="3" style="padding:14px;text-align:center;color:var(--t3);">No movements in this period</td></tr>';
+      </tr>`).join('') : empty;
   }
 
   // TODO(backend): replace with window.kasa.createWallet() once the WDK wallet service is wired up

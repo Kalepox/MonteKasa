@@ -2,11 +2,11 @@
 // It fills the screen with real data and replaces the UI's simulated actions with real ones.
 // Everything else in the UI (views, animations, demo sections) stays as it is.
 import QRCode from 'qrcode'
-import { invoicesCsv } from './invoice-csv'
+import { invoiceDetailsCsv, invoicesCsv, transactionsCsv } from './invoice-csv'
 import { invoiceDocumentBody } from '../../shared/invoice-document'
 import { searchLedger, taxRecordsCsv, taxLedgerSummary } from './ledger'
 import { reviewPayment } from './security'
-import type { KasaInvoice, KasaSnapshot, KasaStatus } from '../../preload/index.d'
+import type { KasaInvoice, KasaPayment, KasaSnapshot, KasaStatus } from '../../preload/index.d'
 
 // the UI's own functions (go, toast, openM, closeM, …) are globals defined in index.html
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -140,7 +140,7 @@ function renderInvoices(): void {
         .map(
           (
             i
-          ) => `<tr onclick="openInvoice('${i.id}')"><td class="mono">${shortId(i)}</td><td>${clientCell(i)}</td>
+          ) => `<tr onclick="downloadInvoicePdfById('${i.id}')" style="cursor:pointer;" title="Click to download this invoice as PDF"><td class="mono">${shortId(i)}</td><td>${clientCell(i)}</td>
        <td class="mono" style="color:var(--t1);font-weight:600;">${amountCell(i)}</td>
        <td class="mono" style="color:var(--t3);">${day(i.createdAt)}</td>
        <td class="mono" style="color:var(--t3);">${day(i.expiresAt)}</td><td>${badge(i)}</td>
@@ -169,20 +169,6 @@ function renderInvoices(): void {
 
   // Invoices page: summary cards, record count, and per-status filter tab counts
   setText('inv-record-count', `${snap.invoices.length} Records`)
-  setText('inv-stat-total', `${fmt(snap.invoices.reduce((s, i) => s + i.amount, 0))} USDT`)
-  setText('inv-stat-settled', `${fmt(settled.reduce((s, i) => s + i.received, 0))} USDT`)
-  setText('inv-stat-awaiting', `${fmt(awaiting.reduce((s, i) => s + i.amount, 0))} USDT`)
-
-  const settlementDays = settled
-    .map((i) => snap.payments.find((p) => p.invoiceId === i.id && p.blockTime))
-    .filter((p): p is NonNullable<typeof p> => !!p?.blockTime)
-    .map((p) => (p.blockTime! - (settled.find((i) => i.id === p.invoiceId)?.createdAt ?? p.blockTime!)) / 86400)
-  setText(
-    'inv-stat-avgtime',
-    settlementDays.length
-      ? `${(settlementDays.reduce((a, b) => a + b, 0) / settlementDays.length).toFixed(1)} Days`
-      : '—'
-  )
 
   const upcoming = $('upcoming-due')
   if (upcoming) {
@@ -220,6 +206,9 @@ function renderInvoices(): void {
   )
 }
 
+// the transfers currently listed in the wallet tables; a clicked row's data-tx indexes into this
+let shownMoves: KasaPayment[] = []
+
 function renderWallet(st: KasaStatus): void {
   walletBalance = st.state === 'online' ? st.balance : 0
   // what to show instead of a number: still loading, locked, or a real problem
@@ -241,7 +230,7 @@ function renderWallet(st: KasaStatus): void {
         const txid = p.txid ? `${p.txid.slice(0, 4)}…${p.txid.slice(-4)}` : '—'
         const out = p.direction === 'out'
         const refund = out && snap.proposals.some((x) => x.txid && x.txid === p.txid)
-        return `<tr><td class="mono" style="color:var(--t3);">${txid}</td>
+        return `<tr data-tx="${moves.indexOf(p)}" style="cursor:pointer;" title="Click to download this transaction as PDF"><td class="mono" style="color:var(--t3);">${txid}</td>
         <td style="color:var(${out ? '--red' : '--green'});font-size:12px;font-weight:600;">${out ? '&#x2191; Sent' : '&#x2193; Received'}</td>
         <td class="mono" style="color:var(--t1);font-weight:600;">${out ? '−' : '+'}${fmt(p.received)} USDT</td>
         <td class="mono">${inv ? shortId(inv) : refund ? 'refund' : 'wallet'}</td>
@@ -249,6 +238,7 @@ function renderWallet(st: KasaStatus): void {
       })
       .join('') ||
     `<tr><td colspan="5" style="color:var(--t3);text-align:center;padding:18px;">No RGB transfers yet</td></tr>`
+  shownMoves = moves
   const tx = $('w-tx')
   if (tx) tx.innerHTML = txRows(moves.slice(0, 10))
   const latest = $('w-tx-latest')
@@ -565,6 +555,34 @@ w.exportInvoicesCSV = async (): Promise<void> => {
   }
 }
 
+w.exportTransactionPdf = async (index: number): Promise<void> => {
+  try {
+    const payment = shownMoves[index]
+    if (!payment) throw new Error('Transaction not found. Refresh and try again.')
+    const bytes = await window.kasa.transactionPdf(payment.nodeIdx)
+    const name = payment.txid ? payment.txid.slice(0, 12) : `node-${payment.nodeIdx}`
+    w.downloadFile(`Transaction_${name}.pdf`, new Uint8Array(bytes), 'application/pdf')
+    w.toast('tx-pdf', '✓', 'PDF downloaded', `Transaction ${name} saved as PDF.`, 'green')
+  } catch (e) {
+    toastErr('PDF export failed', e)
+  }
+}
+w.exportAllTransactionsCSV = (): void => {
+  try {
+    if (!shownMoves.length) throw new Error('There are no transactions to export yet.')
+    // newest first, as listed; the whole recorded history, not just the 10 rows shown
+    w.downloadFile('transactions.csv', transactionsCsv(shownMoves, snap), 'text/csv;charset=utf-8;')
+    w.toast('tx-csv', '✓', 'CSV exported', `${shownMoves.length} transactions exported.`, 'green')
+  } catch (e) {
+    toastErr('Export failed', e)
+  }
+}
+for (const id of ['w-tx', 'w-tx-latest'])
+  $(id)?.addEventListener('click', (e) => {
+    const row = (e.target as HTMLElement).closest<HTMLElement>('tr[data-tx]')
+    if (row) void w.exportTransactionPdf(Number(row.dataset.tx))
+  })
+
 // Invoice modal: real data + refund approval
 let selectedInvoiceId: string | undefined
 w.openM = (id: string): void => {
@@ -598,6 +616,27 @@ w.downloadInvoicePdf = async (): Promise<void> => {
     w.downloadFile(`Invoice_${id}.pdf`, new Uint8Array(bytes), 'application/pdf')
   } catch (e) {
     toastErr('PDF export failed', e)
+  }
+}
+w.downloadInvoicePdfById = async (id: string): Promise<void> => {
+  try {
+    const invoice = snap.invoices.find((i) => i.id === id)
+    if (!invoice) throw new Error('Invoice not found. Refresh and try again.')
+    const bytes = await window.kasa.invoicePdf(id)
+    w.downloadFile(`Invoice_${shortId(invoice)}.pdf`, new Uint8Array(bytes), 'application/pdf')
+    w.toast('inv-pdf', '✓', 'PDF downloaded', `${shortId(invoice)} saved as PDF.`, 'green')
+  } catch (e) {
+    toastErr('PDF export failed', e)
+  }
+}
+w.exportInvoiceDetailsCSV = async (): Promise<void> => {
+  try {
+    const current = await window.kasa.snapshot()
+    if (!current.invoices.length) throw new Error('There are no invoices to export yet.')
+    w.downloadFile('invoice-details.csv', invoiceDetailsCsv(current), 'text/csv;charset=utf-8;')
+    w.toast('inv-csv', '✓', 'CSV exported', `${current.invoices.length} invoices exported.`, 'green')
+  } catch (e) {
+    toastErr('Export failed', e)
   }
 }
 w.printInvoiceDoc = w.downloadInvoicePdf

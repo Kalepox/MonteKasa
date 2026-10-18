@@ -72,6 +72,7 @@ declare global {
       status(): Promise<KasaStatus>
       snapshot(): Promise<KasaSnapshot>
       invoicePdf(id: string): Promise<Uint8Array>
+      transactionPdf(nodeIdx: number): Promise<Uint8Array>
       createInvoice(client: string, amount: number | string): Promise<KasaInvoice>
       receive(
         fresh?: boolean,

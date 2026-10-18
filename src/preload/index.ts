@@ -43,6 +43,7 @@ const kasa = {
   status: () => ipcRenderer.invoke('kasa:status'),
   snapshot: () => ipcRenderer.invoke('kasa:snapshot'),
   invoicePdf: (id: string) => ipcRenderer.invoke('kasa:invoicePdf', id),
+  transactionPdf: (nodeIdx: number) => ipcRenderer.invoke('kasa:transactionPdf', nodeIdx),
   createInvoice: (client: string, amount: number | string) =>
     ipcRenderer.invoke('kasa:createInvoice', client, amount),
   receive: (fresh = false, amount?: string | number) =>
