@@ -70,9 +70,6 @@ on the merchant's laptop; keys never leave it; only settlement touches the netwo
 - **Email payment requests** with a "Pay with MonteKasa" link (`docs/pay.html` on GitHub Pages).
 - Redesigned wallet-first UI, transaction PDFs and CSV export.
 
-**Not built:** invoice extraction from PDFs is still simulated; the EUR price feed and the final tax figure are not
-calculated yet (the **Total Tax** card stays empty until they are).
-
 ---
 
 ## Run it on a new computer

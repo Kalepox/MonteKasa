@@ -119,7 +119,14 @@ function viewUnlock(): void {
     void act(go, 'Unlocking…', async () => {
       const password = $<HTMLInputElement>('#wg-pw').value
       if (!password) throw new Error('Enter your password.')
-      await call('unlock', { password })
+      // balances show "Loading…" instead of "Locked" while the wallet opens (kasa.ts)
+      window.dispatchEvent(new Event('wallet-unlocking'))
+      try {
+        await call('unlock', { password })
+      } catch (e) {
+        window.dispatchEvent(new Event('wallet-unlock-failed'))
+        throw e
+      }
       close()
     })
   go.onclick = submit
