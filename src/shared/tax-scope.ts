@@ -1,6 +1,21 @@
 import { validateEnrichment, enrichmentGaps, feeGaps, type TaxEnrichment } from './tax-enrichment'
+import {
+  disposalBasisKey,
+  validateDisposalBasis,
+  type TaxDisposalBasis
+} from './tax-disposal-basis'
 import { validateTaxProfile, type TaxProfile } from './tax-profile'
+import {
+  preparationAnswerKey,
+  validatePreparationAnswer,
+  type TaxPreparationAnswer
+} from './tax-questions'
 import type { KasaSnapshot } from '../preload/index.d'
+import {
+  recordTaxpayerMap,
+  validateRecordProfile,
+  type TaxRecordProfile
+} from './tax-record-profile'
 
 export type Taxpayer = { id: string; label: string; profile: TaxProfile }
 export type TaxAccount = {
@@ -28,14 +43,20 @@ export type TaxScope = {
   accounts: TaxAccount[]
   assets: TaxAsset[]
   enrichments?: TaxEnrichment[]
+  preparationAnswers?: TaxPreparationAnswer[]
+  disposalBases?: TaxDisposalBasis[]
   assignments: TaxAssignment[]
+  recordProfiles?: TaxRecordProfile[]
   autoAssignmentExclusions?: string[]
 }
 export type ScopeCommand =
   | { kind: 'taxpayer'; label: string }
   | { kind: 'create-profile'; label: string; profile: TaxProfile }
   | { kind: 'select-taxpayer'; taxpayerId: string }
+  | { kind: 'link-records'; taxpayerId: string; recordKeys: string[] }
   | { kind: 'history-coverage'; taxpayerId: string; coverage: TaxProfile['recordsCoverage'] }
+  | { kind: 'preparation-answer'; answer: TaxPreparationAnswer }
+  | { kind: 'disposal-basis'; basis: TaxDisposalBasis }
   | {
       kind: 'account'
       taxpayerId: string
@@ -104,7 +125,45 @@ export function changeTaxScope(
   if (!input || typeof input !== 'object') throw new Error('Invalid scope command.')
   const c = input as Record<string, unknown>
   const next = structuredClone(state)
-  if (c.kind === 'history-coverage') {
+  if (c.kind === 'link-records') {
+    if (!state.taxpayers.some((taxpayer) => taxpayer.id === c.taxpayerId))
+      throw new Error('Select an existing profile.')
+    if (c.taxpayerId !== state.activeTaxpayerId)
+      throw new Error('The selected profile changed. Reload before linking these records.')
+    if (
+      !Array.isArray(c.recordKeys) ||
+      !c.recordKeys.length ||
+      new Set(c.recordKeys).size !== c.recordKeys.length
+    )
+      throw new Error('Select unique saved records to link.')
+    // Validate the entire request before adding any relationships. Existing
+    // account assignments and another profile's links remain authoritative.
+    const owners = recordTaxpayerMap(state)
+    const links = c.recordKeys.map((recordKey) => {
+      const link = validateRecordProfile({ recordKey, taxpayerId: c.taxpayerId }, state, owners)
+      if (!records.has(link.recordKey))
+        throw new Error('The record is not in the current database.')
+      return link
+    })
+    const additions = links.filter((link) => !owners.has(link.recordKey))
+    if (additions.length) next.recordProfiles = [...(next.recordProfiles ?? []), ...additions]
+  } else if (c.kind === 'disposal-basis') {
+    const basis = validateDisposalBasis(c.basis, state, records)
+    const key = disposalBasisKey(basis)
+    next.disposalBases = [
+      ...(next.disposalBases ?? []).filter((entry) => disposalBasisKey(entry) !== key),
+      basis
+    ]
+  } else if (c.kind === 'preparation-answer') {
+    const answer = validatePreparationAnswer(c.answer, state.taxpayers)
+    if (answer.taxpayerId !== state.activeTaxpayerId)
+      throw new Error('The selected profile changed. Reload before saving this answer.')
+    const key = preparationAnswerKey(answer)
+    next.preparationAnswers = [
+      ...(next.preparationAnswers ?? []).filter((entry) => preparationAnswerKey(entry) !== key),
+      answer
+    ]
+  } else if (c.kind === 'history-coverage') {
     const taxpayer = next.taxpayers.find((t) => t.id === c.taxpayerId)
     if (!taxpayer) throw new Error('Select an existing profile.')
     taxpayer.profile.recordsCoverage = choice(
@@ -201,6 +260,8 @@ export function changeTaxScope(
         (key) => key !== c.recordKey
       )
     next.assignments = next.assignments.filter((a) => a.recordKey !== c.recordKey)
+    if (next.recordProfiles)
+      next.recordProfiles = next.recordProfiles.filter((entry) => entry.recordKey !== c.recordKey)
     if (c.kind === 'assign')
       next.assignments.push({
         recordKey: String(c.recordKey),
@@ -228,6 +289,11 @@ export function scopedRecords(
       .filter((a) => accounts.has(a.accountId) && (!assetId || a.assetId === assetId))
       .map((a) => a.recordKey)
   )
+  if (!accountId && !assetId) {
+    const owners = recordTaxpayerMap(state)
+    for (const relationship of state.recordProfiles ?? [])
+      if (owners.get(relationship.recordKey) === taxpayerId) keys.add(relationship.recordKey)
+  }
   return {
     invoices: snapshot.invoices.filter((i) => keys.has(`invoice:${i.id}`)),
     payments: snapshot.payments.filter((p) => keys.has(`payment:${p.nodeIdx}`)),
@@ -257,6 +323,20 @@ export function calculationCompleteness(
     state.enrichments?.find((e) => e.recordKey === a.recordKey)
   )
   const common: string[] = enrichmentGaps(entries)
+  const knownAccounts = new Set(state.accounts.map((account) => account.id))
+  const knownAssets = new Set(state.assets.map((asset) => asset.id))
+  const fullyAssigned = new Set(
+    assignments
+      .filter(
+        (assignment) =>
+          knownAccounts.has(assignment.accountId) && knownAssets.has(assignment.assetId)
+      )
+      .map((assignment) => assignment.recordKey)
+  )
+  if (fullyAssigned.size < keys.size)
+    common.push(
+      'Some records are linked to this profile without account and asset details. Confirm those details and ownership before using them in tax calculations.'
+    )
   if (
     state.accounts.some(
       (a) =>
@@ -438,6 +518,19 @@ export function validateTaxScope(input: unknown, databaseId: string): TaxScope {
     records.add(key)
     state = changeTaxScope(state, { ...a, kind: 'assign' }, null, records, '')
   }
+  if (source.recordProfiles !== undefined) {
+    if (!Array.isArray(source.recordProfiles))
+      throw new Error('Invalid record profile relationships.')
+    state.recordProfiles = []
+    const linked = new Set<string>()
+    const owners = recordTaxpayerMap(state)
+    for (const relationship of source.recordProfiles) {
+      const valid = validateRecordProfile(relationship, state, owners)
+      if (linked.has(valid.recordKey)) throw new Error('Duplicate record profile relationship.')
+      linked.add(valid.recordKey)
+      state.recordProfiles.push(valid)
+    }
+  }
   if (source.enrichments !== undefined && !Array.isArray(source.enrichments))
     throw new Error('Invalid enrichment list.')
   const enriched = new Set<string>()
@@ -446,6 +539,34 @@ export function validateTaxScope(input: unknown, databaseId: string): TaxScope {
     if (enriched.has(valid.recordKey)) throw new Error('Duplicate enrichment.')
     enriched.add(valid.recordKey)
     state.enrichments = [...(state.enrichments ?? []), valid]
+  }
+  if (source.preparationAnswers !== undefined) {
+    if (!Array.isArray(source.preparationAnswers)) throw new Error('Invalid preparation answers.')
+    const answered = new Set<string>()
+    state.preparationAnswers = []
+    for (const answer of source.preparationAnswers) {
+      // Preserve earlier years and formerly applicable questions for review. Only
+      // a new edit must match the profile's current year and classification.
+      const valid = validatePreparationAnswer(answer, state.taxpayers, false)
+      const key = preparationAnswerKey(valid)
+      if (answered.has(key)) throw new Error('Duplicate preparation answer.')
+      answered.add(key)
+      state.preparationAnswers.push(valid)
+    }
+  }
+  if (source.disposalBases !== undefined) {
+    if (!Array.isArray(source.disposalBases)) throw new Error('Invalid disposal cost evidence.')
+    const reviewed = new Set<string>()
+    state.disposalBases = []
+    for (const basis of source.disposalBases) {
+      // Keep prior evidence after profile or assignment changes. The calculator
+      // separately checks current ownership and the saved-record fingerprint.
+      const valid = validateDisposalBasis(basis, state, records, false)
+      const key = disposalBasisKey(valid)
+      if (reviewed.has(key)) throw new Error('Duplicate disposal cost evidence.')
+      reviewed.add(key)
+      state.disposalBases.push(valid)
+    }
   }
   if (source.autoAssignmentExclusions !== undefined) {
     if (!Array.isArray(source.autoAssignmentExclusions))

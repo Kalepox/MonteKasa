@@ -30,6 +30,8 @@ const errorText = (error: unknown): string =>
     ''
   )
 const recordEditsPending = (): boolean =>
+  document.getElementById('view-tax')?.dataset.taxBasisDirty === 'true' ||
+  document.getElementById('view-tax')?.dataset.taxQuestionsDirty === 'true' ||
   document.getElementById('view-tax')?.dataset.enrichmentDirty === 'true' ||
   document.getElementById('view-tax')?.dataset.activityEditing === 'true'
 
@@ -333,6 +335,8 @@ el('cancel').onclick = () => {
   window.dispatchEvent(new Event('kasa:tax-setup-closed'))
 }
 window.addEventListener('kasa:tax-enrichment-dirty', updateDraftControls)
+window.addEventListener('kasa:tax-questions-dirty', updateDraftControls)
+window.addEventListener('kasa:tax-basis-dirty', updateDraftControls)
 window.addEventListener('kasa:tax-activity-editing', updateDraftControls)
 function updateSavedScope(event: Event): void {
   const current = (event as CustomEvent<{ scope: TaxScope }>).detail.scope

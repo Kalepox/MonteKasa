@@ -74,11 +74,15 @@ window.addEventListener('kasa:tax-profile-select', (event) => {
   const status = document.getElementById('tax-navigation-status')!
   if (selector.disabled || selector.closest('fieldset')?.disabled) {
     status.textContent =
-      root.dataset.enrichmentDirty === 'true'
-        ? 'Save or discard your record edits in Activity before changing profiles.'
-        : root.dataset.activityEditing === 'true'
-          ? 'Finish or cancel source ownership in Activity before changing profiles.'
-          : 'Please wait for the saved profiles to finish loading.'
+      root.dataset.taxBasisDirty === 'true'
+        ? 'Save or discard your cost review in Reports before changing profiles.'
+        : root.dataset.taxQuestionsDirty === 'true'
+          ? 'Save or discard your preparation answer in Reports before changing profiles.'
+          : root.dataset.enrichmentDirty === 'true'
+            ? 'Save or discard your record edits in Activity before changing profiles.'
+            : root.dataset.activityEditing === 'true'
+              ? 'Finish or cancel source ownership in Activity before changing profiles.'
+              : 'Please wait for the saved profiles to finish loading.'
     status.hidden = false
     return
   }
@@ -96,10 +100,28 @@ window.addEventListener('kasa:tax-navigate', (event) => {
   const page = target?.closest<HTMLElement>('[data-tax-panel]')?.dataset.taxPanel
   if (page && page in pages && closeSetup()) showPage(page as Page)
 })
-window.addEventListener('kasa:tax-enrichment-dirty', (event) => {
+function showPendingEdits(): void {
   const status = document.getElementById('tax-navigation-status')!
-  status.hidden = !(event as CustomEvent<{ dirty: boolean }>).detail.dirty
   status.textContent =
-    'You have unsaved record details in Activity. Save or discard them before changing profiles.'
-})
+    root.dataset.taxBasisDirty === 'true'
+      ? 'You have an unsaved cost review in Reports. Save or discard it before changing profiles.'
+      : root.dataset.taxQuestionsDirty === 'true'
+        ? 'You have an unsaved preparation answer in Reports. Save or discard it before changing profiles.'
+        : root.dataset.enrichmentDirty === 'true'
+          ? 'You have unsaved record details in Activity. Save or discard them before changing profiles.'
+          : root.dataset.activityEditing === 'true'
+            ? 'Finish or cancel source ownership in Activity before changing profiles.'
+            : ''
+  status.hidden = !status.textContent
+}
+// One editor can emit an unchanged clean state while another is still dirty.
+// The notice must reflect all current editors, regardless of event order.
+for (const event of [
+  'kasa:tax-questions-dirty',
+  'kasa:tax-basis-dirty',
+  'kasa:tax-enrichment-dirty',
+  'kasa:tax-activity-editing'
+])
+  window.addEventListener(event, showPendingEdits)
 showPage('overview')
+showPendingEdits()

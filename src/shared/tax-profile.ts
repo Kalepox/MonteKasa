@@ -65,7 +65,7 @@ export function validateTaxProfile(input: unknown, year = currentTaxYear()): Tax
 
 export function taxProfileNotes(profile: TaxProfile): string[] {
   const notes = [
-    'Profile saved on this device. Tax estimates are not available yet. The main ledger summary covers all recorded dates; a separate review uses your saved tax year.'
+    'Profile saved on this device. Reports use the selected saved profile’s assignments and tax year; undated records remain separate for review. A limited personal Bitcoin disposal estimate is available when its required evidence is recorded. A separate entire-database export covers all profiles and dates.'
   ]
   if (profile.country === 'other')
     notes.push(
