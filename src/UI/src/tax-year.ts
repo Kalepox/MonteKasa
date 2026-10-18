@@ -48,7 +48,7 @@ async function refresh(): Promise<void> {
         row.invoiceId || 'Unlinked',
         row.client || '—',
         row.direction || '—',
-        `${row.amount} USDT`,
+        `${row.amount} ${row.unit}`,
         row.status,
         row.date || 'Date unavailable'
       ]) {

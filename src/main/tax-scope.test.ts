@@ -13,6 +13,7 @@ import {
 } from '../shared/tax-scope'
 import type { TaxProfile } from '../shared/tax-profile'
 import type { KasaSnapshot } from '../preload/index.d'
+import { emptyValuation } from '../shared/tax-enrichment'
 const personal: TaxProfile = {
   version: 1,
   country: 'IT',
@@ -245,7 +246,7 @@ describe('calculation completeness', () => {
   })
 })
 describe('scope persistence', () => {
-  it('persists declarations and assignments across restart; rejects database changes and bad commands', () => {
+  it('persists declarations across restart, isolates databases and rejects bad commands', () => {
     const d = mkdtempSync(join(tmpdir(), 'scope-test-'))
     directories.push(d)
     const path = join(d, 'scope.json')
@@ -259,7 +260,7 @@ describe('scope persistence', () => {
     }
     store.change(command, null, records)
     expect(new TaxScopeStore(path, 'db-one').get().assignments).toHaveLength(1)
-    expect(() => new TaxScopeStore(path, 'db-two').get()).toThrow('different database')
+    expect(new TaxScopeStore(path, 'db-two').get()).toEqual({ ...empty, databaseId: 'db-two' })
     const before = readFileSync(path, 'utf8')
     expect(() => store.change({ ...command, assetId: 'absent' }, null, records)).toThrow()
     expect(readFileSync(path, 'utf8')).toBe(before)
@@ -280,6 +281,62 @@ describe('scope persistence', () => {
 })
 
 describe('unified profile creation', () => {
+  it('preserves enriched records and their source profile when another profile is created and selected', () => {
+    const d = mkdtempSync(join(tmpdir(), 'guided-profile-preservation-'))
+    directories.push(d)
+    const path = join(d, 'scopes.json')
+    const assigned = changeTaxScope(
+      fixture(),
+      { kind: 'assign', recordKey: 'payment:1', accountId: 'person-account', assetId: 'live' },
+      null,
+      records,
+      ''
+    )
+    const original = changeTaxScope(
+      assigned,
+      {
+        kind: 'enrich',
+        enrichment: {
+          ...assigned.assignments[0],
+          classification: 'income',
+          valuation: {
+            eur: '9.12345678',
+            date: '2026-04-01',
+            source: 'Saved evidence',
+            reference: 'local-record'
+          },
+          fee: {
+            status: 'unknown',
+            amount: '',
+            assetId: '',
+            purpose: '',
+            reference: '',
+            valuation: emptyValuation()
+          },
+          relatedRecordKey: ''
+        }
+      },
+      null,
+      records,
+      ''
+    )
+    writeFileSync(path, JSON.stringify(original))
+    const store = new TaxScopeStore(path, 'db-one')
+    store.change(
+      { kind: 'create-profile', label: 'Another review', profile: business },
+      null,
+      records
+    )
+    store.change({ kind: 'select-taxpayer', taxpayerId: 'person' }, null, records)
+    const reloaded = new TaxScopeStore(path, 'db-one').get()
+    expect(reloaded.taxpayers.slice(0, 2)).toEqual(original.taxpayers)
+    expect(reloaded.accounts).toEqual(original.accounts)
+    expect(reloaded.assets).toEqual(original.assets)
+    expect(reloaded.assignments).toEqual(original.assignments)
+    expect(reloaded.enrichments).toEqual(original.enrichments)
+    expect(reloaded.activeTaxpayerId).toBe('person')
+    expect(snapshot.payments[0].received).toBe(10)
+  })
   it('creates and selects a profile atomically without changing existing declarations', () => {
     const original = fixture()
     const next = changeTaxScope(
