@@ -14,13 +14,23 @@ const call = <T>(method: string, params?: Record<string, unknown>): Promise<T> =
 
 // IPC errors arrive as "Error invoking remote method 'wallet:call': Error: <message>"
 const message = (e: unknown): string =>
-  String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+  String((e as Error)?.message ?? e).replace(
+    /^Error invoking remote method '[^']+': (Error: )?/,
+    ''
+  )
 
+let startError = '' // why the wallet service couldn't start, shown with a retry button
 async function walletState(): Promise<WalletState | null> {
   try {
-    return (await call<{ state: WalletState }>('state')).state
-  } catch {
-    return null // not the WDK backend, or the wallet service isn't up yet
+    const state = (await call<{ state: WalletState }>('state')).state
+    startError = ''
+    return state
+  } catch (e) {
+    const text = message(e)
+    // another backend (Kaleido node / fake wallet): there's no in-app wallet to show
+    if (/No handler registered/.test(text)) return null
+    startError = text
+    return null
   }
 }
 
@@ -30,7 +40,8 @@ const root = document.createElement('div')
 root.id = 'wallet-gate'
 root.hidden = true
 // top of the Wallet page, above the balance; falls back to the page body if the layout changes
-const walletPage = document.querySelector('#view-dashboard .vb') ?? document.getElementById('view-dashboard')
+const walletPage =
+  document.querySelector('#view-dashboard .vb') ?? document.getElementById('view-dashboard')
 ;(walletPage ?? document.body).prepend(root)
 
 let busy = false // a view is mid-action: don't let the poller replace it
@@ -55,7 +66,11 @@ function close(): void {
 }
 
 // run an action with the buttons disabled; errors appear in the card
-async function act(button: HTMLButtonElement, label: string, work: () => Promise<void>): Promise<void> {
+async function act(
+  button: HTMLButtonElement,
+  label: string,
+  work: () => Promise<void>
+): Promise<void> {
   if (busy) return
   busy = true
   const original = button.textContent
@@ -84,7 +99,8 @@ function onEnter(handler: () => void): void {
 function checkNewPassword(): string {
   const pw = $<HTMLInputElement>('#wg-pw').value
   const pw2 = $<HTMLInputElement>('#wg-pw2').value
-  if (pw.length < MIN_PASSWORD) throw new Error(`Password must be at least ${MIN_PASSWORD} characters.`)
+  if (pw.length < MIN_PASSWORD)
+    throw new Error(`Password must be at least ${MIN_PASSWORD} characters.`)
   if (pw !== pw2) throw new Error('The two passwords do not match.')
   return pw
 }
@@ -134,7 +150,9 @@ function viewCreate(): void {
   const go = $<HTMLButtonElement>('#wg-go')
   const submit = (): void =>
     void act(go, 'Creating…', async () => {
-      const { mnemonic } = await call<{ mnemonic: string }>('create', { password: checkNewPassword() })
+      const { mnemonic } = await call<{ mnemonic: string }>('create', {
+        password: checkNewPassword()
+      })
       viewBackup(mnemonic)
     })
   go.onclick = submit
@@ -154,7 +172,8 @@ function viewBackup(mnemonic: string): void {
     <div class="wg-error"></div>
     <div class="wg-actions"><button class="btn btn-p" id="wg-go" disabled>Continue</button></div>`)
   const go = $<HTMLButtonElement>('#wg-go')
-  $<HTMLInputElement>('#wg-ok').onchange = (e) => (go.disabled = !(e.target as HTMLInputElement).checked)
+  $<HTMLInputElement>('#wg-ok').onchange = (e) =>
+    (go.disabled = !(e.target as HTMLInputElement).checked)
   go.onclick = () => void viewFund() // the words leave the DOM with the next render
 }
 
@@ -171,7 +190,11 @@ function viewRestore(): void {
   const go = $<HTMLButtonElement>('#wg-go')
   go.onclick = () =>
     void act(go, 'Restoring…', async () => {
-      const mnemonic = $<HTMLTextAreaElement>('#wg-words').value.trim().toLowerCase().split(/\s+/).join(' ')
+      const mnemonic = $<HTMLTextAreaElement>('#wg-words')
+        .value.trim()
+        .toLowerCase()
+        .split(/\s+/)
+        .join(' ')
       if (mnemonic.split(' ').length !== 12) throw new Error('Enter exactly 12 words.')
       await call('restore', { mnemonic, password: checkNewPassword() })
       await viewFund()
@@ -223,6 +246,22 @@ async function viewFund(): Promise<void> {
   void poll()
 }
 
+function viewStartError(): void {
+  render(`
+    <h2>The wallet could not start</h2>
+    <p>Your wallet files stay on this device. Check the message below, fix it, then try again.
+    Most often the wallet service needs Node.js 22 and its own install:
+    <code>nvm install 22</code> then <code>cd wallet-service &amp;&amp; nvm exec 22 npm install</code>.</p>
+    <div class="wg-error"></div>
+    <div class="wg-actions"><button class="btn btn-p" id="wg-retry">Try again</button></div>`)
+  setError(startError)
+  $<HTMLButtonElement>('#wg-retry').onclick = () => {
+    root.innerHTML = ''
+    root.hidden = true
+    void sync()
+  }
+}
+
 // ---------- keep the gate in sync with the wallet ----------
 
 let shown: WalletState | null = null
@@ -230,6 +269,11 @@ let shown: WalletState | null = null
 async function sync(): Promise<void> {
   if (busy) return
   const state = await walletState()
+  if (state === null && startError) {
+    if (shown !== null || root.hidden) viewStartError()
+    shown = null
+    return
+  }
   if (state === null || state === 'unlocked') {
     if (state === 'unlocked' && shown && shown !== 'unlocked' && !root.hidden && !busy) {
       // unlocked elsewhere (or a view finished): keep the fund view if it's open

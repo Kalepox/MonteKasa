@@ -1,7 +1,29 @@
 import process from 'process'
+import { existsSync, readdirSync } from 'fs'
+import { join } from 'path'
 export type RgbBackendName = 'mock' | 'kaleido' | 'wdk'
+// the in-app WDK wallet is the default; RGB_BACKEND=kaleido for the Docker node, RGB_MOCK=1 for a fake wallet
 const backend = (process.env.RGB_BACKEND ??
-  (process.env.RGB_MOCK === '1' ? 'mock' : 'kaleido')) as RgbBackendName
+  (process.env.RGB_MOCK === '1' ? 'mock' : 'wdk')) as RgbBackendName
+
+// The wallet service needs Node 22 (rgb-lib's native module doesn't load on newer Node).
+// WALLET_NODE wins; otherwise look for a Node 22 from nvm or Homebrew, then fall back to `node` on PATH.
+function findNode22(): string {
+  if (process.env.WALLET_NODE) return process.env.WALLET_NODE
+  const home = process.env.HOME ?? ''
+  try {
+    const dir = join(home, '.nvm', 'versions', 'node')
+    const v22 = readdirSync(dir)
+      .filter((v) => v.startsWith('v22.'))
+      .sort((a, b) => Number(b.split('.')[1]) - Number(a.split('.')[1]))[0]
+    if (v22) return join(dir, v22, 'bin', 'node')
+  } catch {
+    /* no nvm */
+  }
+  for (const brew of ['/opt/homebrew/opt/node@22/bin/node', '/usr/local/opt/node@22/bin/node'])
+    if (existsSync(brew)) return brew
+  return 'node'
+}
 const WDK = backend === 'wdk'
 
 // RGB network label: the KaleidoSwap node calls Mutinynet 'SignetCustom', UTEXO's WDK module 'Signet'.
@@ -34,7 +56,7 @@ export const rgbConfig = {
   // blocks before a payment counts as final; 1 suits Mutinynet test funds (raise for real money)
   confirmations: Number(process.env.RGB_CONFIRMATIONS ?? 1),
   explorerApi: process.env.RGB_EXPLORER_API ?? 'https://mutinynet.com/api',
-  walletNode: process.env.WALLET_NODE ?? 'node', // must be a Node 22 binary
+  walletNode: findNode22(),
   walletMaxSendRaw: Number(process.env.WALLET_MAX_SEND_RAW ?? 500_000_000),
   payPage: process.env.PAY_PAGE ?? 'https://kalepox.github.io/MonteKasa/pay.html'
 }
