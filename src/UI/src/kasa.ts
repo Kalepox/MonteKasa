@@ -2,11 +2,11 @@
 // It fills the screen with real data and replaces the UI's simulated actions with real ones.
 // Everything else in the UI (views, animations, demo sections) stays as it is.
 import QRCode from 'qrcode'
-import { invoicesCsv } from './invoice-csv'
+import { invoiceDetailsCsv, invoicesCsv, transactionsCsv } from './invoice-csv'
 import { invoiceDocumentBody } from '../../shared/invoice-document'
 import { searchLedger } from './ledger'
 import { reviewPayment } from './security'
-import type { KasaInvoice, KasaSnapshot, KasaStatus } from '../../preload/index.d'
+import type { KasaInvoice, KasaPayment, KasaSnapshot, KasaStatus } from '../../preload/index.d'
 
 // the UI's own functions (go, toast, openM, closeM, …) are globals defined in index.html
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -20,6 +20,13 @@ const fmt = (n: number): string =>
   n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const day = (t: number): string =>
   new Date(t * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+// Bitcoin txid as a link to the Mutinynet explorer (opens in the system browser); stopPropagation
+// keeps the wallet row's own click (PDF download) from firing
+const TX_EXPLORER = 'https://mutinynet.com/tx/'
+const txLink = (txid: string, label: string): string =>
+  /^[0-9a-f]{64}$/.test(txid)
+    ? `<a href="${TX_EXPLORER}${txid}" target="_blank" rel="noreferrer" onclick="event.stopPropagation()" title="Open on Mutinynet explorer" style="color:inherit;text-decoration:underline;">${label}</a>`
+    : '—'
 const esc = (s: string): string =>
   s.replace(
     /[&<>"']/g,
@@ -31,7 +38,10 @@ const setText = (id: string, v: string): void => {
 }
 // IPC errors arrive as "Error invoking remote method 'kasa:send': Error: <message>"
 const errText = (e: unknown): string =>
-  String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+  String((e as Error)?.message ?? e).replace(
+    /^Error invoking remote method '[^']+': (Error: )?/,
+    ''
+  )
 const toastErr = (title: string, e: unknown, retry?: () => void): void =>
   w.toast('err', '!', title, esc(errText(e)), 'red', retry)
 
@@ -125,7 +135,7 @@ function renderInvoices(): void {
         .map(
           (
             i
-          ) => `<tr onclick="openInvoice('${i.id}')"><td class="mono">${shortId(i)}</td><td>${clientCell(i)}</td>
+          ) => `<tr onclick="downloadInvoicePdfById('${i.id}')" style="cursor:pointer;" title="Click to download this invoice as PDF"><td class="mono">${shortId(i)}</td><td>${clientCell(i)}</td>
        <td class="mono" style="color:var(--t1);font-weight:600;">${amountCell(i)}</td>
        <td class="mono" style="color:var(--t3);">${day(i.createdAt)}</td>
        <td class="mono" style="color:var(--t3);">${day(i.expiresAt)}</td><td>${badge(i)}</td>
@@ -136,16 +146,25 @@ function renderInvoices(): void {
   const activeFilter = document.querySelector('#view-invoices .ft.on')
   if (activeFilter) w.ft(activeFilter)
 
-  const settled = snap.invoices.filter((i) => ['Paid', 'Overpaid', 'Underpaid'].includes(i.state))
-  const awaiting = snap.invoices.filter((i) => ['Issued', 'Pending'].includes(i.state))
-  setText('stat-received', `${fmt(settled.reduce((s, i) => s + i.received, 0))} USDT`)
-  setText('stat-paid', String(snap.invoices.filter((i) => i.state === 'Paid').length))
-  setText('stat-awaiting', String(awaiting.length))
-  setText('stat-review', String(snap.proposals.filter((p) => p.status === 'open').length))
-
+  // Money arrives two ways: New Invoice (an invoice row) and Receive requests (only a payment row),
+  // so the cards count incoming payments, not just invoices.
+  const incoming = snap.payments.filter((p) => p.direction === 'in')
+  const arrived = incoming.filter((p) => p.received > 0 && p.status !== 'failed')
   const needsAttention = snap.invoices.filter((i) =>
     ['Underpaid', 'Overpaid', 'Flagged'].includes(i.state)
   ).length
+  setText('stat-received', `${fmt(arrived.reduce((s, p) => s + p.received, 0))} USDT`)
+  setText(
+    'stat-paid',
+    String(
+      snap.invoices.filter((i) => i.state === 'Paid').length +
+        arrived.filter((p) => !p.invoiceId).length
+    )
+  )
+  const sent = snap.payments.filter(
+    (p) => p.direction === 'out' && p.received > 0 && p.status !== 'failed'
+  )
+  setText('stat-sent', `${fmt(sent.reduce((s, p) => s + p.received, 0))} USDT`)
   const navBadge = $('nav-inv-badge')
   if (navBadge) {
     navBadge.textContent = String(needsAttention)
@@ -154,6 +173,9 @@ function renderInvoices(): void {
 
   // Invoices page: summary cards, record count, and per-status filter tab counts
   setText('inv-record-count', `${snap.invoices.length} Records`)
+  // Invoices page cards: New Invoice invoices only
+  const settled = snap.invoices.filter((i) => ['Paid', 'Overpaid', 'Underpaid'].includes(i.state))
+  const awaiting = snap.invoices.filter((i) => ['Issued', 'Pending'].includes(i.state))
   setText('inv-stat-total', `${fmt(snap.invoices.reduce((s, i) => s + i.amount, 0))} USDT`)
   setText('inv-stat-settled', `${fmt(settled.reduce((s, i) => s + i.received, 0))} USDT`)
   setText('inv-stat-awaiting', `${fmt(awaiting.reduce((s, i) => s + i.amount, 0))} USDT`)
@@ -161,7 +183,11 @@ function renderInvoices(): void {
   const settlementDays = settled
     .map((i) => snap.payments.find((p) => p.invoiceId === i.id && p.blockTime))
     .filter((p): p is NonNullable<typeof p> => !!p?.blockTime)
-    .map((p) => (p.blockTime! - (settled.find((i) => i.id === p.invoiceId)?.createdAt ?? p.blockTime!)) / 86400)
+    .map(
+      (p) =>
+        (p.blockTime! - (settled.find((i) => i.id === p.invoiceId)?.createdAt ?? p.blockTime!)) /
+        86400
+    )
   setText(
     'inv-stat-avgtime',
     settlementDays.length
@@ -169,10 +195,11 @@ function renderInvoices(): void {
       : '—'
   )
 
+
   const upcoming = $('upcoming-due')
   if (upcoming) {
-    const dueSoon = awaiting
-      .slice()
+    const dueSoon = snap.invoices
+      .filter((i) => ['Issued', 'Pending'].includes(i.state))
       .sort((a, b) => a.expiresAt - b.expiresAt)
       .slice(0, 5)
     upcoming.innerHTML = dueSoon.length
@@ -201,14 +228,23 @@ function renderInvoices(): void {
   setText('ft-count-overpaid', String(snap.invoices.filter((i) => i.state === 'Overpaid').length))
   setText(
     'ft-count-flagged',
-    String(snap.invoices.filter((i) => ['Underpaid', 'Expired', 'Flagged'].includes(i.state)).length)
+    String(
+      snap.invoices.filter((i) => ['Underpaid', 'Expired', 'Flagged'].includes(i.state)).length
+    )
   )
 }
+
+// the transfers currently listed in the wallet tables; a clicked row's data-tx indexes into this
+let shownMoves: KasaPayment[] = []
 
 function renderWallet(st: KasaStatus): void {
   walletBalance = st.state === 'online' ? st.balance : 0
   // what to show instead of a number: still loading, locked, or a real problem
-  const pending = ['syncing', 'timeout'].includes(st.state) ? 'Loading…' : st.state === 'locked' ? 'Locked' : 'Unavailable'
+  const pending = ['syncing', 'timeout'].includes(st.state)
+    ? 'Loading…'
+    : st.state === 'locked'
+      ? 'Locked'
+      : 'Unavailable'
   // shown balance includes payments on their way; spending (Send → Available) uses settled only
   const shown = st.future ?? st.balance
   setText('w-balance', st.state === 'online' ? `${fmt(shown)} USDT` : pending)
@@ -223,10 +259,10 @@ function renderWallet(st: KasaStatus): void {
     list
       .map((p) => {
         const inv = snap.invoices.find((i) => i.id === p.invoiceId)
-        const txid = p.txid ? `${p.txid.slice(0, 4)}…${p.txid.slice(-4)}` : '—'
+        const txid = p.txid ? txLink(p.txid, `${p.txid.slice(0, 8)}…${p.txid.slice(-8)}`) : '—'
         const out = p.direction === 'out'
         const refund = out && snap.proposals.some((x) => x.txid && x.txid === p.txid)
-        return `<tr><td class="mono" style="color:var(--t3);">${txid}</td>
+        return `<tr data-tx="${moves.indexOf(p)}" style="cursor:pointer;" title="Click to download this transaction as PDF"><td class="mono" style="color:var(--t3);">${txid}</td>
         <td style="color:var(${out ? '--red' : '--green'});font-size:12px;font-weight:600;">${out ? '&#x2191; Sent' : '&#x2193; Received'}</td>
         <td class="mono" style="color:var(--t1);font-weight:600;">${out ? '−' : '+'}${fmt(p.received)} USDT</td>
         <td class="mono">${inv ? shortId(inv) : refund ? 'refund' : 'wallet'}</td>
@@ -234,6 +270,7 @@ function renderWallet(st: KasaStatus): void {
       })
       .join('') ||
     `<tr><td colspan="5" style="color:var(--t3);text-align:center;padding:18px;">No RGB transfers yet</td></tr>`
+  shownMoves = moves
   const tx = $('w-tx')
   if (tx) tx.innerHTML = txRows(moves.slice(0, 10))
   const latest = $('w-tx-latest')
@@ -268,19 +305,51 @@ function notifyNewFlags(previous: KasaSnapshot, current: KasaSnapshot): void {
     const was = prevState.get(i.id)
     if (was === i.state) continue
     if (i.state === 'Overpaid')
-      w.pushNotification('&#x26A0;', 'Invoice Overpaid', `${esc(i.client)} sent extra on ${shortId(i)}.`, 'amber', () => w.openInvoice(i.id))
+      w.pushNotification(
+        '&#x26A0;',
+        'Invoice Overpaid',
+        `${esc(i.client)} sent extra on ${shortId(i)}.`,
+        'amber',
+        () => w.openInvoice(i.id)
+      )
     else if (i.state === 'Underpaid')
-      w.pushNotification('&#x26A0;', 'Invoice Underpaid', `${esc(i.client)} sent less than ${shortId(i)} requires.`, 'red', () => w.openInvoice(i.id))
+      w.pushNotification(
+        '&#x26A0;',
+        'Invoice Underpaid',
+        `${esc(i.client)} sent less than ${shortId(i)} requires.`,
+        'red',
+        () => w.openInvoice(i.id)
+      )
     else if (i.state === 'Flagged')
-      w.pushNotification('&#x2691;', 'Invoice Flagged', `${shortId(i)} needs manual review.`, 'red', () => w.openInvoice(i.id))
+      w.pushNotification(
+        '&#x2691;',
+        'Invoice Flagged',
+        `${shortId(i)} needs manual review.`,
+        'red',
+        () => w.openInvoice(i.id)
+      )
     else if (i.state === 'Expired' && was && was !== 'Expired')
-      w.pushNotification('&#x23F0;', 'Invoice Expired', `${esc(i.client)}'s ${shortId(i)} expired unpaid.`, 'amber', () => w.openInvoice(i.id))
+      w.pushNotification(
+        '&#x23F0;',
+        'Invoice Expired',
+        `${esc(i.client)}'s ${shortId(i)} expired unpaid.`,
+        'amber',
+        () => w.openInvoice(i.id)
+      )
   }
   const prevProposals = new Set(previous.proposals.map((p) => p.id))
   for (const p of current.proposals) {
     if (p.status !== 'open' || prevProposals.has(p.id)) continue
     const inv = current.invoices.find((i) => i.id === p.invoiceId)
-    w.pushNotification('&#x1F916;', 'Refund Proposed', inv ? `${p.kind} for ${shortId(inv)}: ${fmt(p.amount)} USDT.` : `${p.kind}: ${fmt(p.amount)} USDT.`, 'blue', inv ? () => w.openInvoice(inv.id) : undefined)
+    w.pushNotification(
+      '&#x1F916;',
+      'Refund Proposed',
+      inv
+        ? `${p.kind} for ${shortId(inv)}: ${fmt(p.amount)} USDT.`
+        : `${p.kind}: ${fmt(p.amount)} USDT.`,
+      'blue',
+      inv ? () => w.openInvoice(inv.id) : undefined
+    )
   }
 }
 
@@ -394,8 +463,8 @@ w.executeSend = async (): Promise<void> => {
     // Switch the Send modal over to the success confirmation view
     setText('send-success-amt', `${fmt(parseFloat(amount))} USDT`)
     setText('send-success-to', invoice.length > 26 ? `${invoice.slice(0, 14)}…${invoice.slice(-9)}` : invoice)
-    setText('send-success-fee', $('send-fee-summary')?.textContent ?? '—')
-    setText('send-success-txid', r.txid ? `${r.txid.slice(0, 10)}…${r.txid.slice(-6)}` : '—')
+    const txidEl = $('send-success-txid')
+    if (txidEl) txidEl.innerHTML = r.txid ? txLink(r.txid, r.txid) : '—'
     const mhdr = $('send-mhdr')
     if (mhdr) mhdr.style.display = 'none'
     const formView = $('send-form-view')
@@ -459,7 +528,8 @@ async function fillReceive(fresh = false, amount?: string): Promise<void> {
     toastErr('No receive invoice', e, () => void fillReceive())
   }
 }
-const currentReceiveAmount = (): string => (($('rcv-amount') as HTMLInputElement | null)?.value ?? '').trim()
+const currentReceiveAmount = (): string =>
+  (($('rcv-amount') as HTMLInputElement | null)?.value ?? '').trim()
 w.setReceiveAsset = (asset: string): void => {
   if (asset !== 'usdt') return
   void fillReceive(false, currentReceiveAmount() || undefined)
@@ -468,7 +538,10 @@ w.generateFreshSeal = (): Promise<void> => fillReceive(true, currentReceiveAmoun
 let receiveAmountDebounce: ReturnType<typeof setTimeout> | undefined
 w.onReceiveAmountInput = (): void => {
   clearTimeout(receiveAmountDebounce)
-  receiveAmountDebounce = setTimeout(() => void fillReceive(true, currentReceiveAmount() || undefined), 500)
+  receiveAmountDebounce = setTimeout(
+    () => void fillReceive(true, currentReceiveAmount() || undefined),
+    500
+  )
 }
 w.openRecv = w.openReceiveModal
 w.copyReceiveAddress = async (): Promise<void> => {
@@ -497,18 +570,38 @@ w.emailReceiveRequest = async (): Promise<void> => {
   const to = ($('rcv-email') as HTMLInputElement | null)?.value.trim() ?? ''
   const amount = currentReceiveAmount()
   const subject = `Payment Request${amount ? ` — ${amount} USDT` : ''}`
+  const st = await window.kasa.status().catch(() => null)
+  const page = st?.payPage ?? 'https://kalepox.github.io/MonteKasa/pay.html'
+  const link = `${page}#${encodeURIComponent(receiveInvoice.invoice)}`
+
+  const due = new Date(receiveInvoice.expiresAt * 1000).toLocaleString()
   const body = [
-    `You have a payment request${amount ? ` for ${amount} USDT` : ''} on the RGB / Bitcoin network.`,
+    'Hello,',
     '',
-    'Wallet / RGB invoice:',
-    receiveInvoice.invoice,
+    `please find below a payment request${amount ? ` for ${amount} USDT` : ''}.`,
     '',
-    `Valid until ${new Date(receiveInvoice.expiresAt * 1000).toLocaleString()}.`,
-    'Open this link with a KaleidoSwap-compatible RGB wallet to pay it directly, or copy the invoice string into your wallet app.'
+    `Amount:      ${amount ? `${amount} USDT` : 'any amount'}`,
+    `Valid until: ${due}`,
+    'Network:     USDT on RGB (Bitcoin)',
+    '',
+    'Pay with MonteKasa:',
+    link,
+    '',
+    'Nothing is sent automatically: you review and approve the payment in the app.',
+    '',
+    'Other RGB wallet? Paste this invoice:',
+    receiveInvoice.invoice
   ].join('\n')
+
   try {
     await window.kasa.emailInvoice(to || undefined, subject, body)
-    w.toast('rcv-em', '&#x2709;', 'Email draft opened', 'Review it in your mail app and hit send.', 'green')
+    w.toast(
+      'rcv-em',
+      '&#x2709;',
+      'Email draft opened',
+      'Review it in your mail app and hit send.',
+      'green'
+    )
   } catch (e) {
     toastErr('Could not open mail app', e)
   }
@@ -529,6 +622,34 @@ w.exportInvoicesCSV = async (): Promise<void> => {
     toastErr('Export failed', e)
   }
 }
+
+w.exportTransactionPdf = async (index: number): Promise<void> => {
+  try {
+    const payment = shownMoves[index]
+    if (!payment) throw new Error('Transaction not found. Refresh and try again.')
+    const bytes = await window.kasa.transactionPdf(payment.nodeIdx)
+    const name = payment.txid ? payment.txid.slice(0, 12) : `node-${payment.nodeIdx}`
+    w.downloadFile(`Transaction_${name}.pdf`, new Uint8Array(bytes), 'application/pdf')
+    w.toast('tx-pdf', '✓', 'PDF downloaded', `Transaction ${name} saved as PDF.`, 'green')
+  } catch (e) {
+    toastErr('PDF export failed', e)
+  }
+}
+w.exportAllTransactionsCSV = (): void => {
+  try {
+    if (!shownMoves.length) throw new Error('There are no transactions to export yet.')
+    // newest first, as listed; the whole recorded history, not just the 10 rows shown
+    w.downloadFile('transactions.csv', transactionsCsv(shownMoves, snap), 'text/csv;charset=utf-8;')
+    w.toast('tx-csv', '✓', 'CSV exported', `${shownMoves.length} transactions exported.`, 'green')
+  } catch (e) {
+    toastErr('Export failed', e)
+  }
+}
+for (const id of ['w-tx', 'w-tx-latest'])
+  $(id)?.addEventListener('click', (e) => {
+    const row = (e.target as HTMLElement).closest<HTMLElement>('tr[data-tx]')
+    if (row) void w.exportTransactionPdf(Number(row.dataset.tx))
+  })
 
 // Invoice modal: real data + refund approval
 let selectedInvoiceId: string | undefined
@@ -563,6 +684,27 @@ w.downloadInvoicePdf = async (): Promise<void> => {
     w.downloadFile(`Invoice_${id}.pdf`, new Uint8Array(bytes), 'application/pdf')
   } catch (e) {
     toastErr('PDF export failed', e)
+  }
+}
+w.downloadInvoicePdfById = async (id: string): Promise<void> => {
+  try {
+    const invoice = snap.invoices.find((i) => i.id === id)
+    if (!invoice) throw new Error('Invoice not found. Refresh and try again.')
+    const bytes = await window.kasa.invoicePdf(id)
+    w.downloadFile(`Invoice_${shortId(invoice)}.pdf`, new Uint8Array(bytes), 'application/pdf')
+    w.toast('inv-pdf', '✓', 'PDF downloaded', `${shortId(invoice)} saved as PDF.`, 'green')
+  } catch (e) {
+    toastErr('PDF export failed', e)
+  }
+}
+w.exportInvoiceDetailsCSV = async (): Promise<void> => {
+  try {
+    const current = await window.kasa.snapshot()
+    if (!current.invoices.length) throw new Error('There are no invoices to export yet.')
+    w.downloadFile('invoice-details.csv', invoiceDetailsCsv(current), 'text/csv;charset=utf-8;')
+    w.toast('inv-csv', '✓', 'CSV exported', `${current.invoices.length} invoices exported.`, 'green')
+  } catch (e) {
+    toastErr('Export failed', e)
   }
 }
 w.printInvoiceDoc = w.downloadInvoicePdf
@@ -666,3 +808,17 @@ window.kasa.onPayment((p) => {
 })
 setInterval(() => void refresh(), 10_000) // balances can change without an invoice event
 void refresh()
+
+// Total Tax card (Wallet page). Empty until the tax side calculates a figure: call
+// window.setTaxTotal(1234.5) or window.setTaxTotal(1234.5, 'EUR'), or dispatch
+// new CustomEvent('kasa:tax-total', { detail: { amount, currency } }). null clears it back to "—".
+w.setTaxTotal = (amount: number | null, currency = 'EUR'): void => {
+  const el = $('stat-tax')
+  if (!el) return
+  el.textContent =
+    typeof amount === 'number' && Number.isFinite(amount) ? `${fmt(amount)} ${currency}` : '—'
+}
+window.addEventListener('kasa:tax-total', (e) => {
+  const d = (e as CustomEvent<{ amount: number | null; currency?: string }>).detail
+  w.setTaxTotal(d?.amount ?? null, d?.currency)
+})

@@ -14,6 +14,7 @@ export interface KasaStatus {
   balance: number // spendable (settled)
   future?: number // display: settled + incoming − outgoing still on their way
   btcSats: number
+  payPage?: string
 }
 
 export interface KasaInvoice {
@@ -74,6 +75,7 @@ declare global {
       status(): Promise<KasaStatus>
       snapshot(): Promise<KasaSnapshot>
       invoicePdf(id: string): Promise<Uint8Array>
+      transactionPdf(nodeIdx: number): Promise<Uint8Array>
       createInvoice(client: string, amount: number | string): Promise<KasaInvoice>
       receive(
         fresh?: boolean,
