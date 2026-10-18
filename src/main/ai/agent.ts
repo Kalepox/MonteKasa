@@ -13,6 +13,25 @@ import type { AgentEvent, SecurityTarget } from '../../shared/agent'
 
 type SDK = typeof import('@qvac/sdk')
 type Message = { role: 'user' | 'assistant'; content: string }
+const INTRODUCTION =
+  "I'm Kasa Assistant, your local, read-only assistant for understanding payment security in this app. I can explain recorded invoice warnings, payment statuses and missing verification, and suggest what to review next. I cannot send funds, approve payments, bypass checks or access private keys. For explanations of your saved tax records, choose Commercialista."
+
+function isIntroduction(input: string): boolean {
+  const question = input
+    .toLowerCase()
+    .replace(/[’]/g, "'")
+    .replace(/[?!.,]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^(?:hi|hello|hey)(?: there)?\s+/, '')
+    .replace(/^please\s+/, '')
+    .replace(/\s+please$/, '')
+  // Match the whole question: a mixed payment/action request still needs evidence.
+  return /^(?:who (?:are you|is kasa assistant)|what (?:are you|is your (?:name|role|purpose)|can you (?:do|help (?:me )?with)|are your (?:capabilities|limitations))|(?:can you )?(?:introduce yourself|tell me (?:about yourself|who you are|what you can do)))$/.test(
+    question
+  )
+}
+
 const SYSTEM = `You are Kasa Assistant, a local read-only security explanation assistant.
 Answer payment security questions in two or three short sentences. Discuss current unresolved findings only unless includeResolved is true. Distinguish RGB settlement from Bitcoin confirmations required by the app. Label unavailable verification as a gap, not a threat, and report last known status when current evidence is unavailable. Do not repeat the Payment details card or explain acknowledgment unless asked. Never equate settlement or absence of warnings with safety or recipient trustworthiness. End with: "For further information, go to the Security panel." Retain a brief do-not-resend instruction for uncertain submissions. For action requests, say you cannot perform the action and direct the user to the normal app review. Do not invent workflows or buttons.
 When ruleGuidance is provided, explain its meaning and next step faithfully. State BLOCKED for network mismatch and duplicate attempts. Do not soften a block into a suggestion. Do not attribute submissions to the recipient or invent names of networks. A local finding ID is not a recipient address.
@@ -145,6 +164,12 @@ export class Agent {
       )
         this.history.splice(0, 2)
       const user: Message = { role: 'user', content: input.trim() }
+      // Identity is app-owned, not a summary of findings or a previously selected payment.
+      if (!taxScopeKey && isIntroduction(user.content)) {
+        emit({ type: 'token', text: INTRODUCTION })
+        this.history.push(user, { role: 'assistant', content: INTRODUCTION })
+        return INTRODUCTION
+      }
       const tax = taxScopeKey ? this.readTax?.(taxScopeKey) : undefined
       if (taxScopeKey && !tax) throw new Error('Commercialista database context is unavailable.')
       if (this.stopped) throw new Error('Stopped.')
