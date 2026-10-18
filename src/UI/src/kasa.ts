@@ -4,7 +4,7 @@
 import QRCode from 'qrcode'
 import { invoiceDetailsCsv, invoicesCsv, transactionsCsv } from './invoice-csv'
 import { invoiceDocumentBody } from '../../shared/invoice-document'
-import { searchLedger, taxRecordsCsv, taxLedgerSummary } from './ledger'
+import { searchLedger } from './ledger'
 import { reviewPayment } from './security'
 import type { KasaInvoice, KasaPayment, KasaSnapshot, KasaStatus } from '../../preload/index.d'
 
@@ -79,21 +79,6 @@ w.qry = async (): Promise<void> => {
     if (request === searchRequest) output.textContent = searchLedger(current, query)
   } catch (e) {
     if (request === searchRequest) output.textContent = `Search failed: ${errText(e)}`
-  }
-}
-w.exportTaxCSV = async (): Promise<void> => {
-  try {
-    const current = await window.kasa.snapshot()
-    w.downloadFile('tax-records-all-dates.csv', taxRecordsCsv(current), 'text/csv;charset=utf-8;')
-    w.toast(
-      'tax-csv',
-      '✓',
-      'Records exported',
-      'USDT records only. Tax liability and EUR conversion are not calculated.',
-      'blue'
-    )
-  } catch (e) {
-    toastErr('Export failed', e)
   }
 }
 let walletBalance = 0
@@ -391,21 +376,6 @@ function notifyNewFlags(previous: KasaSnapshot, current: KasaSnapshot): void {
 }
 
 let refreshing = false
-function renderTaxSummary(): void {
-  const summary = taxLedgerSummary(snap)
-  setText('tax-invoice-count', String(summary.invoiceCount))
-  setText('tax-requested', `${summary.requested} USDT`)
-  setText('tax-received', `${summary.received} USDT`)
-  for (const key of ['underpaid', 'overpaid', 'unsettled', 'unlinked', 'undated'] as const)
-    setText(`tax-${key}`, String(summary[key]))
-  setText(
-    'commercialista-status',
-    snap.invoices.length || snap.payments.length
-      ? 'Showing all recorded dates. Payment observations are listed separately and are not added to invoice totals.'
-      : 'No recorded invoices or payments yet. Empty records do not mean zero tax is due.'
-  )
-}
-
 let firstRefresh = true
 async function refresh(): Promise<void> {
   if (refreshing) return
@@ -419,12 +389,7 @@ async function refresh(): Promise<void> {
     renderStatus(st)
     renderInvoices()
     renderWallet(st)
-    renderTaxSummary()
   } catch (e) {
-    setText(
-      'commercialista-status',
-      'Records could not be refreshed. Any displayed totals may be out of date. Try reopening the app.'
-    )
     console.error('[kasa ui] refresh failed', e)
   } finally {
     refreshing = false

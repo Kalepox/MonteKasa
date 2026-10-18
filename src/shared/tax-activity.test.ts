@@ -177,6 +177,30 @@ describe('saved ledger source ownership', () => {
     expect(linked.assignments[0]).toEqual(state.assignments[0])
     expect(linked.assignments).toHaveLength(2)
   })
+  it('retains profile-only ownership when a different owner confirms a saved source', () => {
+    const state = scope()
+    state.taxpayers.push({ ...state.taxpayers[0], id: 'other' })
+    state.recordProfiles = [{ recordKey: 'payment:1', taxpayerId: 'other' }]
+    const linked = bindLedgerSource(state, snapshot, bind, 'my-account')
+    expect(linked.recordProfiles).toEqual(state.recordProfiles)
+    expect(linked.assignments.map((assignment) => assignment.recordKey)).toEqual([
+      'invoice:request'
+    ])
+    expect(organiseTaxActivity(linked, snapshot)).toBe(linked)
+    expect(activityRows(linked, snapshot, 'other')[0]).toMatchObject({
+      recordKey: 'payment:1',
+      taxpayerId: 'other',
+      assignment: undefined
+    })
+  })
+  it('can fill account and asset details for a record already linked to the same profile', () => {
+    const state = scope()
+    state.recordProfiles = [{ recordKey: 'payment:1', taxpayerId: 'me' }]
+    const linked = bindLedgerSource(state, snapshot, bind, 'account')
+    expect(linked.assignments).toHaveLength(2)
+    expect(linked.recordProfiles).toEqual(state.recordProfiles)
+    expect(state.assignments).toEqual([])
+  })
   it('keeps manually removed records excluded on later refresh and after reload', () => {
     const linked = bindLedgerSource(scope(), snapshot, bind, 'account')
     const removed = changeTaxScope(
@@ -264,6 +288,55 @@ describe('saved ledger source ownership', () => {
 })
 
 describe('reconciled activity presentation', () => {
+  it('shows legacy profile-linked payments without inventing account, asset or source facts', () => {
+    const state = scope()
+    state.recordProfiles = [
+      { recordKey: 'payment:1', taxpayerId: 'me' },
+      { recordKey: 'invoice:request', taxpayerId: 'me' }
+    ]
+    const legacy = {
+      ...snapshot,
+      payments: [{ ...payment, source: undefined }],
+      invoices: [{ ...invoice, source: undefined }]
+    }
+    const rows = activityRows(state, legacy, 'me')
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      recordKey: 'payment:1',
+      taxpayerId: 'me',
+      invoice: { id: 'request' },
+      assignment: undefined,
+      environment: 'unknown'
+    })
+    expect(state.accounts).toEqual([])
+    expect(state.assets).toEqual([])
+    expect(state.assignments).toEqual([])
+    expect(activityRows(state, legacy, 'other', true)).toEqual([])
+  })
+  it('keeps another profile’s linked invoice separate in both filtered and all-activity views', () => {
+    const state = scope()
+    state.taxpayers.push({ ...state.taxpayers[0], id: 'other' })
+    state.recordProfiles = [
+      { recordKey: 'payment:1', taxpayerId: 'me' },
+      { recordKey: 'invoice:request', taxpayerId: 'other' }
+    ]
+    const mine = activityRows(state, snapshot, 'me', true)
+    expect(mine.map((row) => row.recordKey)).toEqual(['payment:1'])
+    expect(mine[0].invoice).toBeUndefined()
+    expect(activityRows(state, snapshot, 'other', true).map((row) => row.recordKey)).toEqual([
+      'invoice:request'
+    ])
+    const all = activityRows(state, snapshot)
+    expect(all.map((row) => row.recordKey)).toEqual(['payment:1', 'invoice:request'])
+    expect(all[0].invoice).toBeUndefined()
+  })
+  it('uses existing account ownership before a conflicting profile-only link', () => {
+    const state = bindLedgerSource(scope(), snapshot, bind, 'account')
+    state.taxpayers.push({ ...state.taxpayers[0], id: 'other' })
+    state.recordProfiles = [{ recordKey: 'payment:1', taxpayerId: 'other' }]
+    expect(activityRows(state, snapshot, 'me')[0].taxpayerId).toBe('me')
+    expect(activityRows(state, snapshot, 'other', true)).toEqual([])
+  })
   it('keeps partial payments and multiple observations sharing a transaction, without a second receipt for the invoice', () => {
     const ledger = {
       ...snapshot,

@@ -1,6 +1,7 @@
 import type { KasaInvoice, KasaPayment, KasaSnapshot } from '../preload/index.d'
 import { readLedgerSource, type LedgerSource } from './ledger-source'
 import { changeTaxScope, type TaxAssignment, type TaxAsset, type TaxScope } from './tax-scope'
+import { recordTaxpayerMap } from './tax-record-profile'
 
 export type ObservedLedgerSource = {
   source: LedgerSource
@@ -133,6 +134,7 @@ export function bindLedgerSource(
 export function organiseTaxActivity(scope: TaxScope, snapshot: KasaSnapshot): TaxScope {
   const assigned = new Set(scope.assignments.map((assignment) => assignment.recordKey))
   const excluded = new Set(scope.autoAssignmentExclusions ?? [])
+  const owners = recordTaxpayerMap(scope)
   const additions: TaxAssignment[] = []
   for (const observed of observedSources(snapshot)) {
     if (observed.conflict) continue
@@ -148,6 +150,8 @@ export function organiseTaxActivity(scope: TaxScope, snapshot: KasaSnapshot): Ta
       continue
     for (const recordKey of observed.recordKeys) {
       if (assigned.has(recordKey) || excluded.has(recordKey)) continue
+      const taxpayerId = owners.get(recordKey)
+      if (taxpayerId && taxpayerId !== account.taxpayerId) continue
       additions.push({ recordKey, accountId: account.id, assetId: asset.id })
       assigned.add(recordKey)
     }
@@ -161,6 +165,7 @@ export type TaxActivityRow = {
   payment?: KasaPayment
   invoice?: KasaInvoice
   assignment?: TaxAssignment
+  taxpayerId?: string
   environment: 'live' | 'test' | 'unknown'
   status: 'settled' | 'pending' | 'failed' | 'unknown' | 'request'
 }
@@ -174,23 +179,15 @@ export function activityRows(
   const assignments = new Map(
     scope.assignments.map((assignment) => [assignment.recordKey, assignment])
   )
-  const accounts = new Set(
-    scope.accounts
-      .filter((account) => account.taxpayerId === taxpayerId)
-      .map((account) => account.id)
-  )
+  const owners = recordTaxpayerMap(scope)
+  const owner = (key: string): string | undefined => owners.get(key)
   const includes = (key: string): boolean =>
-    taxpayerId === undefined ||
-    accounts.has(assignments.get(key)?.accountId ?? '') ||
-    (includeUnassigned && !assignments.has(key))
+    taxpayerId === undefined || owner(key) === taxpayerId || (includeUnassigned && !owner(key))
   // Apply visibility before reconciliation: a hidden payment must not consume
   // an unassigned request that remains visible in the selected profile's review.
   const payments = snapshot.payments.filter((payment) => includes(`payment:${payment.nodeIdx}`))
   const visibleInvoices = snapshot.invoices.filter((invoice) => includes(`invoice:${invoice.id}`))
   const invoices = new Map(visibleInvoices.map((invoice) => [invoice.id, invoice]))
-  const owners = new Map(scope.accounts.map((account) => [account.id, account.taxpayerId]))
-  const owner = (key: string): string | undefined =>
-    owners.get(assignments.get(key)?.accountId ?? '')
   const coveredInvoices = new Set<string>()
   const seenPayments = new Set<number>()
   const rows: TaxActivityRow[] = []
@@ -229,6 +226,7 @@ export function activityRows(
       payment,
       invoice,
       assignment: assignments.get(recordKey),
+      taxpayerId: owner(recordKey),
       environment: readLedgerSource(payment.source)?.asset.environment ?? 'unknown',
       status
     })
@@ -243,6 +241,7 @@ export function activityRows(
       kind: 'request',
       invoice,
       assignment: assignments.get(recordKey),
+      taxpayerId: owner(recordKey),
       environment: readLedgerSource(invoice.source)?.asset.environment ?? 'unknown',
       status: 'request'
     })

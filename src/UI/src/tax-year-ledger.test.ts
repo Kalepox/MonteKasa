@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { KasaInvoice, KasaPayment, KasaSnapshot } from '../../preload/index.d'
+import type { LedgerSource } from '../../shared/ledger-source'
 import { taxYearReview, taxYearRows, taxYearCsv } from './tax-year-ledger'
 
 const seconds = (date: string): number => Date.parse(date) / 1000
@@ -24,6 +25,18 @@ const payment: KasaPayment = {
   blockTime: seconds('2026-01-02T12:00:00Z')
 }
 const snapshot: KasaSnapshot = { invoices: [invoice], payments: [payment], proposals: [] }
+const bitcoin: LedgerSource = {
+  id: 'saved-bitcoin',
+  label: 'Saved Bitcoin source',
+  backend: 'wdk',
+  asset: {
+    symbol: 'BTC',
+    canonicalId: 'bitcoin',
+    network: 'bitcoin',
+    decimals: 8,
+    environment: 'live'
+  }
+}
 
 describe('tax-year record review', () => {
   it('selects invoice and payment dates independently and retains cross-year invoice references', () => {
@@ -43,7 +56,7 @@ describe('tax-year record review', () => {
     expect(review.excludedPayments).toBe(1)
     const rows = taxYearRows(snapshot, review)
     expect(rows[0].amount).toBe('100.000000')
-    expect(rows[0].unit).toBe('USDT')
+    expect(rows[0].unit).toBe('recorded app units')
     expect(rows[0].basis).toContain('receipt totals may span years')
   })
   it('uses Europe/Rome boundaries rather than UTC or the host timezone', () => {
@@ -61,11 +74,11 @@ describe('tax-year record review', () => {
     const records = {
       ...snapshot,
       invoices: [{ ...invoice, createdAt: NaN }],
-      payments: [null, NaN, Infinity].map((blockTime) => ({ ...payment, blockTime }))
+      payments: [null, NaN, Infinity, 1e20].map((blockTime) => ({ ...payment, blockTime }))
     }
     const review = taxYearReview(records, 2026)
     expect(review.payments).toHaveLength(0)
-    expect(review.undatedPayments).toHaveLength(3)
+    expect(review.undatedPayments).toHaveLength(4)
     expect(review.undatedInvoices).toHaveLength(1)
     expect(review.excludedPayments).toBe(0)
     expect(
@@ -154,6 +167,141 @@ describe('tax-year record review', () => {
         unit: 'BTC'
       })
     }
+  })
+  it('uses the saved invoice asset and raw amount without treating cumulative receipts as year income', () => {
+    const records: KasaSnapshot = {
+      ...snapshot,
+      invoices: [{ ...invoice, source: bitcoin, amountRaw: 123456780, receivedRaw: 900000000 }]
+    }
+    const before = structuredClone(records)
+    const [row] = taxYearRows(records, taxYearReview(records, 2025))
+    expect(row).toMatchObject({
+      amount: '1.23456780',
+      unit: 'BTC',
+      amountRaw: '123456780',
+      sourceId: bitcoin.id,
+      sourceLabel: bitcoin.label,
+      backend: 'wdk',
+      assetId: 'bitcoin',
+      network: 'bitcoin',
+      environment: 'live',
+      decimals: '8',
+      sourceStatus: 'saved'
+    })
+    expect(row.basis).toContain('receipt totals may span years')
+    expect(taxYearCsv(records, 2025)).toContain('"1.23456780","BTC"')
+    expect(taxYearCsv(records, 2025)).not.toContain('9.00000000')
+    expect(records).toEqual(before)
+  })
+  it('keeps legacy invoices unverified even if a linked payment identifies an asset', () => {
+    const records = {
+      ...snapshot,
+      payments: [{ ...payment, source: bitcoin, receivedRaw: 125000000 }]
+    }
+    const [row] = taxYearRows(records, taxYearReview(records, 2025))
+    expect(row).toMatchObject({
+      amount: '100.000000',
+      unit: 'recorded app units',
+      sourceStatus: 'unknown',
+      sourceId: '',
+      assetId: '',
+      network: '',
+      environment: 'unknown'
+    })
+    expect(row.basis).toContain('do not identify a currency')
+    expect(taxYearCsv(records, 2025)).not.toContain('USDT')
+  })
+  it('withholds unsafe invoice amounts while retaining raw values and saved provenance for review', () => {
+    for (const amountRaw of [undefined, NaN, Infinity, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      const records = {
+        ...snapshot,
+        invoices: [{ ...invoice, source: bitcoin, amountRaw }]
+      }
+      const [row] = taxYearRows(records, taxYearReview(records, 2025))
+      expect(row).toMatchObject({
+        amount: 'Unavailable',
+        unit: 'BTC',
+        sourceStatus: 'saved',
+        amountRaw: amountRaw === undefined ? '' : String(amountRaw)
+      })
+      expect(row.basis).toContain('missing or unsafe')
+    }
+    const records = {
+      ...snapshot,
+      invoices: [{ ...invoice, source: bitcoin, amountRaw: Number.MAX_SAFE_INTEGER }]
+    }
+    expect(taxYearRows(records, taxYearReview(records, 2025))[0].amount).toBe('90071992.54740991')
+  })
+  it('withholds invalid legacy amounts instead of showing a negative or non-finite amount', () => {
+    for (const amount of [-1, NaN, Infinity]) {
+      const records = {
+        ...snapshot,
+        invoices: [{ ...invoice, amount }],
+        payments: [{ ...payment, received: amount }]
+      }
+      expect(taxYearRows(records, taxYearReview(records, 2025))[0].amount).toBe('Unavailable')
+      expect(taxYearRows(records, taxYearReview(records, 2026))[0].amount).toBe('Unavailable')
+    }
+  })
+  it('withholds conflicting source amounts even when the conflicting record is outside the selected year', () => {
+    const records = {
+      ...snapshot,
+      invoices: [{ ...invoice, source: bitcoin, amountRaw: 100000000 }],
+      payments: [
+        {
+          ...payment,
+          receivedRaw: 100000000,
+          source: { ...bitcoin, asset: { ...bitcoin.asset, network: 'other-network' } }
+        }
+      ]
+    }
+    for (const year of [2025, 2026]) {
+      const [row] = taxYearRows(records, taxYearReview(records, year))
+      expect(row).toMatchObject({
+        amount: 'Unavailable',
+        sourceStatus: 'conflict',
+        amountRaw: '100000000'
+      })
+      expect(row.basis).toContain('Conflicting saved metadata')
+      expect(taxYearCsv(records, year)).toContain('"100000000"')
+      expect(taxYearCsv(records, year)).not.toContain('"1.00000000"')
+    }
+  })
+  it('labels test, mock and unknown environments without converting them into verified live records', () => {
+    const sources: LedgerSource[] = [
+      { ...bitcoin, id: 'test', asset: { ...bitcoin.asset, environment: 'test' } },
+      { ...bitcoin, id: 'mock', backend: 'mock' },
+      { ...bitcoin, id: 'unknown', asset: { ...bitcoin.asset, environment: 'unknown' } }
+    ]
+    const records = {
+      ...snapshot,
+      payments: sources.map((source, nodeIdx) => ({ ...payment, nodeIdx, source, receivedRaw: 1 }))
+    }
+    const rows = taxYearRows(records, taxYearReview(records, 2026))
+    expect(rows.map((row) => row.environment)).toEqual(['test', 'live', 'unknown'])
+    expect(rows.every((row) => row.amount === '0.00000001')).toBe(true)
+    expect(rows[0].basis).toContain('Test/demo data')
+    expect(rows[1].basis).toContain('Test/demo data')
+    expect(rows[2].basis).toContain('Environment unknown')
+    expect(rows.every((row) => row.basis.includes('not live verification'))).toBe(true)
+  })
+  it('escapes formulas and quotes in every exported source field', () => {
+    const source: LedgerSource = {
+      ...bitcoin,
+      id: '=SOURCE()',
+      label: '+Label,"saved"',
+      asset: { ...bitcoin.asset, symbol: '@BTC', canonicalId: '-ASSET()', network: '\tNetwork' }
+    }
+    const records = { ...snapshot, invoices: [{ ...invoice, source, amountRaw: 1 }] }
+    const csv = taxYearCsv(records, 2025)
+    expect(csv).toContain('"\'=SOURCE()"')
+    expect(csv).toContain('"\'+Label,""saved"""')
+    expect(csv).toContain('"\'@BTC"')
+    expect(csv).toContain('"\'-ASSET()"')
+    expect(csv).toContain('"\'\tNetwork"')
+    expect(csv).toContain(
+      '"Source_ID","Source_Label","Backend","Asset_ID","Network","Environment","Decimals","Source_Metadata_Status"'
+    )
   })
   it('does not trust invalid source metadata or infer a payment currency from its linked invoice', () => {
     const records = {

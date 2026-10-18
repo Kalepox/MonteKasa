@@ -1458,10 +1458,16 @@
           <p id="tax-page-description">See what is saved and what needs your attention.</p>
         </div>
         <p id="tax-navigation-status" role="status" hidden></p>
+        <div class="tax-section-heading tax-summary-selection" aria-label="Summary selection">
+          <div><strong id="tax-summary-profile">Loading app profile…</strong><p id="tax-summary-selection-status" class="tax-help" role="status" aria-live="polite">Summaries use the app profile and a saved tax year.</p></div>
+          <div><label for="tax-summary-year">Tax year for summaries</label><select id="tax-summary-year" class="fi" disabled aria-describedby="tax-summary-year-help"></select><p id="tax-summary-year-help" class="tax-help">Choose a year you have set up. To add another, review its tax details first.</p><button id="tax-summary-setup" class="btn btn-s" type="button" disabled>Add or edit tax year</button><button id="tax-summary-retry" class="btn btn-s" type="button" hidden>Reload saved selection</button></div>
+        </div>
         <section id="tax-setup" class="tax-panel tax-setup" data-tax-panel="profile" aria-labelledby="tax-setup-title" hidden>
           <div class="tax-profile-library">
-            <div class="tax-section-heading"><div><h3 id="tax-setup-title">Your saved profiles</h3><p>Keep personal and business activity separate. Each saved profile includes its tax year.</p></div><button id="tax-profile-new" class="btn btn-p" type="button" disabled>Add profile</button></div>
+            <div class="tax-section-heading"><div><h3 id="tax-setup-title">Tax details for your app profile</h3><p>Commercialista uses the same person or business you selected in Profile. Complete their tax details here, or explicitly link existing tax records.</p></div><button id="tax-profile-new" class="btn btn-p" type="button" disabled>Complete tax details</button></div>
+            <p id="tax-profile-context" class="tax-help" role="status"></p>
             <ul id="tax-profile-existing" class="tax-profile-list"></ul>
+            <button id="tax-profile-create-app" class="btn btn-s" type="button" disabled>Create another app profile</button>
             <button id="tax-profile-legacy" class="btn btn-s" type="button" hidden>Reuse previous setup</button>
             <div class="tax-draft-actions">
               <p id="tax-profile-draft-note"></p>
@@ -1475,7 +1481,7 @@
               <h3 id="tax-profile-step-title" tabindex="-1"></h3>
               <fieldset id="tax-profile-step-0">
                 <legend class="tax-sr-only">Profile type</legend>
-                <p class="tax-step-help">Choose whose activity you want to organise. You can add another profile later.</p>
+                <p class="tax-step-help">Choose how this app profile's activity is treated for tax. For a different person or business, create another profile in the app's Profile section.</p>
                 <div class="tax-type-choices">
                   <label><input type="radio" name="tax-profile-type" value="personal" required /><span><strong>Personal</strong><small>Crypto you hold or use outside a business.</small></span></label>
                   <label><input type="radio" name="tax-profile-type" value="business" required /><span><strong>Business / professional</strong><small>Your company, business or independent professional activity.</small></span></label>
@@ -1484,8 +1490,8 @@
               <fieldset id="tax-profile-step-1" hidden disabled>
                 <legend class="tax-sr-only">Country and tax year</legend>
                 <p class="tax-step-help">Tax rules depend on where you are tax resident and the year you are reviewing.</p>
-                <label>Profile name<input class="fi" id="tax-profile-name" required maxlength="200" aria-describedby="tax-profile-name-help" /></label>
-                <p id="tax-profile-name-help" class="tax-help">Use a familiar name, such as “My personal taxes” or your business name.</p>
+                <label>App profile name<input class="fi" id="tax-profile-name" readonly aria-describedby="tax-profile-name-help" /></label>
+                <p id="tax-profile-name-help" class="tax-help">This name comes from Profile. Business tax details use the company name when available. Edit identity details in Profile.</p>
                 <div class="tax-form-grid">
                   <div><label><span id="tax-profile-country-label">Country of tax residence</span><select class="fi" id="tax-profile-country" required aria-describedby="tax-profile-country-help"><option value="">Choose a country</option><option value="IT">Italy</option><option value="other">Another country</option></select></label><p id="tax-profile-country-help" class="tax-help">Tax residence can differ from citizenship or an exchange’s location.</p></div>
                   <div><label>Tax year to review<select class="fi" id="tax-profile-year" required></select></label><p class="tax-help">The year of the activity, not the year you file a return. Business fiscal periods need separate review.</p></div>
@@ -1517,7 +1523,7 @@
               </fieldset>
               <fieldset id="tax-profile-step-4" hidden disabled>
                 <legend class="tax-sr-only">Review your answers</legend>
-                <p class="tax-step-help">Check your answers. Creating this profile keeps all existing profiles and records.</p>
+                <p class="tax-step-help">Check the tax details for this app profile. Saving updates its existing taxpayer identity and preserves other years and records.</p>
                 <dl id="tax-profile-summary" class="tax-summary"></dl>
                 <div class="tax-review-actions">
                   <button id="tax-profile-edit-type" class="btn btn-s" type="button">Edit profile type</button>
@@ -1525,7 +1531,7 @@
                   <button id="tax-profile-edit-tax" class="btn btn-s" type="button">Edit tax details</button>
                   <button id="tax-profile-edit-activity" class="btn btn-s" type="button">Review app activity</button>
                 </div>
-                <p class="tax-help">Saved on this device. This organises your records; it does not file a return or calculate tax. Unknown answers stay open for review.</p>
+                <p class="tax-help">Saved on this device and linked to your app profile. This setup does not file a return. Unknown answers stay open for review.</p>
               </fieldset>
               <div class="tax-step-actions">
                 <button id="tax-profile-back" class="btn btn-s" type="button">Back</button>
@@ -1539,11 +1545,13 @@
           <ul id="tax-profile-notes" class="tax-help"></ul>
         </section>
           <div class="tax-context">
-            <label>Profile &amp; tax year<select id="scope-taxpayer" class="fi" disabled></select></label>
+            <label>Current app profile &amp; tax year<select id="scope-taxpayer" class="fi" disabled></select></label>
             <p id="scope-profile"></p>
           </div>
             <section class="tax-panel" data-tax-panel="activity" hidden aria-labelledby="tax-activity-title">
-              <div class="tax-section-heading"><div><h3 id="tax-activity-title">Activity from your app</h3><p>Payments come from the saved ledger. Confirm a source’s owner once to organise matching records automatically.</p></div><button id="tax-activity-refresh" class="btn btn-s" type="button">Refresh activity</button></div>
+              <div class="tax-section-heading"><div><h3 id="tax-activity-title">Activity from your app</h3><p>Link saved activity to your selected profile to see it in Overview and Reports. Account ownership and missing asset details can be reviewed separately.</p></div><button id="tax-activity-refresh" class="btn btn-s" type="button">Refresh activity</button></div>
+              <div class="tax-review-actions"><button id="tax-activity-link-profile" class="btn btn-p" type="button" disabled>Link unassigned activity to this profile</button></div>
+              <p class="tax-help">Links all currently unassigned saved payments and invoice requests, across all dates. Existing profile assignments are kept. Linking does not confirm ownership shares, identify unknown assets or make test activity taxable.</p>
               <p id="tax-activity-status" role="status">Reading saved activity…</p>
               <p id="tax-activity-pending" class="tax-notice" role="status" hidden>New saved activity is waiting. Save or discard your open edits to refresh.</p>
               <div id="tax-activity-sources" class="tax-source-list"></div>
@@ -1570,20 +1578,119 @@
               <div class="tax-activity-table"><table aria-label="Saved payment activity"><thead><tr><th>Activity</th><th>Recorded amount</th><th>Status</th><th>Assigned profile</th><th>Review</th></tr></thead><tbody id="tax-activity-rows"></tbody></table></div>
               <button id="tax-activity-more" class="btn btn-s" type="button" hidden>Show more activity</button>
             </section>
+        <section class="tax-panel tax-dashboard" data-tax-panel="overview" aria-labelledby="tax-dashboard-title">
+          <div class="tax-section-heading">
+            <div><span class="tax-eyebrow">Tax &amp; VAT</span><h3 id="tax-dashboard-title">A clearer view of your taxes</h3><p id="tax-dashboard-subtitle">Your saved payments, useful estimates and the details still needed.</p></div>
+            <button id="tax-dashboard-refresh" class="btn btn-s" type="button" aria-controls="tax-dashboard-content">Refresh records</button>
+          </div>
+          <p id="tax-dashboard-status" role="status" aria-live="polite">Reading the selected profile and saved records…</p>
+          <p id="tax-profile-missing" class="tax-notice">Choose an app profile, then complete or link its tax details to see your overview.</p>
+          <div id="tax-dashboard-content" hidden>
+            <p id="tax-dashboard-context" class="tax-dashboard-context"></p>
+            <div id="tax-dashboard-cards" class="tax-dashboard-cards" aria-label="Estimates and payment documentation"></div>
+            <section class="tax-dashboard-block tax-activity-visual" aria-labelledby="tax-dashboard-months-title">
+              <div class="tax-section-heading">
+                <div><h4 id="tax-dashboard-months-title">Payment activity</h4><p id="tax-dashboard-chart-summary" class="tax-help"></p></div>
+                <label class="tax-chart-mode">Show<select id="tax-dashboard-chart-mode" class="fi" aria-describedby="tax-dashboard-months-help" disabled><option value="eur">EUR with evidence</option><option value="count">Payment count</option></select></label>
+              </div>
+              <div class="tax-chart-legend" aria-label="Chart legend"><span><i class="tax-legend-in" aria-hidden="true"></i>Received</span><span><i class="tax-legend-out" aria-hidden="true"></i>Sent</span></div>
+              <div class="tax-chart-scroll"><div id="tax-dashboard-chart" class="tax-payment-chart" aria-hidden="true"></div></div>
+              <p id="tax-dashboard-chart-empty" class="tax-notice" hidden></p>
+              <p id="tax-dashboard-months-help" class="tax-help"></p>
+              <details class="tax-chart-table"><summary>View monthly figures</summary><div class="tax-dashboard-chart"><table aria-describedby="tax-dashboard-months-help"><caption class="tax-sr-only">Monthly payment activity for the selected app profile and year</caption><thead><tr><th scope="col">Month</th><th scope="col">Received</th><th scope="col">Sent</th></tr></thead><tbody id="tax-dashboard-months"></tbody></table></div></details>
+            </section>
+            <section class="tax-dashboard-block tax-review-panel" aria-labelledby="tax-dashboard-next-title">
+              <div class="tax-section-heading"><h4 id="tax-dashboard-next-title">Things to review</h4><span class="tax-help">Needed for estimates</span></div>
+              <ol id="tax-dashboard-next" class="tax-next-steps"></ol>
+            </section>
+            <details id="tax-dashboard-details" class="tax-dashboard-details">
+              <summary>How is my estimate worked out?</summary>
+              <p>Estimates use the selected app profile, its saved tax-year settings and supporting records. A missing estimate never means that no tax is due.</p>
+              <p>Only the supported personal Bitcoin disposal calculation can currently produce a provisional tax subtotal. VAT, whole-business income and holding-tax calculations still need additional inputs and calculation support.</p>
+              <div id="tax-dashboard-estimates" class="tax-dashboard-estimates"></div>
+              <dl><dt>Included</dt><dd>Saved payments linked or assigned to this profile. Dates use the Europe/Rome calendar year. Invoice requests are supporting records and are never added as another payment.</dd><dt>Outside the year totals</dt><dd>Other profiles, unassigned records, other years and undated records. Test, unidentified and conflicting sources are excluded from the EUR chart; the payment-count view labels their presence.</dd><dt>Evidence and limitations</dt><dd>Saved settlement, supplied evidence and ownership declarations are not independently verified. Recorded receipts are not automatically taxable income, and sent amounts are not automatically deductible expenses.</dd></dl>
+              <p id="tax-dashboard-coverage" class="tax-help"></p>
+              <p id="tax-dashboard-exclusions" class="tax-help"></p>
+              <p id="tax-dashboard-ownership" class="tax-help"></p>
+              <button class="btn btn-s" type="button" data-tax-open="reports">Review calculations &amp; export</button>
+            </details>
+            <details class="tax-dashboard-details" aria-labelledby="tax-dashboard-assets-title">
+              <summary id="tax-dashboard-assets-title">Saved amounts by asset &amp; source</summary>
+              <p class="tax-help">Original recorded amounts, including test activity where labelled. Assets and sources stay separate; these are not tax totals.</p>
+              <div id="tax-dashboard-assets" class="tax-dashboard-assets"></div>
+            </details>
+            <footer class="tax-dashboard-footer"><p id="tax-dashboard-source" class="tax-help"></p><p id="tax-dashboard-freshness" class="tax-help" hidden>Last read: <time id="tax-dashboard-updated"></time></p></footer>
+          </div>
+        </section>
+        <section id="tax-personal-panel" class="tax-panel" data-tax-panel="reports" hidden aria-labelledby="tax-personal-title">
+          <h3 id="tax-personal-title" tabindex="-1">Personal Bitcoin disposal estimate</h3>
+          <p>A provisional subtotal for supported BTC sales and spending. Payments come from saved app records; add only the documented acquisition cost allocated to each disposal.</p>
+          <p id="tax-personal-status" role="status" aria-live="polite">Select a saved profile to begin.</p>
+          <div id="tax-personal-content" hidden>
+            <p id="tax-personal-context" class="tax-notice"></p>
+            <div id="tax-personal-summary" class="tax-dashboard-cards"></div>
+            <ul id="tax-personal-reasons"></ul>
+            <p id="tax-personal-excluded" class="tax-help"></p>
+            <h4>Review the acquisition cost</h4>
+            <label>Saved disposal<select id="tax-basis-record" class="fi"></select></label>
+            <p id="tax-basis-record-summary" class="tax-help"></p>
+            <button id="tax-basis-details" class="btn btn-s" type="button">Review saved purpose, EUR value and fees</button>
+            <form id="tax-basis-form" hidden>
+              <fieldset id="tax-basis-fields" class="scope-fields" disabled>
+                <legend>Documented cost allocated to this disposal</legend>
+                <label>What happened?<select id="tax-basis-kind" class="fi" required><option value="">Choose the disposal type</option><option value="fiat-sale">Sold Bitcoin for fiat money</option><option value="goods-services">Spent Bitcoin on goods or services</option></select></label>
+                <label>Allocated acquisition cost in EUR<input id="tax-basis-cost" class="fi" inputmode="decimal" maxlength="27" required aria-describedby="tax-basis-cost-help" /></label>
+                <p id="tax-basis-cost-help" class="tax-help">Use the documented LIFO cost allocation across your BTC accounts, excluding acquisition and disposal fees. This release does not match acquisition lots automatically. Unknown cost must stay unresolved; enter zero only if explicitly supported.</p>
+                <label>Cost allocation evidence<input id="tax-basis-reference" class="fi" maxlength="500" required aria-describedby="tax-basis-reference-help" /></label>
+                <p id="tax-basis-reference-help" class="tax-help">Name the acquisition and LIFO allocation schedule. A reference is saved as text; the app does not open or verify documents.</p>
+                <label class="tax-question-show"><input id="tax-basis-reviewed" type="checkbox" /> I checked the saved settlement and date against evidence, confirmed this is a fiat sale or purchase of goods/services, and reviewed the original acquisition costs and LIFO allocation across my BTC history. No gift, inheritance, revaluation or swap treatment is used for this cost.</label>
+                <button id="tax-basis-save" class="btn btn-p" type="submit">Save cost review</button>
+              </fieldset>
+              <button id="tax-basis-discard" class="btn btn-s" type="button">Discard edits</button>
+            </form>
+            <p id="tax-basis-status" role="status" aria-live="polite"></p>
+            <details class="tax-report-help"><summary>Included disposals and calculation</summary><div id="tax-personal-rows"></div></details>
+            <details class="tax-report-help"><summary>Method, limits and official references</summary><p id="tax-personal-method"></p><ul id="tax-personal-limits"></ul><ul id="tax-personal-sources"></ul></details>
+          </div>
+        </section>
+        <section id="tax-questions-panel" class="tax-panel" data-tax-panel="reports" hidden aria-labelledby="tax-questions-title">
+          <h3 id="tax-questions-title" tabindex="-1">Missing tax information</h3>
+          <p>Choose a calculation to see the questions that apply. Payments already saved in the app stay automatic.</p>
+          <p id="tax-questions-status" role="status" aria-live="polite">Select a saved profile to see its questions.</p>
+          <div id="tax-questions-content" hidden>
+            <p id="tax-questions-context" class="tax-notice"></p>
+            <label>What are you preparing?<select id="tax-questions-calculation" class="fi"></select></label>
+            <section class="tax-question-records" aria-labelledby="tax-question-records-title">
+              <h4 id="tax-question-records-title">Details missing from saved records</h4>
+              <p class="tax-help">Review one record at a time in the existing editor. Your answers supplement the ledger; payment amounts and statuses are not changed.</p>
+              <div id="tax-question-records"></div>
+            </section>
+            <section class="tax-question-preparation" aria-labelledby="tax-question-preparation-title">
+              <h4 id="tax-question-preparation-title">Supporting information beyond the ledger</h4>
+              <p class="tax-help">These answers describe records you have available for review. Numerical tax inputs are not verified or calculated here.</p>
+              <label class="tax-question-show"><input id="tax-question-show-saved" type="checkbox" /> Include questions with saved supporting references</label>
+              <p id="tax-question-progress" class="tax-help"></p>
+              <form id="tax-question-form">
+                <fieldset id="tax-question-fields" class="scope-fields" disabled>
+                  <legend id="tax-question-title"></legend>
+                  <p id="tax-question-prompt"></p>
+                  <p id="tax-question-help" class="tax-help"></p>
+                  <label>What information do you have?<select id="tax-question-answer" class="fi"><option value="unknown">I’m not sure / I don’t have the records yet</option><option value="partial">Some supporting records are available</option><option value="available">The supporting records are available for review</option></select></label>
+                  <label>Supporting reference<input id="tax-question-reference" class="fi" maxlength="500" aria-describedby="tax-question-reference-help" /></label>
+                  <p id="tax-question-reference-help" class="tax-help">Use a document name, statement ID or location. Required when you say records are available. References are text only; documents are not uploaded, opened or verified.</p>
+                  <label>What is known or still missing?<textarea id="tax-question-notes" class="fi" rows="3" maxlength="2000" aria-describedby="tax-question-notes-help"></textarea></label>
+                  <p id="tax-question-notes-help" class="tax-help">Optional context for your review. Do not enter passwords, private keys or seed phrases. Notes do not become calculation inputs automatically.</p>
+                  <div class="tax-review-actions"><button id="tax-question-save" class="btn btn-p" type="submit">Save answer</button></div>
+                </fieldset>
+                <button id="tax-question-discard" class="btn btn-s" type="button">Discard edits</button>
+              </form>
+              <div class="tax-review-actions"><button id="tax-question-previous" class="btn btn-s" type="button">Previous question</button><button id="tax-question-next" class="btn btn-s" type="button">Next question</button></div>
+              <p id="tax-question-storage" class="tax-help">Saved separately from the payment ledger in this database’s local tax metadata, under the taxpayer and year. Unknown answers remain open. An available reference is not proof of completeness, eligibility or tax readiness.</p>
+            </section>
+            <details class="tax-report-help"><summary>Other information still requiring review</summary><ul id="tax-question-warnings"></ul></details>
+          </div>
+        </section>
         <fieldset id="tax-scope-fields" class="tax-scope-fields" disabled>
-          <section class="tax-panel tax-estimate-empty" data-tax-panel="overview" aria-label="Tax estimate availability">
-            <div><span class="tax-eyebrow">Tax estimate</span><h3>Not available yet</h3><p id="tax-profile-missing">Choose or create a profile to get started.</p></div>
-            <p>Tax calculations are not available yet. You can review saved records and add supporting details in Activity.</p>
-          </section>
-          <section id="scope-overview" class="scope-section tax-panel" data-tax-panel="overview" aria-labelledby="scope-overview-title">
-            <h3 id="scope-overview-title">Your saved activity</h3>
-            <p id="scope-overview-status" role="status"></p>
-            <div id="scope-overview-totals" class="scope-grid"></div>
-            <p class="tax-help">Record counts cover all dates assigned to this profile. Requests and payments may describe the same funds; these are not taxable totals.</p>
-            <p id="scope-overview-unassigned" class="tax-help"></p>
-            <h4>Next steps</h4>
-            <ul id="scope-next-steps" class="tax-next-steps"></ul>
-          </section>
           <section class="scope-section tax-panel" data-tax-panel="profile" hidden aria-labelledby="tax-history-title">
             <h3 id="tax-history-title">History coverage</h3>
               <form id="scope-history-form">
@@ -1739,38 +1846,68 @@
           <button id="tax-ai-prepare" class="btn btn-p" type="button" disabled>Checking…</button>
           <button id="tax-ai-close" class="btn btn-s" type="button" disabled>Turn off agent</button>
           <p>Uses the same model as Kasa Assistant. Closing AI switches it off for both sections; downloaded files stay on this device.</p>
-          <p>Tax questions and explanations are not available yet. Ledger summaries and CSV export work without AI.</p>
+          <p>AI tax explanations are not available yet. Focused questions, supported deterministic estimates, ledger summaries and CSV export work without AI.</p>
         </div>
         <section class="tax-panel" data-tax-panel="reports" hidden aria-label="Database records and exports">
-          <div class="tax-section-heading"><div><h3>App records &amp; exports</h3><p>These exports cover the app database, not only the selected profile. They are records for review, not a tax return.</p></div><button class="btn btn-s" type="button" onclick="exportTaxCSV()">Export all records CSV</button></div>
-        <p id="commercialista-status" role="status">Loading recorded invoices and payments…</p>
-        <p>These summaries work without AI. Recorded receipts are not taxable revenue. Invoice and payment records may describe the same funds.</p>
+          <div class="tax-section-heading">
+            <div><h3>Profile report &amp; records</h3><p>Use the Profile &amp; tax year selector above. This report includes only records assigned to that profile, across all its accounts and assets. It is a record review, not a tax return.</p></div>
+            <div class="tax-review-actions">
+              <button id="tax-reports-refresh" class="btn btn-s" type="button" aria-controls="tax-reports-summary">Refresh records</button>
+              <button id="tax-reports-export" class="btn btn-s" type="button" disabled>Export profile &amp; year CSV</button>
+            </div>
+          </div>
+        <p id="tax-reports-context" class="tax-notice">Select a saved profile and tax year above to see its report.</p>
+        <p id="commercialista-status" role="status">Loading the selected profile and saved records…</p>
+        <p id="tax-reports-freshness" hidden>Last read from app database: <time id="tax-reports-updated"></time>. This is not a network-sync check.</p>
+        <p id="tax-reports-export-status" role="status"></p>
+        <p>These summaries use saved records and work without AI or a wallet connection. Invoice issue dates and payment block dates select records using Europe/Rome calendar-year boundaries; they do not determine when tax is due.</p>
+        <div id="tax-reports-summary" aria-busy="true">
         <div class="tcard" style="margin:20px 0;">
-          <table aria-label="Recorded ledger summary">
-            <thead><tr><th>Summary</th><th>All recorded dates</th></tr></thead>
+          <table aria-label="Recorded ledger counts">
+            <thead><tr><th>Summary</th><th>Selected profile &amp; year</th></tr></thead>
             <tbody>
-              <tr><td>Invoices</td><td id="tax-invoice-count">—</td></tr>
-              <tr><td>Requested on invoices</td><td id="tax-requested">—</td></tr>
-              <tr><td>Recorded received against invoices</td><td id="tax-received">—</td></tr>
-              <tr><td>Invoices marked underpaid</td><td id="tax-underpaid">—</td></tr>
-              <tr><td>Invoices marked overpaid</td><td id="tax-overpaid">—</td></tr>
+              <tr><td>Invoices issued in the year</td><td id="tax-invoice-count">—</td></tr>
+              <tr><td>Year’s invoices currently marked underpaid</td><td id="tax-underpaid">—</td></tr>
+              <tr><td>Year’s invoices currently marked overpaid</td><td id="tax-overpaid">—</td></tr>
               <tr><td>Payment observations not marked settled</td><td id="tax-unsettled">—</td></tr>
-              <tr><td>Payment observations without a matching invoice</td><td id="tax-unlinked">—</td></tr>
-              <tr><td>Payment observations without a date</td><td id="tax-undated">—</td></tr>
+              <tr><td>Payment observations without a matching invoice assigned to this profile</td><td id="tax-unlinked">—</td></tr>
             </tbody>
           </table>
         </div>
-        <div class="tcard" style="padding:18px; margin-bottom:20px;">
-          <strong>Saved tax-year record review · unscoped database</strong>
+        <p id="tax-reports-attention" class="tax-notice"></p>
+        <p id="tax-reports-ownership"></p>
+        <h3>Saved amounts by asset and source</h3>
+        <p id="tax-report-totals-help">Amounts stay separate by asset, network and source. Invoice requests and payment observations can describe the same funds: do not add these columns together.</p>
+        <details class="tax-report-help">
+          <summary>How to read these amounts</summary>
+          <p>Each row uses the asset and precision saved with its records. Test/demo and unknown sources stay separate from live sources. Expand “Saved source details” to inspect the identity.</p>
+          <p>Payment totals include only records marked settled in the database. They are not a balance, profit or tax estimate.</p>
+          <p>Cumulative invoice receipt amounts are not shown here because they may include receipts from other years. The year’s recorded incoming payments are shown separately. Business fiscal periods may differ from this calendar-year review.</p>
+          <p>“Not totalled” means source details conflict, the asset is unknown, or at least one amount is missing or unsafe to interpret. No partial total is presented as complete. A dash means there are no records for that column.</p>
+        </details>
+        <div class="tcard tax-report-amounts">
+          <table aria-label="Saved amounts by asset and source" aria-describedby="tax-report-totals-help">
+            <thead><tr><th scope="col">Asset &amp; source</th><th scope="col">Invoices issued in year</th><th scope="col">Settled payments in year · incoming</th><th scope="col">Settled payments in year · outgoing</th></tr></thead>
+            <tbody id="tax-report-groups"><tr><td colspan="4">Loading saved amounts…</td></tr></tbody>
+          </table>
+        </div>
+        </div>
+        <div id="tax-year-review" class="tcard" style="padding:18px; margin-bottom:20px;" hidden>
+          <strong>Selected profile’s year records &amp; undated items</strong>
           <p>Invoices are selected by issue date; payments by recorded block date. These dates do not determine when income is taxable. Pending and failed observations retain their recorded status. Undated records are shown separately without assigning a year.</p>
           <p>Invoice amounts are requested amounts; payment amounts are observations. They may describe the same funds and must not be added together. Dates below are UTC; year boundaries use Europe/Rome.</p>
           <p id="tax-year-status" role="status">Loading tax-year records…</p>
-          <button id="tax-year-refresh" class="btn btn-s" type="button">Refresh year review</button>
-          <button id="tax-year-export" class="btn btn-s" type="button" disabled>Export year review + undated CSV</button>
+          <p>The profile/year CSV above includes all these records, including undated items clearly marked for review.</p>
           <div style="overflow-x:auto; margin-top:14px;">
             <table aria-label="Saved tax-year records"><thead><tr><th>Record</th><th>ID</th><th>Invoice ID</th><th>Client</th><th>Direction</th><th>Amount</th><th>Status</th><th>Date (UTC)</th></tr></thead><tbody id="tax-year-rows"></tbody></table>
           </div>
         </div>
+        <details class="tax-report-help">
+          <summary>Export the entire database instead</summary>
+          <p>This separate export includes every profile, unassigned records and all dates. Use it only when you need the complete saved ledger; it does not follow the selected profile or year.</p>
+          <button id="tax-reports-all-export" class="btn btn-s" type="button">Export entire database CSV</button>
+          <p id="tax-reports-all-export-status" role="status"></p>
+        </details>
         </section>
         <div class="tax-local-status">
           <p id="tax-scope-status" role="status">Loading saved records…</p>
@@ -2124,7 +2261,7 @@
     <!-- ──────────────── PROFILE ──────────────── -->
     <div id="view-profile" class="view">
       <div class="topbar">
-        <div style="flex:1"><div class="tb-title">User Profile & Entity</div><div class="tb-sub">Identity &middot; Business Info &middot; Preferences</div></div>
+        <div style="flex:1"><div class="tb-title">Your profiles</div><div class="tb-sub">Identity &middot; Business information &middot; Preferences</div></div>
         <div class="tb-actions">
           <button class="cmd-trigger-btn" onclick="openCmdPalette()" title="Spotlight Search (Cmd+K)">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.8;"><circle cx="11" cy="11" r="7.5"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
@@ -2134,52 +2271,67 @@
         </div>
       </div>
       <div class="vb">
+        <div style="display:flex; gap:12px; align-items:end; flex-wrap:wrap; margin-bottom:12px;">
+          <div class="fg" style="flex:1; min-width:220px; margin:0;"><label class="fl" for="app-profile-select">Active profile</label><select class="fi" id="app-profile-select" disabled><option value="">Loading saved profiles…</option></select></div>
+          <button id="app-profile-new" type="button" class="btn btn-s" disabled>New profile</button>
+          <button id="app-profile-retry" type="button" class="btn btn-s" hidden>Retry loading</button>
+        </div>
+        <p id="app-profile-link-status" style="font-size:12px; color:var(--t3); line-height:1.5;">Your saved profile can be connected to its tax setup in Commercialista.</p>
+        <p id="app-profile-lock-status" hidden style="font-size:12px; color:var(--t2); line-height:1.5;">Finish or cancel your open Commercialista edits before changing profile details or switching profiles.</p>
+        <p id="app-profile-status" role="status" aria-live="polite" style="font-size:12px; color:var(--t2); line-height:1.5;">Loading profiles saved for this database…</p>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:start;">
           
           <!-- Left Column: Form -->
-          <div>
+          <form id="app-profile-form">
+            <fieldset id="app-profile-fields" disabled style="border:0; margin:0; padding:0; min-width:0;">
+            <legend style="font-size:13px; font-weight:700; margin-bottom:12px;">Profile details</legend>
             <div class="sg">
               <div class="sgh">Personal Identity</div>
               <div class="sgb">
-                <div class="fg"><label class="fl">Full Name</label><input class="fi" id="prof-name" value="Giulia Mancini" oninput="updateProfilePreview()"/></div>
-                <div class="fg"><label class="fl">Email Address</label><input class="fi" id="prof-email" value="giulia@mancini.studio"/></div>
+                <div class="fg"><label class="fl" for="prof-name">Full name</label><input class="fi" id="prof-name" maxlength="200" autocomplete="name" placeholder="Your full name"/></div>
+                <div class="fg"><label class="fl" for="prof-email">Email address (optional)</label><input class="fi" id="prof-email" type="email" maxlength="254" autocomplete="email" placeholder="you@example.com"/></div>
               </div>
             </div>
 
             <div class="sg">
-              <div class="sgh">Business Entity</div>
+              <div class="sgh">Business details (if applicable)</div>
               <div class="sgb">
-                <div class="fg"><label class="fl">Company Name</label><input class="fi" id="prof-co" value="Studio Mancini" oninput="updateProfilePreview()"/></div>
-                <div class="fg"><label class="fl">VAT / Tax ID</label><input class="fi" id="prof-vat" value="IT12345678901" oninput="updateProfilePreview()"/></div>
-                <div class="fg"><label class="fl">Registered Address</label><input class="fi" id="prof-addr" value="Via Roma 10, Milano, Italy"/></div>
+                <div class="fg"><label class="fl" for="prof-co">Company name</label><input class="fi" id="prof-co" maxlength="200" autocomplete="organization" placeholder="Your company name"/></div>
+                <div class="fg"><label class="fl" for="prof-vat">VAT / tax ID (optional)</label><input class="fi" id="prof-vat" maxlength="80" placeholder="Your tax identifier"/></div>
+                <div class="fg"><label class="fl" for="prof-addr">Registered address (optional)</label><input class="fi" id="prof-addr" maxlength="2000" autocomplete="street-address" placeholder="Street, city and country"/></div>
               </div>
             </div>
 
             <div class="sg">
               <div class="sgh">Preferences</div>
               <div class="sgb">
-                <div class="fg"><label class="fl">Default Currency</label><select class="fi"><option>USDT (RGB20)</option><option>EUR (€)</option><option>BTC (Sats)</option></select></div>
-                <button class="btn btn-p" style="padding:9px 18px; font-size:12px; margin-top:12px;" onclick="saveProfile()">Save Changes</button>
+                <div class="fg"><label class="fl" for="prof-currency">Default currency</label><select class="fi" id="prof-currency"><option value="USDT">USDT</option><option value="EUR">EUR (€)</option><option value="BTC">BTC</option></select></div>
               </div>
             </div>
-          </div>
+            </fieldset>
+            <p style="font-size:12px; color:var(--t3); line-height:1.5;">Enter a name or company name to identify this profile. Tax residence, personal or business use, and the tax year are set separately in Commercialista.</p>
+            <div style="display:flex; gap:10px; margin-top:12px;">
+              <button id="app-profile-save" type="submit" class="btn btn-p" disabled>Save profile</button>
+              <button id="app-profile-cancel" type="button" class="btn btn-s" disabled>Cancel</button>
+            </div>
+          </form>
 
           <!-- Right Column: Live Business Card Preview -->
           <div style="background:var(--c2); border:1px solid var(--borderB); border-radius:var(--r5); padding:24px;">
-            <div style="font-size:11px; font-weight:700; color:var(--t3); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px;">Live Merchant Card Preview</div>
+            <div style="font-size:11px; font-weight:700; color:var(--t3); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px;">Profile card preview</div>
             
             <div style="background:linear-gradient(135deg, rgba(35,40,48,0.9), rgba(20,24,30,0.9)); border:1px solid var(--border); border-radius:var(--r5); padding:20px; box-shadow:0 8px 24px rgba(0,0,0,0.3); position:relative; overflow:hidden;">
               <div style="display:flex; align-items:center; gap:14px; margin-bottom:16px;">
-                <div id="prev-av" style="width:48px; height:48px; border-radius:50%; background:var(--blue); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:18px; box-shadow:0 0 12px rgba(59,130,246,0.3);">GM</div>
+                <div id="prev-av" style="width:48px; height:48px; border-radius:50%; background:var(--blue); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:18px; box-shadow:0 0 12px rgba(59,130,246,0.3);">—</div>
                 <div>
-                  <div id="prev-name" style="font-size:16px; font-weight:700; color:var(--t1);">Giulia Mancini</div>
-                  <div id="prev-co" style="font-size:12px; color:var(--blue); font-weight:600;">Studio Mancini</div>
+                  <div id="prev-name" style="font-size:16px; font-weight:700; color:var(--t1);">Your name</div>
+                  <div id="prev-co" style="font-size:12px; color:var(--blue); font-weight:600;"></div>
                 </div>
               </div>
               <hr class="div" style="margin:12px 0;">
               <div style="display:flex; flex-direction:column; gap:8px; font-size:11px; color:var(--t2);">
-                <div><strong>VAT:</strong> <span id="prev-vat" class="mono">IT12345678901</span></div>
-                <div><strong>Verification:</strong> <span class="badge b-paid" style="font-size:9px; color:var(--green); border-color:var(--green);">✓ Verified Merchant</span></div>
+                <div><strong>VAT / tax ID:</strong> <span id="prev-vat" class="mono">Not provided</span></div>
+                <div>Details are entered by you and have not been verified.</div>
               </div>
             </div>
 
@@ -2610,48 +2762,6 @@
     });
   }
 
-  function updateProfilePreview() {
-    const name = document.getElementById('prof-name')?.value || 'Giulia Mancini';
-    const co = document.getElementById('prof-co')?.value || 'Studio Mancini';
-    const vat = document.getElementById('prof-vat')?.value || 'IT12345678901';
-    const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-    
-    if (document.getElementById('prev-name')) document.getElementById('prev-name').textContent = name;
-    if (document.getElementById('prev-co')) document.getElementById('prev-co').textContent = co;
-    if (document.getElementById('prev-vat')) document.getElementById('prev-vat').textContent = vat;
-    if (document.getElementById('prev-av')) document.getElementById('prev-av').textContent = initials || 'GM';
-  }
-
-  function saveProfile() {
-    updateProfilePreview();
-    const name = document.getElementById('prof-name').value || 'Giulia Mancini';
-    const co = document.getElementById('prof-co').value || 'Studio Mancini';
-    const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-    
-    document.getElementById('sidebar-av').textContent = initials || 'GM';
-    document.getElementById('sidebar-name').textContent = name;
-    document.getElementById('sidebar-co').textContent = co;
-    
-    const profile = {};
-    document.querySelectorAll('input[id^="prof-"]').forEach(input => { profile[input.id] = input.value; });
-    try { localStorage.setItem('kasa-business-profile', JSON.stringify(profile)); }
-    catch { toast('profile', '!', 'Profile not saved', 'Local storage is unavailable.', 'red'); return; }
-    toast('profile', '✓', 'Profile Saved', 'Identity and business details updated.', 'green');
-  }
-  document.addEventListener('DOMContentLoaded', () => {
-    try {
-      const profile = JSON.parse(localStorage.getItem('kasa-business-profile') || '{}');
-      document.querySelectorAll('input[id^="prof-"]').forEach(input => {
-        if (typeof profile[input.id] === 'string') input.value = profile[input.id].slice(0, 2000);
-      });
-      if (typeof profile['prof-name'] === 'string') {
-        updateProfilePreview();
-        document.getElementById('sidebar-name').textContent = profile['prof-name'];
-        document.getElementById('sidebar-co').textContent = typeof profile['prof-co'] === 'string' ? profile['prof-co'] : '';
-        document.getElementById('sidebar-av').textContent = profile['prof-name'].split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-      }
-    } catch { /* Ignore malformed stored presentation data. */ }
-  });
   function ft(el) {
     el.closest('.fbr').querySelectorAll('.ft').forEach(t => t.classList.remove('on'));
     el.classList.add('on');
@@ -4149,9 +4259,10 @@ function startManualInvoice() {
 <script type="module" src="/src/wallet-gate.ts"></script>
 <script type="module" src="/src/wallet-security.ts"></script>
 <script type="module" src="/src/agent.ts"></script>
+<script type="module" src="/src/app-profile.ts"></script>
 <script type="module" src="/src/commercialista-nav.ts"></script>
+<script type="module" src="/src/commercialista-reports.ts"></script>
 <script type="module" src="/src/tax-profile.ts"></script>
-<script type="module" src="/src/tax-year.ts"></script>
 <script type="module" src="/src/tax-scope.ts"></script>
 <script type="module" src="/src/tax-activity.ts"></script>
 </body>

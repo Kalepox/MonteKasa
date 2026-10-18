@@ -12,8 +12,8 @@ const pages = {
     'Review calculation requirements and export records for your accountant.'
   ],
   profile: [
-    'Your tax profiles',
-    'Keep personal and business activity organised, with a clear tax year for each profile.'
+    'Tax details for your app profile',
+    'Complete the tax information for the person or business selected in Profile.'
   ]
 } as const
 type Page = keyof typeof pages
@@ -68,26 +68,16 @@ window.addEventListener('kasa:tax-profile-created', () => {
   delete root.dataset.setupActive
   showPage('overview', true)
 })
-
-window.addEventListener('kasa:tax-profile-select', (event) => {
-  const selector = document.getElementById('scope-taxpayer') as HTMLSelectElement
-  const status = document.getElementById('tax-navigation-status')!
-  if (selector.disabled || selector.closest('fieldset')?.disabled) {
-    status.textContent =
-      root.dataset.enrichmentDirty === 'true'
-        ? 'Save or discard your record edits in Activity before changing profiles.'
-        : root.dataset.activityEditing === 'true'
-          ? 'Finish or cancel source ownership in Activity before changing profiles.'
-          : 'Please wait for the saved profiles to finish loading.'
-    status.hidden = false
-    return
-  }
-  const { taxpayerId } = (event as CustomEvent<{ taxpayerId: string }>).detail
-  if (![...selector.options].some((option) => option.value === taxpayerId)) return
-  status.hidden = true
-  selector.value = taxpayerId
-  selector.dispatchEvent(new Event('change'))
+window.addEventListener('kasa:tax-profile-saved', () => {
+  delete root.dataset.setupActive
   showPage('overview', true)
+})
+
+window.addEventListener('kasa:tax-profile-select', () => {
+  const status = document.getElementById('tax-navigation-status')!
+  status.textContent =
+    'Commercialista follows your current app profile. Choose another person or business in Profile.'
+  status.hidden = false
 })
 
 // Checklist actions must reveal their destination before the scope controller focuses it.
@@ -96,10 +86,37 @@ window.addEventListener('kasa:tax-navigate', (event) => {
   const page = target?.closest<HTMLElement>('[data-tax-panel]')?.dataset.taxPanel
   if (page && page in pages && closeSetup()) showPage(page as Page)
 })
-window.addEventListener('kasa:tax-enrichment-dirty', (event) => {
+function showPendingEdits(): void {
   const status = document.getElementById('tax-navigation-status')!
-  status.hidden = !(event as CustomEvent<{ dirty: boolean }>).detail.dirty
   status.textContent =
-    'You have unsaved record details in Activity. Save or discard them before changing profiles.'
-})
+    root.dataset.appProfileBusy === 'true'
+      ? 'Wait for the app profile to finish loading or saving.'
+      : root.dataset.appProfileDirty === 'true'
+        ? 'Save or cancel your identity edits in Profile before changing tax details.'
+        : root.dataset.taxBasisDirty === 'true'
+          ? 'You have an unsaved cost review in Reports. Save or discard it before changing profiles.'
+          : root.dataset.taxQuestionsDirty === 'true'
+            ? 'You have an unsaved preparation answer in Reports. Save or discard it before changing profiles.'
+            : root.dataset.enrichmentDirty === 'true'
+              ? 'You have unsaved record details in Activity. Save or discard them before changing profiles.'
+              : root.dataset.taxHistoryDirty === 'true'
+                ? 'Save your history answer, or restore its saved choice, before changing profiles or tax years.'
+                : root.dataset.activityEditing === 'true'
+                  ? 'Finish or cancel source ownership in Activity before changing profiles.'
+                  : ''
+  status.hidden = !status.textContent
+}
+// One editor can emit an unchanged clean state while another is still dirty.
+// The notice must reflect all current editors, regardless of event order.
+for (const event of [
+  'kasa:tax-questions-dirty',
+  'kasa:tax-basis-dirty',
+  'kasa:tax-history-dirty',
+  'kasa:tax-enrichment-dirty',
+  'kasa:tax-activity-editing',
+  'kasa:app-profile-dirty',
+  'kasa:app-profile-busy'
+])
+  window.addEventListener(event, showPendingEdits)
 showPage('overview')
+showPendingEdits()

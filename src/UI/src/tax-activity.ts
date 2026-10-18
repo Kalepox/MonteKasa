@@ -5,7 +5,8 @@ import {
   type TaxActivityRow
 } from '../../shared/tax-activity'
 import { readLedgerSource } from '../../shared/ledger-source'
-import type { ScopeCommand, TaxActivitySnapshot } from '../../shared/tax-scope'
+import { recordKeys, type ScopeCommand, type TaxActivitySnapshot } from '../../shared/tax-scope'
+import { recordTaxpayerMap } from '../../shared/tax-record-profile'
 
 const el = (id: string): HTMLElement => document.getElementById(id)!
 const input = (id: string): HTMLInputElement => el(id) as HTMLInputElement
@@ -18,7 +19,15 @@ let busy = false
 let queued = false
 let limit = 100
 let formTaxpayerId = ''
-const editingRecord = (): boolean => root.dataset.enrichmentDirty === 'true'
+let unlinkedCount = 0
+let appRevision = 0
+const editingRecord = (): boolean =>
+  root.dataset.enrichmentDirty === 'true' ||
+  root.dataset.taxQuestionsDirty === 'true' ||
+  root.dataset.taxBasisDirty === 'true' ||
+  root.dataset.taxSetupDirty === 'true' ||
+  root.dataset.appProfileBusy === 'true' ||
+  root.dataset.appProfileDirty === 'true'
 const blocked = (): boolean => editingRecord() || !form.hidden || root.dataset.scopeBusy === 'true'
 const message = (error: unknown): string =>
   String(error instanceof Error ? error.message : error).replace(
@@ -35,6 +44,11 @@ function sourceEditing(editing: boolean): void {
 }
 function controls(): void {
   input('tax-activity-refresh').disabled = busy
+  input('tax-activity-link-profile').disabled =
+    busy ||
+    blocked() ||
+    !data?.scope.taxpayers.some((item) => item.id === data!.scope.activeTaxpayerId) ||
+    !unlinkedCount
   ;(el('tax-source-fields') as HTMLFieldSetElement).disabled = busy
   for (const button of el('tax-activity-sources').querySelectorAll<HTMLButtonElement>('button'))
     button.disabled = busy || blocked() || button.dataset.unavailable === 'true'
@@ -138,7 +152,8 @@ function renderSources(): void {
 function reviewText(row: TaxActivityRow): string {
   const source = readLedgerSource((row.payment ?? row.invoice)?.source)
   const notes: string[] = []
-  if (!row.assignment) notes.push('Ownership / assignment needed')
+  if (!row.taxpayerId) notes.push('Profile link needed')
+  if (!row.assignment) notes.push('Account and asset details needed')
   if (!source) notes.push('Source identity missing')
   if (row.environment === 'test') notes.push('Test activity — excluded from tax estimates')
   else if (row.environment === 'unknown') notes.push('Real/test identity needs review')
@@ -199,9 +214,8 @@ function renderRows(): void {
     const status = document.createElement('td')
     status.textContent = row.status === 'request' ? (row.invoice?.state ?? 'Request') : row.status
     const ownership = document.createElement('td')
-    const account = scope.accounts.find((item) => item.id === row.assignment?.accountId)
     ownership.textContent =
-      scope.taxpayers.find((item) => item.id === account?.taxpayerId)?.label ?? 'Unassigned'
+      scope.taxpayers.find((item) => item.id === row.taxpayerId)?.label ?? 'Unassigned'
     const review = document.createElement('td')
     review.textContent = reviewText(row)
     tr.append(activity, amount, status, ownership, review)
@@ -213,14 +227,14 @@ function renderRows(): void {
     cell.colSpan = 5
     cell.textContent =
       mode === 'assigned'
-        ? 'No activity is assigned to this profile yet.'
+        ? 'No activity is linked to this profile yet.'
         : 'No saved activity matches this view.'
     row.append(cell)
     body.append(row)
   }
   const payments = rows.filter((row) => row.kind === 'payment')
   el('tax-activity-summary').textContent =
-    `${payments.length} payments · ${rows.length - payments.length} unmatched requests · ${rows.filter((row) => !row.assignment).length} unassigned${rows.length > limit ? ` · showing ${limit} of ${rows.length}` : ''}`
+    `${payments.length} payments · ${rows.length - payments.length} unmatched requests · ${rows.filter((row) => !row.taxpayerId).length} without a profile · ${rows.filter((row) => !row.assignment).length} need account or asset details${rows.length > limit ? ` · showing ${limit} of ${rows.length}` : ''}`
   el('tax-activity-more').hidden = rows.length <= limit
 }
 
@@ -233,13 +247,20 @@ async function refresh(): Promise<void> {
   try {
     while (queued && !blocked()) {
       queued = false
+      const revision = appRevision
       const next = await window.taxScope.organise()
       if (blocked()) {
         queued = true
         break
       }
+      if (revision !== appRevision) {
+        queued = true
+        continue
+      }
       const nextSignature = JSON.stringify(next)
       data = next
+      const owners = recordTaxpayerMap(next.scope)
+      unlinkedCount = [...recordKeys(next.snapshot)].filter((key) => !owners.has(key)).length
       if (signature !== nextSignature) {
         signature = nextSignature
         renderSources()
@@ -277,6 +298,36 @@ async function change(command: ScopeCommand): Promise<void> {
     return
   } finally {
     busy = false
+    controls()
+  }
+  await refresh()
+}
+
+async function linkProfile(): Promise<void> {
+  if (!data || busy || blocked()) return
+  const taxpayerId = data.scope.activeTaxpayerId
+  if (!taxpayerId || !data.scope.taxpayers.some((item) => item.id === taxpayerId)) return
+  const databaseId = data.scope.databaseId
+  const savedKeys = recordKeys(data.snapshot)
+  busy = true
+  sourceEditing(true)
+  controls()
+  try {
+    const current = await window.taxScope.get()
+    if (current.databaseId !== databaseId || current.activeTaxpayerId !== taxpayerId)
+      throw new Error('The selected profile changed. Refresh activity and try again')
+    const owners = recordTaxpayerMap(current)
+    const unlinked = [...savedKeys].filter((key) => !owners.has(key))
+    if (unlinked.length)
+      await window.taxScope.change({ kind: 'link-records', taxpayerId, recordKeys: unlinked })
+    signature = ''
+  } catch (error) {
+    el('tax-activity-status').textContent =
+      `Could not link activity: ${message(error)}. Existing profile links and payments are retained.`
+    return
+  } finally {
+    busy = false
+    sourceEditing(false)
     controls()
   }
   await refresh()
@@ -331,6 +382,9 @@ el('tax-source-cancel').onclick = () => {
 el('tax-activity-refresh').onclick = () => {
   void refresh()
 }
+el('tax-activity-link-profile').onclick = () => {
+  void linkProfile()
+}
 select('tax-activity-filter').onchange = () => {
   limit = 100
   renderRows()
@@ -339,10 +393,28 @@ el('tax-activity-more').onclick = () => {
   limit += 100
   renderRows()
 }
-for (const event of ['kasa:tax-scope-updated', 'kasa:tax-profile-saved'])
+for (const event of [
+  'kasa:tax-scope-updated',
+  'kasa:tax-profile-saved',
+  'kasa:app-profile-updated'
+])
   window.addEventListener(event, () => {
+    if (event === 'kasa:app-profile-updated') appRevision++
     void refresh()
   })
+for (const name of ['kasa:app-profile-dirty', 'kasa:app-profile-busy', 'kasa:tax-setup-dirty'])
+  window.addEventListener(name, () => {
+    controls()
+    if (!editingRecord() && queued) void refresh()
+  })
+window.addEventListener('kasa:tax-questions-dirty', () => {
+  controls()
+  if (!editingRecord() && queued) void refresh()
+})
+window.addEventListener('kasa:tax-basis-dirty', () => {
+  controls()
+  if (!editingRecord() && queued) void refresh()
+})
 window.addEventListener('kasa:tax-enrichment-dirty', () => {
   controls()
   if (!editingRecord() && queued) void refresh()
