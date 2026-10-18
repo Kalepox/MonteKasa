@@ -19,7 +19,7 @@ CREATE TABLE payments (
   received_raw  INTEGER NOT NULL,
   status        TEXT NOT NULL,             -- waiting | confirming | settled | failed
   txid          TEXT,
-  block_time    INTEGER,                   -- legal receipt date, from the explorer
+  block_time    INTEGER,                   -- observed chain time, not a fiscal classification
   receive_utxo  TEXT,
   updated_at    INTEGER NOT NULL
 );
@@ -42,4 +42,3 @@ CREATE TABLE proposals (
 );
 CREATE UNIQUE INDEX one_proposal_per_kind ON proposals(invoice_id, kind);
 `
-

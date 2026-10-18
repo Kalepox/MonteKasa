@@ -1,14 +1,25 @@
-import { ElectronAPI } from '@electron-toolkit/preload'
+import type { TaxScopeAPI } from '../shared/tax-scope'
+import type { TaxProfileAPI } from '../shared/tax-profile'
+import type { SecurityAPI } from '../shared/security'
+import type { AgentAPI } from '../shared/agent'
+import type { LedgerSource } from '../shared/ledger-source'
 
 export interface KasaStatus {
-  state: 'online' | 'syncing' | 'locked' | 'offline'
+  state: 'online' | 'syncing' | 'locked' | 'offline' | 'timeout' | 'error'
+  error?: string
+  configurationError?: string
   mock: boolean
   pubkey?: string
-  balance: number
+  balance: number // spendable (settled)
+  future?: number // display: settled + incoming − outgoing still on their way
   btcSats: number
+  payPage?: string
 }
 
 export interface KasaInvoice {
+  source?: LedgerSource
+  amountRaw?: number
+  receivedRaw?: number
   id: string
   client: string
   amount: number
@@ -32,7 +43,13 @@ export interface KasaProposal {
 }
 
 export interface KasaPayment {
+  source?: LedgerSource
+  receivedRaw?: number
+  requestedRaw?: number | null
+  recipientId?: string
+  updatedAt?: number
   nodeIdx: number
+  direction: 'in' | 'out'
   invoiceId: string | null
   received: number
   status: string
@@ -48,17 +65,29 @@ export interface KasaSnapshot {
 
 declare global {
   interface Window {
-    electron: ElectronAPI
+    taxScope: TaxScopeAPI
+    taxProfile: TaxProfileAPI
+    agent: AgentAPI
+    security: SecurityAPI
     kasa: {
       status(): Promise<KasaStatus>
       snapshot(): Promise<KasaSnapshot>
-      createInvoice(client: string, amount: number): Promise<KasaInvoice>
-      receive(): Promise<{ invoice: string; expiresAt: number }>
+      invoicePdf(id: string): Promise<Uint8Array>
+      createInvoice(client: string, amount: number | string): Promise<KasaInvoice>
+      receive(
+        fresh?: boolean,
+        amount?: string | number
+      ): Promise<{ invoice: string; expiresAt: number }>
+      emailInvoice(to: string | undefined, subject: string, body: string): Promise<boolean>
       send(invoice: string, amount: number): Promise<{ txid: string }>
       approve(id: string, refundInvoice: string): Promise<void>
       dismiss(id: string): Promise<void>
       mockPay(recipientId: string, amount: number): Promise<void>
+      wallet(method: string, params?: Record<string, unknown>): Promise<unknown>
       onChanged(cb: () => void): () => void
+      onPayment(
+        cb: (p: { amount: number; client?: string; invoiceId?: string }) => void
+      ): () => void
     }
   }
 }

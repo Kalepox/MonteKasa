@@ -1,0 +1,88 @@
+#security-toggle {
+  width: 100%;
+  text-align: left;
+  font-size: 12.5px;
+  font-weight: 500;
+  border: 0;
+}
+.security-page {
+  overflow-y: auto;
+  padding: 24px;
+}
+.security-page article {
+  background: var(--c3);
+  border: 1px solid var(--border);
+  border-radius: var(--r4);
+  padding: 16px;
+  margin: 12px 0;
+  overflow-wrap: anywhere;
+}
+.security-page p,
+.security-page h3 {
+  margin: 12px 0;
+}
+.security-page small {
+  color: var(--t3);
+}
+.security-page summary {
+  cursor: pointer;
+}
+.security-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0;
+  cursor: pointer;
+}
+.security-dialog {
+  margin: auto;
+  width: min(680px, 92vw);
+  max-height: 85vh;
+  padding: 22px;
+  color: var(--t1);
+  background: var(--c2);
+  border: 1px solid var(--borderB);
+  border-radius: 12px;
+  overflow-y: auto;
+}
+.security-dialog::backdrop {
+  background: #0009;
+}
+.security-dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.security-dialog p,
+.security-dialog h3,
+.security-dialog label {
+  display: block;
+  margin: 12px 0;
+  overflow-wrap: anywhere;
+}
+.security-dialog article {
+  border-top: 1px solid var(--borderB);
+  margin-top: 14px;
+  padding-top: 14px;
+}
+.security-dialog button {
+  padding: 9px 12px;
+  margin: 8px 8px 0 0;
+  border-radius: 6px;
+  background: #3b4655;
+}
+.security-dialog button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+.security-dialog pre {
+  white-space: pre-wrap;
+  font-size: 11px;
+}
+.security-dialog small,
+.security-note {
+  color: var(--t3);
+}
+.security-dialog input {
+  margin-right: 8px;
+}

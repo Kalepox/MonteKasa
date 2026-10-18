@@ -1,0 +1,141 @@
+#agent-panel {
+  position: fixed;
+  right: 24px;
+  bottom: 20px;
+  z-index: 1000;
+  font-size: 13px;
+}
+#agent-panel button {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--c4);
+}
+#agent-panel button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+#agent-panel button:focus-visible,
+#agent-input:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+#agent-panel #agent-toggle,
+#agent-panel #agent-send {
+  background: var(--blue);
+  color: white;
+}
+#agent-chat {
+  position: absolute;
+  right: 0;
+  bottom: 48px;
+  width: min(420px, calc(100vw - 48px));
+  height: min(560px, calc(100vh - 100px));
+  background: var(--c2);
+  border: 1px solid var(--borderB);
+  border-radius: 14px;
+  box-shadow: 0 16px 60px #0008;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#agent-chat[hidden] {
+  display: none;
+}
+#agent-chat header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px;
+  border-bottom: 1px solid var(--border);
+}
+#agent-chat header div {
+  flex: 1;
+}
+#agent-chat small {
+  display: block;
+  color: var(--t3);
+  font-size: 10px;
+}
+#agent-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+}
+#agent-messages > div {
+  margin-bottom: 18px;
+}
+#agent-messages strong {
+  color: var(--t3);
+  font-size: 11px;
+}
+#agent-messages p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin-top: 5px;
+  user-select: text;
+}
+#agent-status {
+  font-size: 11px;
+  color: var(--t3);
+  padding: 8px 14px;
+  overflow-wrap: anywhere;
+}
+#agent-form {
+  padding: 12px;
+  border-top: 1px solid var(--border);
+}
+#agent-form label {
+  display: block;
+  font-size: 11px;
+  margin-bottom: 5px;
+  color: var(--t3);
+}
+#agent-input {
+  width: 100%;
+  resize: none;
+  font: inherit;
+  color: var(--t1);
+  background: var(--c5);
+  border: 1px solid var(--borderB);
+  border-radius: 8px;
+  padding: 10px;
+}
+#agent-form > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.agent-security-note {
+  margin: 8px 14px;
+  color: var(--t3);
+  font-size: 11px;
+}
+
+#agent-messages .agent-facts {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--c3);
+}
+#agent-messages p {
+  line-height: 1.55;
+}
+#agent-messages details {
+  margin: 0 0 16px;
+  color: var(--t3);
+}
+#agent-messages summary {
+  cursor: pointer;
+}
+#agent-messages pre {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+#agent-off {
+  margin-right: auto;
+}

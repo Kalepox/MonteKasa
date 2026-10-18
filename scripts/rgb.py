@@ -29,9 +29,9 @@ def raw(usdt):
 
 def status(a):
     try:
+        post(a.node, "/refreshtransfers", {"filter": [], "skip_sync": False})
         bal = post(a.node, "/assetbalance", {"asset_id": USDT})
         print(f"USDT settled {bal['settled'] / 10**PRECISION}  spendable {bal['spendable'] / 10**PRECISION}")
-        post(a.node, "/refreshtransfers", {"filter": [], "skip_sync": False})
         ts = post(a.node, "/listtransfers", {"asset_filter": {"type": "Id", "value": USDT}})["transfers"]
         for t in ts[-5:]:
             amt = sum(x.get("value", 0) for x in t["assignments"]) / 10**PRECISION
