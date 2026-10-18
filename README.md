@@ -107,18 +107,30 @@ The status pill says **"Mock node"**. To try the whole flow:
    ```
 3. The invoice turns **Overpaid** → click it → paste any `rgb:` text → **Approve refund**.
 
-### 4. Start with the WDK wallet (what we use right now)
-One-time setup first: [WDK Tether wallet setup](#wdk-tether-wallet-setup-mutinynet). Then:
+### 4. Start with the in-app wallet (WDK) – main way to run
+The wallet runs inside the app (Tether WDK, `@utexo/wdk-wallet-rgb`) – no Docker, no Kaleido node.
+It needs **Node 22** for the wallet service (install with [nvm](https://github.com/nvm-sh/nvm): `nvm install 22`).
 
-| macOS / Linux | Windows (PowerShell) |
-|---|---|
-| `RGB_BACKEND=wdk WALLET_NODE=$(nvm which 22) npm run dev` | `$env:RGB_BACKEND="wdk"; $env:WALLET_NODE="<path to Node 22 node.exe>"; npm run dev` |
+One time, install the wallet service:
+```bash
+cd wallet-service && npm install && cd ..
+```
 
-`WALLET_NODE` must point to a **Node 22** binary: the app runs on Electron's Node, but the wallet service is
-started as a separate Node 22 process. `$(nvm which 22)` prints that path.
+Start:
+```bash
+RGB_BACKEND=wdk WALLET_NODE=$(nvm which 22) npm run dev
+```
 
-### 5. Start with the KaleidoSwap node (fallback)
-With your node running and unlocked (see [below](#your-own-test-wallet-mutinynet-kaleidoswap-node-fallback)): `npm run dev`
+Create the wallet on the **Wallet** page (password 8+ characters, write down the 12 words), or from
+**F12 → Console**:
+```js
+await kasa.wallet('unlock', { password: '<your password>' })     // after every app start
+await kasa.wallet('address')                                       // fund it at https://faucet.mutinynet.com
+await kasa.wallet('createUtxos', { num: 10, size: 3000 })          // once the BTC has arrived
+```
+
+### 5. Start with the KaleidoSwap node (alternative)
+With your node running and unlocked (see below): `npm run dev`
 (PowerShell: `Remove-Item Env:RGB_MOCK -ErrorAction SilentlyContinue; npm run dev`).
 The pill should say **"Mutinynet connected"**.
 

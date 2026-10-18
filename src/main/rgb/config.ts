@@ -13,8 +13,11 @@ export const rgbConfig = {
   backend,
   mock: backend === 'mock',
   nodeUrl: process.env.RLN_NODE_URL ?? 'http://localhost:3001',
-  assetId: process.env.RGB_ASSET_ID ??
-    (WDK ? 'rgb:PZYLqe~F-l1W~luC-1zH3CCI-TChEioP-jbNuXjJ-zVo6J7k' : 'rgb:lX~ToKsO-Iup7dJ5-UM794sA-9WD21ge-VHYzBGb-E9PA_h0'),
+  assetId:
+    process.env.RGB_ASSET_ID ??
+    (WDK
+      ? 'rgb:PZYLqe~F-l1W~luC-1zH3CCI-TChEioP-jbNuXjJ-zVo6J7k'
+      : 'rgb:lX~ToKsO-Iup7dJ5-UM794sA-9WD21ge-VHYzBGb-E9PA_h0'),
   proxy: process.env.RGB_PROXY ?? 'rpcs://proxy.kaleidoswap.com/json-rpc',
   precision: 6,
   invoiceTtlSec: 3600,
@@ -31,8 +34,9 @@ export const rgbConfig = {
   // blocks before a payment counts as final; 1 suits Mutinynet test funds (raise for real money)
   confirmations: Number(process.env.RGB_CONFIRMATIONS ?? 1),
   explorerApi: process.env.RGB_EXPLORER_API ?? 'https://mutinynet.com/api',
-  walletNode: process.env.WALLET_NODE ?? 'node',              // must be a Node 22 binary
+  walletNode: process.env.WALLET_NODE ?? 'node', // must be a Node 22 binary
   walletMaxSendRaw: Number(process.env.WALLET_MAX_SEND_RAW ?? 500_000_000),
+  payPage: process.env.PAY_PAGE ?? 'https://kalepox.github.io/MonteKasa/pay.html'
 }
 
 export function paymentConfigurationError(): string | undefined {
