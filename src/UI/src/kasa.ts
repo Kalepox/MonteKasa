@@ -20,6 +20,13 @@ const fmt = (n: number): string =>
   n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const day = (t: number): string =>
   new Date(t * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+// Bitcoin txid as a link to the Mutinynet explorer (opens in the system browser); stopPropagation
+// keeps the wallet row's own click (PDF download) from firing
+const TX_EXPLORER = 'https://mutinynet.com/tx/'
+const txLink = (txid: string, label: string): string =>
+  /^[0-9a-f]{64}$/.test(txid)
+    ? `<a href="${TX_EXPLORER}${txid}" target="_blank" rel="noreferrer" onclick="event.stopPropagation()" title="Open on Mutinynet explorer" style="color:inherit;text-decoration:underline;">${label}</a>`
+    : '—'
 const esc = (s: string): string =>
   s.replace(
     /[&<>"']/g,
@@ -151,16 +158,25 @@ function renderInvoices(): void {
   const activeFilter = document.querySelector('#view-invoices .ft.on')
   if (activeFilter) w.ft(activeFilter)
 
-  const settled = snap.invoices.filter((i) => ['Paid', 'Overpaid', 'Underpaid'].includes(i.state))
-  const awaiting = snap.invoices.filter((i) => ['Issued', 'Pending'].includes(i.state))
-  setText('stat-received', `${fmt(settled.reduce((s, i) => s + i.received, 0))} USDT`)
-  setText('stat-paid', String(snap.invoices.filter((i) => i.state === 'Paid').length))
-  setText('stat-awaiting', String(awaiting.length))
-  setText('stat-review', String(snap.proposals.filter((p) => p.status === 'open').length))
-
+  // Money arrives two ways: New Invoice (an invoice row) and Receive requests (only a payment row),
+  // so the cards count incoming payments, not just invoices.
+  const incoming = snap.payments.filter((p) => p.direction === 'in')
+  const arrived = incoming.filter((p) => p.received > 0 && p.status !== 'failed')
   const needsAttention = snap.invoices.filter((i) =>
     ['Underpaid', 'Overpaid', 'Flagged'].includes(i.state)
   ).length
+  setText('stat-received', `${fmt(arrived.reduce((s, p) => s + p.received, 0))} USDT`)
+  setText(
+    'stat-paid',
+    String(
+      snap.invoices.filter((i) => i.state === 'Paid').length +
+        arrived.filter((p) => !p.invoiceId).length
+    )
+  )
+  const sent = snap.payments.filter(
+    (p) => p.direction === 'out' && p.received > 0 && p.status !== 'failed'
+  )
+  setText('stat-sent', `${fmt(sent.reduce((s, p) => s + p.received, 0))} USDT`)
   const navBadge = $('nav-inv-badge')
   if (navBadge) {
     navBadge.textContent = String(needsAttention)
@@ -172,8 +188,8 @@ function renderInvoices(): void {
 
   const upcoming = $('upcoming-due')
   if (upcoming) {
-    const dueSoon = awaiting
-      .slice()
+    const dueSoon = snap.invoices
+      .filter((i) => ['Issued', 'Pending'].includes(i.state))
       .sort((a, b) => a.expiresAt - b.expiresAt)
       .slice(0, 5)
     upcoming.innerHTML = dueSoon.length
@@ -227,7 +243,7 @@ function renderWallet(st: KasaStatus): void {
     list
       .map((p) => {
         const inv = snap.invoices.find((i) => i.id === p.invoiceId)
-        const txid = p.txid ? `${p.txid.slice(0, 4)}…${p.txid.slice(-4)}` : '—'
+        const txid = p.txid ? txLink(p.txid, `${p.txid.slice(0, 8)}…${p.txid.slice(-8)}`) : '—'
         const out = p.direction === 'out'
         const refund = out && snap.proposals.some((x) => x.txid && x.txid === p.txid)
         return `<tr data-tx="${moves.indexOf(p)}" style="cursor:pointer;" title="Click to download this transaction as PDF"><td class="mono" style="color:var(--t3);">${txid}</td>
@@ -419,8 +435,8 @@ w.executeSend = async (): Promise<void> => {
     // Switch the Send modal over to the success confirmation view
     setText('send-success-amt', `${fmt(parseFloat(amount))} USDT`)
     setText('send-success-to', invoice.length > 26 ? `${invoice.slice(0, 14)}…${invoice.slice(-9)}` : invoice)
-    setText('send-success-fee', $('send-fee-summary')?.textContent ?? '—')
-    setText('send-success-txid', r.txid ? `${r.txid.slice(0, 10)}…${r.txid.slice(-6)}` : '—')
+    const txidEl = $('send-success-txid')
+    if (txidEl) txidEl.innerHTML = r.txid ? txLink(r.txid, r.txid) : '—'
     const mhdr = $('send-mhdr')
     if (mhdr) mhdr.style.display = 'none'
     const formView = $('send-form-view')
@@ -740,3 +756,17 @@ window.kasa.onPayment((p) => {
 })
 setInterval(() => void refresh(), 10_000) // balances can change without an invoice event
 void refresh()
+
+// Total Tax card (Wallet page). Empty until the tax side calculates a figure: call
+// window.setTaxTotal(1234.5) or window.setTaxTotal(1234.5, 'EUR'), or dispatch
+// new CustomEvent('kasa:tax-total', { detail: { amount, currency } }). null clears it back to "—".
+w.setTaxTotal = (amount: number | null, currency = 'EUR'): void => {
+  const el = $('stat-tax')
+  if (!el) return
+  el.textContent =
+    typeof amount === 'number' && Number.isFinite(amount) ? `${fmt(amount)} ${currency}` : '—'
+}
+window.addEventListener('kasa:tax-total', (e) => {
+  const d = (e as CustomEvent<{ amount: number | null; currency?: string }>).detail
+  w.setTaxTotal(d?.amount ?? null, d?.currency)
+})

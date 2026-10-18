@@ -142,7 +142,18 @@ app.whenReady().then(() => {
   if (wallet) {
     app.on('will-quit', () => wallet.stop())
     handle('wallet:call', (_e, method: unknown, params: unknown) => {
-      const allowed = ['state', 'create', 'restore', 'unlock', 'lock', 'address', 'createUtxos']
+      const allowed = [
+        'state',
+        'create',
+        'restore',
+        'unlock',
+        'lock',
+        'address',
+        'createUtxos',
+        'revealMnemonic',
+        'changePassword',
+        'securityLog' // Security page
+      ]
       if (typeof method !== 'string' || !allowed.includes(method)) throw new Error('Not allowed')
       return wallet.call(method, (params ?? {}) as Record<string, unknown>)
     })
