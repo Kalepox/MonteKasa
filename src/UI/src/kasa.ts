@@ -2,11 +2,11 @@
 // It fills the screen with real data and replaces the UI's simulated actions with real ones.
 // Everything else in the UI (views, animations, demo sections) stays as it is.
 import QRCode from 'qrcode'
-import { invoicesCsv } from './invoice-csv'
+import { invoiceDetailsCsv, invoicesCsv, transactionsCsv } from './invoice-csv'
 import { invoiceDocumentBody } from '../../shared/invoice-document'
 import { searchLedger, taxRecordsCsv, taxLedgerSummary } from './ledger'
 import { reviewPayment } from './security'
-import type { KasaInvoice, KasaSnapshot, KasaStatus } from '../../preload/index.d'
+import type { KasaInvoice, KasaPayment, KasaSnapshot, KasaStatus } from '../../preload/index.d'
 
 // the UI's own functions (go, toast, openM, closeM, …) are globals defined in index.html
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -20,6 +20,13 @@ const fmt = (n: number): string =>
   n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const day = (t: number): string =>
   new Date(t * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+// Bitcoin txid as a link to the Mutinynet explorer (opens in the system browser); stopPropagation
+// keeps the wallet row's own click (PDF download) from firing
+const TX_EXPLORER = 'https://mutinynet.com/tx/'
+const txLink = (txid: string, label: string): string =>
+  /^[0-9a-f]{64}$/.test(txid)
+    ? `<a href="${TX_EXPLORER}${txid}" target="_blank" rel="noreferrer" onclick="event.stopPropagation()" title="Open on Mutinynet explorer" style="color:inherit;text-decoration:underline;">${label}</a>`
+    : '—'
 const esc = (s: string): string =>
   s.replace(
     /[&<>"']/g,
@@ -117,6 +124,14 @@ function amountCell(i: KasaInvoice): string {
   return `${fmt(i.received)} USDT${sub}`
 }
 
+// money received through Receive (no New Invoice behind it), newest first
+const paidRequests = (): KasaPayment[] =>
+  snap.payments.filter(
+    (p) => p.direction === 'in' && p.received > 0 && p.status !== 'failed' && !p.invoiceId
+  )
+const requestId = (p: KasaPayment): string =>
+  'REQ-' + (p.txid ? p.txid.slice(0, 6).toUpperCase() : String(p.nodeIdx))
+
 function renderInvoices(): void {
   const empty = (cols: number): string =>
     `<tr><td colspan="${cols}" style="color:var(--t3);text-align:center;padding:18px;">No invoices yet</td></tr>`
@@ -136,6 +151,18 @@ function renderInvoices(): void {
         )
         .join('') || empty(6)
 
+  // paid Receive requests have no invoice row of their own: list them as paid invoices too
+  const requestRows = paidRequests()
+    .map(
+      (
+        p
+      ) => `<tr onclick="exportTransactionPdfByNode(${p.nodeIdx})" style="cursor:pointer;" title="Click to download this invoice as PDF"><td class="mono">${requestId(p)}</td><td style="color:var(--t3);">Payment request</td>
+       <td class="mono" style="color:var(--t1);font-weight:600;">${fmt(p.received)} USDT</td>
+       <td class="mono" style="color:var(--t3);">${p.blockTime ? day(p.blockTime) : '—'}</td>
+       <td class="mono" style="color:var(--t3);">—</td><td><span class="badge ${BADGE.Paid ?? 'b-paid'}">Paid</span></td>
+       <td class="mono" style="font-size:9.5px;color:var(--t3);">${esc((p.txid ?? '').slice(-8))}</td></tr>`
+    )
+    .join('')
   const all = $('inv-table')
   if (all)
     all.innerHTML =
@@ -143,27 +170,36 @@ function renderInvoices(): void {
         .map(
           (
             i
-          ) => `<tr onclick="openInvoice('${i.id}')"><td class="mono">${shortId(i)}</td><td>${clientCell(i)}</td>
+          ) => `<tr onclick="downloadInvoicePdfById('${i.id}')" style="cursor:pointer;" title="Click to download this invoice as PDF"><td class="mono">${shortId(i)}</td><td>${clientCell(i)}</td>
        <td class="mono" style="color:var(--t1);font-weight:600;">${amountCell(i)}</td>
        <td class="mono" style="color:var(--t3);">${day(i.createdAt)}</td>
        <td class="mono" style="color:var(--t3);">${day(i.expiresAt)}</td><td>${badge(i)}</td>
        <td class="mono" style="font-size:9.5px;color:var(--t3);">${esc(i.recipientId.slice(-8))}</td></tr>`
         )
-        .join('') || empty(7)
+        .join('') + requestRows || empty(7)
 
   const activeFilter = document.querySelector('#view-invoices .ft.on')
   if (activeFilter) w.ft(activeFilter)
 
-  const settled = snap.invoices.filter((i) => ['Paid', 'Overpaid', 'Underpaid'].includes(i.state))
-  const awaiting = snap.invoices.filter((i) => ['Issued', 'Pending'].includes(i.state))
-  setText('stat-received', `${fmt(settled.reduce((s, i) => s + i.received, 0))} USDT`)
-  setText('stat-paid', String(snap.invoices.filter((i) => i.state === 'Paid').length))
-  setText('stat-awaiting', String(awaiting.length))
-  setText('stat-review', String(snap.proposals.filter((p) => p.status === 'open').length))
-
+  // Money arrives two ways: New Invoice (an invoice row) and Receive requests (only a payment row),
+  // so the cards count incoming payments, not just invoices.
+  const incoming = snap.payments.filter((p) => p.direction === 'in')
+  const arrived = incoming.filter((p) => p.received > 0 && p.status !== 'failed')
   const needsAttention = snap.invoices.filter((i) =>
     ['Underpaid', 'Overpaid', 'Flagged'].includes(i.state)
   ).length
+  setText('stat-received', `${fmt(arrived.reduce((s, p) => s + p.received, 0))} USDT`)
+  setText(
+    'stat-paid',
+    String(
+      snap.invoices.filter((i) => i.state === 'Paid').length +
+        arrived.filter((p) => !p.invoiceId).length
+    )
+  )
+  const sent = snap.payments.filter(
+    (p) => p.direction === 'out' && p.received > 0 && p.status !== 'failed'
+  )
+  setText('stat-sent', `${fmt(sent.reduce((s, p) => s + p.received, 0))} USDT`)
   const navBadge = $('nav-inv-badge')
   if (navBadge) {
     navBadge.textContent = String(needsAttention)
@@ -171,7 +207,10 @@ function renderInvoices(): void {
   }
 
   // Invoices page: summary cards, record count, and per-status filter tab counts
-  setText('inv-record-count', `${snap.invoices.length} Records`)
+  setText('inv-record-count', `${snap.invoices.length + paidRequests().length} Records`)
+  // Invoices page cards: New Invoice invoices only
+  const settled = snap.invoices.filter((i) => ['Paid', 'Overpaid', 'Underpaid'].includes(i.state))
+  const awaiting = snap.invoices.filter((i) => ['Issued', 'Pending'].includes(i.state))
   setText('inv-stat-total', `${fmt(snap.invoices.reduce((s, i) => s + i.amount, 0))} USDT`)
   setText('inv-stat-settled', `${fmt(settled.reduce((s, i) => s + i.received, 0))} USDT`)
   setText('inv-stat-awaiting', `${fmt(awaiting.reduce((s, i) => s + i.amount, 0))} USDT`)
@@ -193,8 +232,8 @@ function renderInvoices(): void {
 
   const upcoming = $('upcoming-due')
   if (upcoming) {
-    const dueSoon = awaiting
-      .slice()
+    const dueSoon = snap.invoices
+      .filter((i) => ['Issued', 'Pending'].includes(i.state))
       .sort((a, b) => a.expiresAt - b.expiresAt)
       .slice(0, 5)
     upcoming.innerHTML = dueSoon.length
@@ -216,10 +255,13 @@ function renderInvoices(): void {
       : '<div style="padding:14px;text-align:center;color:var(--t3);font-size:12px;">No invoices awaiting payment</div>'
   }
 
-  setText('ft-count-all', String(snap.invoices.length))
+  setText('ft-count-all', String(snap.invoices.length + paidRequests().length))
   setText('ft-count-issued', String(snap.invoices.filter((i) => i.state === 'Issued').length))
   setText('ft-count-pending', String(snap.invoices.filter((i) => i.state === 'Pending').length))
-  setText('ft-count-paid', String(snap.invoices.filter((i) => i.state === 'Paid').length))
+  setText(
+    'ft-count-paid',
+    String(snap.invoices.filter((i) => i.state === 'Paid').length + paidRequests().length)
+  )
   setText('ft-count-overpaid', String(snap.invoices.filter((i) => i.state === 'Overpaid').length))
   setText(
     'ft-count-flagged',
@@ -228,6 +270,9 @@ function renderInvoices(): void {
     )
   )
 }
+
+// the transfers currently listed in the wallet tables; a clicked row's data-tx indexes into this
+let shownMoves: KasaPayment[] = []
 
 function renderWallet(st: KasaStatus): void {
   walletBalance = st.state === 'online' ? st.balance : 0
@@ -251,10 +296,10 @@ function renderWallet(st: KasaStatus): void {
     list
       .map((p) => {
         const inv = snap.invoices.find((i) => i.id === p.invoiceId)
-        const txid = p.txid ? `${p.txid.slice(0, 4)}…${p.txid.slice(-4)}` : '—'
+        const txid = p.txid ? txLink(p.txid, `${p.txid.slice(0, 8)}…${p.txid.slice(-8)}`) : '—'
         const out = p.direction === 'out'
         const refund = out && snap.proposals.some((x) => x.txid && x.txid === p.txid)
-        return `<tr><td class="mono" style="color:var(--t3);">${txid}</td>
+        return `<tr data-tx="${moves.indexOf(p)}" style="cursor:pointer;" title="Click to download this transaction as PDF"><td class="mono" style="color:var(--t3);">${txid}</td>
         <td style="color:var(${out ? '--red' : '--green'});font-size:12px;font-weight:600;">${out ? '&#x2191; Sent' : '&#x2193; Received'}</td>
         <td class="mono" style="color:var(--t1);font-weight:600;">${out ? '−' : '+'}${fmt(p.received)} USDT</td>
         <td class="mono">${inv ? shortId(inv) : refund ? 'refund' : 'wallet'}</td>
@@ -262,6 +307,7 @@ function renderWallet(st: KasaStatus): void {
       })
       .join('') ||
     `<tr><td colspan="5" style="color:var(--t3);text-align:center;padding:18px;">No RGB transfers yet</td></tr>`
+  shownMoves = moves
   const tx = $('w-tx')
   if (tx) tx.innerHTML = txRows(moves.slice(0, 10))
   const latest = $('w-tx-latest')
@@ -477,8 +523,8 @@ w.executeSend = async (): Promise<void> => {
       'send-success-to',
       invoice.length > 26 ? `${invoice.slice(0, 14)}…${invoice.slice(-9)}` : invoice
     )
-    setText('send-success-fee', $('send-fee-summary')?.textContent ?? '—')
-    setText('send-success-txid', r.txid ? `${r.txid.slice(0, 10)}…${r.txid.slice(-6)}` : '—')
+    const txidEl = $('send-success-txid')
+    if (txidEl) txidEl.innerHTML = r.txid ? txLink(r.txid, r.txid) : '—'
     const mhdr = $('send-mhdr')
     if (mhdr) mhdr.style.display = 'none'
     const formView = $('send-form-view')
@@ -637,6 +683,39 @@ w.exportInvoicesCSV = async (): Promise<void> => {
   }
 }
 
+w.exportTransactionPdf = async (index: number): Promise<void> => {
+  try {
+    const payment = shownMoves[index]
+    if (!payment) throw new Error('Transaction not found. Refresh and try again.')
+    const bytes = await window.kasa.transactionPdf(payment.nodeIdx)
+    const name = payment.txid ? payment.txid.slice(0, 12) : `node-${payment.nodeIdx}`
+    w.downloadFile(`Transaction_${name}.pdf`, new Uint8Array(bytes), 'application/pdf')
+    w.toast('tx-pdf', '✓', 'PDF downloaded', `Transaction ${name} saved as PDF.`, 'green')
+  } catch (e) {
+    toastErr('PDF export failed', e)
+  }
+}
+w.exportTransactionPdfByNode = async (nodeIdx: number): Promise<void> => {
+  const index = shownMoves.findIndex((p) => p.nodeIdx === nodeIdx)
+  if (index >= 0) return w.exportTransactionPdf(index)
+  toastErr('PDF export failed', new Error('Transaction not found. Refresh and try again.'))
+}
+w.exportAllTransactionsCSV = (): void => {
+  try {
+    if (!shownMoves.length) throw new Error('There are no transactions to export yet.')
+    // newest first, as listed; the whole recorded history, not just the 10 rows shown
+    w.downloadFile('transactions.csv', transactionsCsv(shownMoves, snap), 'text/csv;charset=utf-8;')
+    w.toast('tx-csv', '✓', 'CSV exported', `${shownMoves.length} transactions exported.`, 'green')
+  } catch (e) {
+    toastErr('Export failed', e)
+  }
+}
+for (const id of ['w-tx', 'w-tx-latest'])
+  $(id)?.addEventListener('click', (e) => {
+    const row = (e.target as HTMLElement).closest<HTMLElement>('tr[data-tx]')
+    if (row) void w.exportTransactionPdf(Number(row.dataset.tx))
+  })
+
 // Invoice modal: real data + refund approval
 let selectedInvoiceId: string | undefined
 w.openM = (id: string): void => {
@@ -670,6 +749,33 @@ w.downloadInvoicePdf = async (): Promise<void> => {
     w.downloadFile(`Invoice_${id}.pdf`, new Uint8Array(bytes), 'application/pdf')
   } catch (e) {
     toastErr('PDF export failed', e)
+  }
+}
+w.downloadInvoicePdfById = async (id: string): Promise<void> => {
+  try {
+    const invoice = snap.invoices.find((i) => i.id === id)
+    if (!invoice) throw new Error('Invoice not found. Refresh and try again.')
+    const bytes = await window.kasa.invoicePdf(id)
+    w.downloadFile(`Invoice_${shortId(invoice)}.pdf`, new Uint8Array(bytes), 'application/pdf')
+    w.toast('inv-pdf', '✓', 'PDF downloaded', `${shortId(invoice)} saved as PDF.`, 'green')
+  } catch (e) {
+    toastErr('PDF export failed', e)
+  }
+}
+w.exportInvoiceDetailsCSV = async (): Promise<void> => {
+  try {
+    const current = await window.kasa.snapshot()
+    if (!current.invoices.length) throw new Error('There are no invoices to export yet.')
+    w.downloadFile('invoice-details.csv', invoiceDetailsCsv(current), 'text/csv;charset=utf-8;')
+    w.toast(
+      'inv-csv',
+      '✓',
+      'CSV exported',
+      `${current.invoices.length} invoices exported.`,
+      'green'
+    )
+  } catch (e) {
+    toastErr('Export failed', e)
   }
 }
 w.printInvoiceDoc = w.downloadInvoicePdf
@@ -773,3 +879,17 @@ window.kasa.onPayment((p) => {
 })
 setInterval(() => void refresh(), 10_000) // balances can change without an invoice event
 void refresh()
+
+// Total Tax card (Wallet page). Empty until the tax side calculates a figure: call
+// window.setTaxTotal(1234.5) or window.setTaxTotal(1234.5, 'EUR'), or dispatch
+// new CustomEvent('kasa:tax-total', { detail: { amount, currency } }). null clears it back to "—".
+w.setTaxTotal = (amount: number | null, currency = 'EUR'): void => {
+  const el = $('stat-tax')
+  if (!el) return
+  el.textContent =
+    typeof amount === 'number' && Number.isFinite(amount) ? `${fmt(amount)} ${currency}` : '—'
+}
+window.addEventListener('kasa:tax-total', (e) => {
+  const d = (e as CustomEvent<{ amount: number | null; currency?: string }>).detail
+  w.setTaxTotal(d?.amount ?? null, d?.currency)
+})
