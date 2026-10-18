@@ -4,6 +4,7 @@ import type { LedgerTotal } from './ledger'
 import { calculationQuestions } from '../../shared/tax-questions'
 
 const element = (id: string): HTMLElement => document.getElementById(id)!
+let chartModel: TaxDashboard | null = null
 
 function node<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -22,12 +23,20 @@ export function setTaxDashboardStatus(message: string, busy: boolean): void {
 }
 
 export function clearTaxDashboard(): void {
+  chartModel = null
+  element('tax-dashboard-title').textContent = 'A clearer view of your taxes'
+  element('tax-dashboard-subtitle').textContent =
+    'Your saved payments, useful estimates and the details still needed.'
+  ;(element('tax-dashboard-chart-mode') as HTMLSelectElement).disabled = true
+  element('tax-dashboard-chart-empty').hidden = true
+  for (const id of ['chart-summary', 'months-help', 'source'])
+    element(`tax-dashboard-${id}`).textContent = ''
   element('tax-dashboard-content').hidden = true
   element('tax-dashboard-freshness').hidden = true
   element('tax-profile-missing').hidden = false
   for (const id of ['context', 'coverage', 'exclusions', 'ownership'])
     element(`tax-dashboard-${id}`).textContent = ''
-  for (const id of ['cards', 'assets', 'months', 'estimates', 'next'])
+  for (const id of ['cards', 'assets', 'months', 'chart', 'estimates', 'next'])
     element(`tax-dashboard-${id}`).replaceChildren()
 }
 
@@ -47,6 +56,10 @@ function navigationBlocked(): boolean {
   }
   if (
     root.dataset.enrichmentDirty === 'true' ||
+    root.dataset.appProfileBusy === 'true' ||
+    root.dataset.appProfileDirty === 'true' ||
+    root.dataset.taxSetupDirty === 'true' ||
+    root.dataset.taxHistoryDirty === 'true' ||
     root.dataset.activityEditing === 'true' ||
     root.dataset.taxQuestionsDirty === 'true' ||
     root.dataset.taxBasisDirty === 'true'
@@ -76,21 +89,190 @@ function navigate(step: TaxDashboard['nextSteps'][number], taxpayerId: string): 
   destination.focus({ preventScroll: true })
 }
 
-export function renderTaxDashboard(model: TaxDashboard, report: TaxReport, readAt: Date): void {
-  const { counts, coverage } = model
-  const cards = [
-    ['Settled incoming', counts.settledIncoming, 'Saved payment records received'],
-    ['Settled outgoing', counts.settledOutgoing, 'Saved payment records sent'],
-    ['Not settled', counts.notSettled, 'Pending, failed or other saved statuses']
-  ].map(([label, count, hint]) => {
+// Values are formatted from decimal strings; chart geometry never feeds tax arithmetic.
+function euro(value: string | null): string {
+  if (value === null) return '—'
+  const [whole, fraction = ''] = value.split('.')
+  return `€${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${fraction.replace(/0+$/, '').padEnd(2, '0')}`
+}
+
+function summaryCards(model: TaxDashboard, report: TaxReport): HTMLElement[] {
+  const business = report.taxpayer.profile.userType === 'business'
+  const supported = report.taxpayer.profile.country === 'IT'
+  const disposal = model.personalDisposal
+  const hasDisposal =
+    !business && disposal?.status === 'estimate' && disposal.scopeKey === model.scopeKey
+  const unsupportedDisposal =
+    !business && disposal?.status === 'unsupported' && disposal.scopeKey === model.scopeKey
+  const definitions = [
+    {
+      label: business ? 'VAT estimate' : 'Bitcoin disposal estimate',
+      value: hasDisposal ? euro(disposal.taxEur) : '€—',
+      status: !supported
+        ? 'Country not supported'
+        : hasDisposal
+          ? 'Provisional subtotal'
+          : unsupportedDisposal
+            ? 'Outside supported calculation'
+            : 'Not yet estimable',
+      hint: !supported
+        ? 'Saved activity is available. Tax estimates for this country are not supported.'
+        : business
+          ? 'Invoice tax treatment is still needed. VAT is not calculated from payment amounts.'
+          : hasDisposal
+            ? 'Included BTC disposals only, before earlier losses and other adjustments. This is not your whole tax bill.'
+            : unsupportedDisposal
+              ? (disposal.reasons[0] ??
+                'This profile or tax year is outside the supported Bitcoin disposal calculation.')
+              : 'Review disposal values, acquisition costs and supporting history.',
+      ready: hasDisposal
+    },
+    {
+      label: business ? 'Income tax estimate' : 'Annual holding tax',
+      value: '€—',
+      status: supported ? 'Not yet estimable' : 'Country not supported',
+      hint: business
+        ? 'Needs whole-business records and tax treatment, including activity outside this app.'
+        : 'Needs historical holdings, EUR values and amounts already paid.',
+      ready: false
+    }
+  ]
+  const cards = definitions.map((definition) => {
     const card = node('article', '', 'tax-dashboard-card')
     card.append(
-      node('h4', String(label)),
-      node('strong', String(count), 'tax-dashboard-value'),
-      node('p', String(hint))
+      node('h4', definition.label),
+      node('strong', definition.value, 'tax-dashboard-value'),
+      node(
+        'span',
+        definition.status,
+        `tax-estimate-badge${definition.ready ? ' tax-estimate-partial' : ''}`
+      ),
+      node('p', definition.hint)
     )
     return card
   })
+  const { documented, total, needsDetails } = model.visuals.reviewed
+  const progress = node('article', '', 'tax-dashboard-card')
+  const track = node('div', '', 'tax-documentation-track')
+  track.setAttribute('role', 'progressbar')
+  track.setAttribute('aria-label', 'Payment details documented; not independently verified')
+  track.setAttribute('aria-valuemin', '0')
+  track.setAttribute('aria-valuemax', String(Math.max(1, total)))
+  track.setAttribute('aria-valuenow', String(documented))
+  track.setAttribute(
+    'aria-valuetext',
+    total ? `${documented} of ${total} settled payments` : 'No settled payments to review'
+  )
+  const fill = node('span')
+  fill.style.width = `${total ? Math.min(100, (documented / total) * 100) : 0}%`
+  track.append(fill)
+  progress.append(
+    node('h4', 'Payment details documented'),
+    node('strong', total ? `${documented} of ${total}` : '—', 'tax-dashboard-value'),
+    track,
+    node(
+      'p',
+      total
+        ? `${needsDetails} need supporting details. Saved fields are not independent verification or tax approval.`
+        : 'No settled, dated payments in this year. An empty ledger does not establish zero tax.'
+    )
+  )
+  cards.push(progress)
+  return cards
+}
+
+function chartTick(value: number, mode: 'eur' | 'count'): string {
+  const prefix = mode === 'eur' ? '€' : ''
+  // Tiny saved values must not look like zero; exact amounts remain in the table.
+  if (value > 0 && value < 0.0001) return `${prefix}${value.toExponential(1)}`
+  const precision =
+    value > 0 && value < 1 ? Math.min(8, Math.max(2, Math.ceil(-Math.log10(value)) + 1)) : 1
+  return `${prefix}${value.toLocaleString('en-GB', {
+    notation: value >= 1000 ? 'compact' : 'standard',
+    maximumFractionDigits: precision
+  })}`
+}
+
+function renderPaymentChart(model: TaxDashboard, requested: 'eur' | 'count'): void {
+  const { activity, coverage } = model.visuals
+  const mode = requested === 'eur' && activity.eligiblePayments ? 'eur' : 'count'
+  const selector = element('tax-dashboard-chart-mode') as HTMLSelectElement
+  selector.replaceChildren()
+  for (const [value, label] of [
+    ['eur', 'EUR with evidence'],
+    ['count', 'Payment count']
+  ]) {
+    const option = node('option', label)
+    option.value = value
+    option.disabled = value === 'eur' && !activity.eligiblePayments
+    selector.append(option)
+  }
+  selector.value = mode
+  selector.disabled = false
+  element('tax-dashboard-months-title').textContent =
+    `Payment activity · ${mode === 'eur' ? 'EUR' : 'payments'}`
+  element('tax-dashboard-chart-summary').textContent =
+    mode === 'eur'
+      ? `Received ${euro(activity.incoming)} · Sent ${euro(activity.outgoing)} · ${activity.eligiblePayments} of ${activity.totalPayments} settled payments have eligible EUR evidence`
+      : `${model.counts.settledIncoming} received · ${model.counts.settledOutgoing} sent · saved settled payment observations`
+  element('tax-dashboard-months-help').textContent =
+    mode === 'eur'
+      ? `${activity.eligiblePayments < activity.totalPayments ? 'Partial evidence view' : 'Saved evidence view'}: ${activity.eligiblePayments} of ${activity.totalPayments} settled payments included. Uses saved EUR values, with no exchange-rate lookup. Test/demo, unknown or conflicting sources, duplicate observations and missing evidence are excluded. Values show full payments before ownership shares. Money received is not the same as taxable profit.`
+      : `Counts of saved settled payment observations, not money or tax amounts. Includes ${coverage.testOrDemo} test/demo and ${coverage.unknownSource} unidentified records where settled and dated; repeated observations may be counted separately. Unsettled and undated records are outside the bars. Money received is not the same as taxable profit.`
+  const countMaximum = Math.max(
+    1,
+    ...activity.months.flatMap((month) => [month.incomingCount, month.outgoingCount])
+  )
+  const maximum = mode === 'eur' ? Number(activity.scaleMaximum ?? 0) : countMaximum
+  const axis = node('div', '', 'tax-chart-axis')
+  for (const value of new Set([maximum, maximum / 2, 0])) {
+    if (mode === 'count' && !Number.isInteger(value)) continue
+    axis.append(node('span', chartTick(value, mode)))
+  }
+  const plot = node('div', '', 'tax-chart-plot')
+  const rows: HTMLElement[] = []
+  for (const month of activity.months) {
+    const group = node('div', '', 'tax-chart-month')
+    const pair = node('div', '', 'tax-chart-pair')
+    const values =
+      mode === 'eur'
+        ? [euro(month.incoming), euro(month.outgoing)]
+        : [String(month.incomingCount), String(month.outgoingCount)]
+    const ratios =
+      mode === 'eur'
+        ? [month.incomingRatio, month.outgoingRatio]
+        : [month.incomingCount / countMaximum, month.outgoingCount / countMaximum]
+    for (const [index, direction] of ['Received', 'Sent'].entries()) {
+      const bar = node('span', '', `tax-chart-bar ${index ? 'tax-chart-out' : 'tax-chart-in'}`)
+      bar.style.height = `${Math.max(0, Math.min(1, ratios[index])) * 100}%`
+      bar.title = `${month.label} · ${direction} · ${values[index]}${mode === 'count' ? ' payments' : ''}`
+      pair.append(bar)
+    }
+    group.append(pair, node('span', month.label, 'tax-chart-month-label'))
+    plot.append(group)
+    const row = node('tr')
+    const label = node('th', month.label)
+    label.scope = 'row'
+    row.append(label, ...values.map((value) => node('td', value)))
+    rows.push(row)
+  }
+  element('tax-dashboard-chart').replaceChildren(axis, plot)
+  element('tax-dashboard-months').replaceChildren(...rows)
+  const empty = element('tax-dashboard-chart-empty')
+  empty.hidden = activity.totalPayments > 0
+  empty.textContent =
+    'No settled, dated payments for this profile and year. Pending or undated activity can still be reviewed in Activity.'
+}
+
+;(element('tax-dashboard-chart-mode') as HTMLSelectElement).onchange = () => {
+  if (!chartModel) return
+  const mode = (element('tax-dashboard-chart-mode') as HTMLSelectElement).value
+  renderPaymentChart(chartModel, mode === 'eur' ? 'eur' : 'count')
+}
+
+export function renderTaxDashboard(model: TaxDashboard, report: TaxReport, readAt: Date): void {
+  const { counts, coverage } = model
+  const cards = summaryCards(model, report)
 
   const assets: HTMLElement[] = model.groups.map((group) => {
     const source = group.source
@@ -142,29 +324,6 @@ export function renderTaxDashboard(model: TaxDashboard, report: TaxReport, readA
   })
   if (!assets.length)
     assets.push(node('p', 'No dated payment records assigned to this profile in this year.'))
-
-  const largest = Math.max(
-    1,
-    ...model.months.flatMap((month) => [month.incoming, month.outgoing, month.notSettled])
-  )
-  const months = model.months.map((month) => {
-    const row = node('tr')
-    const label = node('th', month.label)
-    label.scope = 'row'
-    row.append(label)
-    for (const [index, count] of [month.incoming, month.outgoing, month.notSettled].entries()) {
-      const cell = node('td')
-      cell.append(node('span', String(count)))
-      const track = node('span', '', 'tax-month-track')
-      track.setAttribute('aria-hidden', 'true')
-      const bar = node('span', '', `tax-month-bar tax-month-bar-${index}`)
-      bar.style.width = `${(count / largest) * 100}%`
-      track.append(bar)
-      cell.append(track)
-      row.append(cell)
-    }
-    return row
-  })
 
   const estimates = model.estimates
     .filter((estimate) => estimate.status !== 'not-applicable')
@@ -239,6 +398,17 @@ export function renderTaxDashboard(model: TaxDashboard, report: TaxReport, readA
   })
 
   // Build nodes first. Untrusted saved labels and evidence are always plain text.
+  const business = report.taxpayer.profile.userType === 'business'
+  element('tax-dashboard-title').textContent = business
+    ? 'A clearer view of business taxes'
+    : 'A clearer view of your crypto taxes'
+  element('tax-dashboard-subtitle').textContent =
+    'Payments appear automatically. Review the missing details to understand what can be estimated.'
+  element('tax-dashboard-next-title').textContent =
+    `${next.length} ${next.length === 1 ? 'thing' : 'things'} to review`
+  const visualCoverage = model.visuals.coverage
+  element('tax-dashboard-source').textContent =
+    `Source: saved app ledger · ${counts.settledIncoming + counts.settledOutgoing} settled payment records · ${counts.notSettled} not settled · ${visualCoverage.undated} undated · ${visualCoverage.testOrDemo} test/demo · ${visualCoverage.unknownSource} unidentified. No live wallet or network lookup.`
   element('tax-dashboard-context').textContent =
     `${model.taxpayerLabel} · ${report.taxpayer.profile.userType === 'personal' ? 'Personal' : 'Business'} · ${model.year} · Europe/Rome calendar year`
   element('tax-dashboard-coverage').textContent =
@@ -249,7 +419,8 @@ export function renderTaxDashboard(model: TaxDashboard, report: TaxReport, readA
     `Full saved amounts are shown, not an ownership-adjusted or taxable share. ${coverage.partialOwnership} accounts have partial ownership; ${coverage.unknownOwnership} have unknown ownership. ${coverage.profileOnly ?? 0} records are linked to this profile without a reviewed account and asset assignment.`
   element('tax-dashboard-cards').replaceChildren(...cards)
   element('tax-dashboard-assets').replaceChildren(...assets)
-  element('tax-dashboard-months').replaceChildren(...months)
+  chartModel = model
+  renderPaymentChart(model, model.visuals.activity.mode)
   element('tax-dashboard-estimates').replaceChildren(...estimates)
   element('tax-dashboard-next').replaceChildren(...next)
   const updated = element('tax-dashboard-updated') as HTMLTimeElement

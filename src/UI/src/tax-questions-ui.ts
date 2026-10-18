@@ -1,5 +1,6 @@
 import type { KasaSnapshot } from '../../preload/index.d'
 import type { TaxScope } from '../../shared/tax-scope'
+import { taxScopeKey } from '../../shared/tax-selection'
 import {
   calculationQuestions,
   type TaxCalculationId,
@@ -29,9 +30,15 @@ let includeSaved = false
 const signature = (answer: TaxPreparationAnswer | undefined): string =>
   JSON.stringify(answer ?? null)
 const externalEdit = (): boolean =>
-  ['scopeBusy', 'enrichmentDirty', 'activityEditing', 'taxBasisDirty'].some(
-    (key) => root.dataset[key] === 'true'
-  )
+  [
+    'scopeBusy',
+    'enrichmentDirty',
+    'activityEditing',
+    'taxBasisDirty',
+    'appProfileBusy',
+    'appProfileDirty',
+    'taxSetupDirty'
+  ].some((key) => root.dataset[key] === 'true')
 function currentReview(): TaxQuestionReview | null {
   return context
     ? buildTaxQuestionReview(context.scope, context.snapshot, context.report, calculation)
@@ -41,11 +48,7 @@ function stale(): boolean {
   if (!context || !active || context.report.scopeKey !== draftKey) return true
   const { scope } = context
   const taxpayer = scope.taxpayers.find((item) => item.id === scope.activeTaxpayerId)
-  if (
-    !taxpayer ||
-    JSON.stringify([scope.databaseId, taxpayer.id, taxpayer.profile.taxYear]) !== draftKey
-  )
-    return true
+  if (!taxpayer || taxScopeKey(scope) !== draftKey) return true
   const applicable = calculationQuestions(taxpayer.profile).some(
     (group) =>
       group.id === calculation && group.questions.some((question) => question.id === active!.id)
@@ -295,7 +298,7 @@ for (const [id, direction] of [
     if (disposed) return
     if (
       !taxpayer ||
-      JSON.stringify([fresh.databaseId, taxpayer.id, taxpayer.profile.taxYear]) !== expectedKey ||
+      taxScopeKey(fresh) !== expectedKey ||
       signature(saved) !== expectedAnswer ||
       !context ||
       stale()
@@ -307,15 +310,22 @@ for (const [id, direction] of [
     if (disposed) return
     saving = false
     setDirty(false)
-    if (context?.report.scopeKey === expectedKey) {
+    const sameSelection =
+      context && taxScopeKey(context.scope) === expectedKey && taxScopeKey(next) === expectedKey
+    if (sameSelection && context) {
       const nextReport = buildTaxReport(next, context.snapshot)
       if (nextReport?.scopeKey === expectedKey)
         updateTaxQuestions(next, context.snapshot, nextReport)
       else clearTaxQuestions()
-    }
+    } else if (context && taxScopeKey(context.scope) !== expectedKey) render()
+    else clearTaxQuestions()
     status.textContent =
       'Preparation answer saved locally. The original ledger is unchanged; evidence and numerical tax inputs still need review.'
-    window.dispatchEvent(new CustomEvent('kasa:tax-scope-updated', { detail: { scope: next } }))
+    window.dispatchEvent(
+      new CustomEvent('kasa:tax-scope-updated', {
+        detail: sameSelection ? { scope: next } : {}
+      })
+    )
   } catch (error) {
     if (!disposed)
       status.textContent = `Could not save: ${error instanceof Error ? error.message : String(error)} Your edits are retained.`
@@ -339,6 +349,9 @@ window.addEventListener('kasa:tax-open-questions', (event) => {
   el('tax-questions-title').focus({ preventScroll: true })
 })
 for (const name of [
+  'kasa:app-profile-busy',
+  'kasa:app-profile-dirty',
+  'kasa:tax-setup-dirty',
   'kasa:tax-scope-busy',
   'kasa:tax-scope-idle',
   'kasa:tax-enrichment-dirty',

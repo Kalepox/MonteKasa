@@ -1,5 +1,6 @@
 import type { KasaSnapshot } from '../../preload/index.d'
 import type { TaxScope } from '../../shared/tax-scope'
+import { taxScopeKey } from '../../shared/tax-selection'
 import type { TaxDisposalBasis } from '../../shared/tax-disposal-basis'
 import { personalBtcRules } from '../../shared/personal-btc-rules'
 import { buildPersonalDisposalEstimate, createDisposalFacts } from './personal-disposal'
@@ -26,9 +27,15 @@ const money = (value: string): string => {
   return `${whole}.${fraction.replace(/0+$/, '').padEnd(2, '0')}`
 }
 const editingElsewhere = (): boolean =>
-  ['scopeBusy', 'enrichmentDirty', 'activityEditing', 'taxQuestionsDirty'].some(
-    (key) => root.dataset[key] === 'true'
-  )
+  [
+    'scopeBusy',
+    'enrichmentDirty',
+    'activityEditing',
+    'taxQuestionsDirty',
+    'appProfileBusy',
+    'appProfileDirty',
+    'taxSetupDirty'
+  ].some((key) => root.dataset[key] === 'true')
 function saved(c: Context): TaxDisposalBasis | undefined {
   return c.scope.disposalBases?.find(
     (basis) =>
@@ -41,6 +48,7 @@ function stale(): boolean {
   return (
     !context ||
     context.report.scopeKey !== draftKey ||
+    taxScopeKey(context.scope) !== draftKey ||
     currentSaved !== original ||
     currentFacts !== draftFacts
   )
@@ -276,6 +284,7 @@ field('details').onclick = () => {
     if (
       !report ||
       report.scopeKey !== expectedKey ||
+      taxScopeKey(scope) !== expectedKey ||
       signature(saved({ scope, snapshot, report })) !== expectedOriginal ||
       createDisposalFacts(scope, snapshot, selected) !== expectedFacts ||
       stale()
@@ -287,12 +296,19 @@ field('details').onclick = () => {
     if (disposed) return
     saving = false
     markDirty(false)
-    const nextReport = buildTaxReport(next, snapshot)
+    const sameSelection =
+      context && taxScopeKey(context.scope) === expectedKey && taxScopeKey(next) === expectedKey
+    const nextReport = sameSelection ? buildTaxReport(next, snapshot) : null
     if (nextReport?.scopeKey === expectedKey) updatePersonalDisposal(next, snapshot, nextReport)
+    else if (context && taxScopeKey(context.scope) !== expectedKey) render()
     else clearPersonalDisposal()
     el('tax-basis-status').textContent =
       'Cost review saved locally. Payment records are unchanged; the calculation remains provisional.'
-    window.dispatchEvent(new CustomEvent('kasa:tax-scope-updated', { detail: { scope: next } }))
+    window.dispatchEvent(
+      new CustomEvent('kasa:tax-scope-updated', {
+        detail: sameSelection ? { scope: next } : {}
+      })
+    )
   } catch (error) {
     if (!disposed)
       el('tax-basis-status').textContent =
@@ -303,6 +319,9 @@ field('details').onclick = () => {
   }
 }
 for (const event of [
+  'kasa:app-profile-busy',
+  'kasa:app-profile-dirty',
+  'kasa:tax-setup-dirty',
   'kasa:tax-scope-busy',
   'kasa:tax-scope-idle',
   'kasa:tax-enrichment-dirty',

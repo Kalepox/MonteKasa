@@ -167,4 +167,35 @@ describe('Commercialista unsaved changes navigation notice', () => {
     expect(f.root.dataset.taxPage).toBe('overview')
     expect(f.forbidden).not.toHaveBeenCalled()
   })
+
+  it('keeps app identity edits visible until both profile editing and loading finish', async () => {
+    const f = await setup({ appProfileDirty: 'true', appProfileBusy: 'true' })
+    expect(f.status.textContent).toContain('finish loading or saving')
+    f.update('appProfileBusy', false, 'kasa:app-profile-busy')
+    expect(f.status.textContent).toContain('identity edits in Profile')
+    f.update('taxQuestionsDirty', false, 'kasa:tax-questions-dirty')
+    expect(f.status.hidden).toBe(false)
+    f.update('appProfileDirty', false, 'kasa:app-profile-dirty')
+    expect(f.status.hidden).toBe(true)
+    expect(f.forbidden).not.toHaveBeenCalled()
+  })
+
+  it('does not independently change taxpayers through legacy profile selection events', async () => {
+    const f = await setup()
+    f.emit('kasa:tax-profile-select')
+    expect(f.status.textContent).toContain('Choose another person or business in Profile')
+    expect(f.status.hidden).toBe(false)
+    expect(f.forbidden).not.toHaveBeenCalled()
+  })
+
+  it('explains how to keep or discard a history draft before changing the tax year', async () => {
+    const f = await setup()
+    f.update('taxHistoryDirty', true, 'kasa:tax-history-dirty')
+    expect(f.status.hidden).toBe(false)
+    expect(f.status.textContent).toContain('history answer')
+    expect(f.status.textContent).toContain('tax years')
+    f.update('taxHistoryDirty', false, 'kasa:tax-history-dirty')
+    expect(f.status.hidden).toBe(true)
+    expect(f.forbidden).not.toHaveBeenCalled()
+  })
 })

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import type { KasaSnapshot } from '../../preload/index.d'
 import type { LedgerSource } from '../../shared/ledger-source'
 import type { TaxScope } from '../../shared/tax-scope'
+import { createDisposalFacts } from './personal-disposal'
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8')
 const pageElements = new Map(
@@ -44,7 +45,7 @@ class Element {
   set innerHTML(_value: string) {
     throw new Error('Saved record metadata must be rendered as text')
   }
-  style = { display: '', width: '' }
+  style = { display: '', width: '', height: '' }
   title = ''
   dateTime = ''
   href = ''
@@ -329,6 +330,113 @@ afterEach(() => {
 })
 
 describe('database-only Commercialista Reports', () => {
+  it('uses only the selected app’s saved year across summaries, questions and CSV', async () => {
+    const saved = records()
+    saved.payments.push(
+      {
+        ...saved.payments[0],
+        nodeIdx: 8,
+        invoiceId: null,
+        blockTime: Date.parse('2025-06-15T12:00:00Z') / 1000,
+        receivedRaw: 8000000
+      },
+      {
+        ...saved.payments[0],
+        nodeIdx: 9,
+        invoiceId: null,
+        receivedRaw: 9000000
+      }
+    )
+    const scope = scopeFor(saved)
+    scope.appProfileId = 'app-personal'
+    const taxpayer = scope.taxpayers[0]
+    taxpayer.yearProfiles = [
+      { ...taxpayer.profile, taxYear: 2025, recordsCoverage: 'incomplete' },
+      { ...taxpayer.profile }
+    ]
+    scope.taxpayers.push({ ...taxpayer, id: 'other', label: 'Other app profile' })
+    scope.accounts.push({ ...scope.accounts[0], id: 'other-account', taxpayerId: 'other' })
+    scope.assignments.find((assignment) => assignment.recordKey === 'payment:9')!.accountId =
+      'other-account'
+    const original = structuredClone({ scope, saved })
+    const f = await setup(Promise.resolve(saved), scope)
+    f.snapshot.mockResolvedValue(saved)
+    expect(f.metric(2)).toBe('2.000001 USDT1 record')
+    const next = structuredClone(scope)
+    next.taxpayers[0].profile = next.taxpayers[0].yearProfiles![0]
+    f.getScope.mockResolvedValue(next)
+    f.get('view-tax').dataset.appProfileBusy = 'true'
+    f.emit('kasa:app-profile-busy')
+    expect(f.get('tax-dashboard-content').hidden).toBe(true)
+    f.emit('kasa:app-profile-updated', { scope: next })
+    f.get('view-tax').dataset.appProfileBusy = 'false'
+    f.emit('kasa:app-profile-busy')
+    await flush()
+    expect(f.metric(2)).toBe('8.000000 USDT1 record')
+    expect(f.get('tax-dashboard-context').textContent).toContain('2025')
+    expect(f.get('tax-reports-context').textContent).toContain('2025')
+    expect(f.get('tax-questions-context').textContent).toContain('2025')
+    expect(f.get('tax-dashboard-cards').textContent).toContain('Payment details documented')
+    expect(f.get('tax-dashboard-months').children[5].children[1].textContent).toBe('1')
+    f.get('tax-reports-export').click()
+    await flush()
+    const csv = await f.blobs[0].text()
+    expect(csv).toContain('8.000000')
+    expect(csv).not.toContain('9.000000')
+    expect(csv).not.toContain('2.000001')
+    expect(f.anchors[0].download).toContain('2025')
+    expect({ scope, saved }).toEqual(original)
+    expect(f.forbiddenAccess).not.toHaveBeenCalled()
+  })
+
+  it.each(['app', 'year', 'assignments'])(
+    'withholds a summary when saved %s changes during the database read without a UI event',
+    async (changed) => {
+      const scope = scopeFor()
+      scope.appProfileId = 'app-original'
+      const f = await setup(Promise.resolve(records()), scope)
+      const pending = deferred<KasaSnapshot>()
+      f.snapshot.mockReturnValueOnce(pending.promise)
+      f.changed()
+      await flush()
+      const next = structuredClone(scope)
+      if (changed === 'app') next.appProfileId = 'app-other'
+      if (changed === 'year') next.taxpayers[0].profile.taxYear = 2025
+      if (changed === 'assignments') next.assignments = []
+      f.getScope.mockResolvedValue(next)
+      pending.resolve(records(99))
+      await flush()
+      expect(f.get('tax-dashboard-content').hidden).toBe(true)
+      expect(f.get('tax-reports-summary').hidden).toBe(true)
+      expect(f.get('tax-reports-export').disabled).toBe(true)
+      expect(f.get('commercialista-status').textContent).toContain('changed')
+      expect(f.get('tax-year-rows').children).toHaveLength(0)
+      expect(f.forbiddenAccess).not.toHaveBeenCalled()
+    }
+  )
+
+  it('rejects a missing app selection even if an older taxpayer selection remains', async () => {
+    const scope = scopeFor()
+    scope.appProfileId = null
+    const f = await setup(Promise.resolve(records()), scope)
+    expect(f.snapshot).not.toHaveBeenCalled()
+    expect(f.get('tax-dashboard-content').hidden).toBe(true)
+    expect(f.get('tax-reports-export').disabled).toBe(true)
+    expect(f.get('commercialista-status').textContent).toContain('complete or link its tax setup')
+  })
+
+  it('does not export an old app profile report even when the taxpayer and year match', async () => {
+    const scope = scopeFor()
+    scope.appProfileId = 'app-original'
+    const f = await setup(Promise.resolve(records()), scope)
+    f.getScope.mockResolvedValue({ ...scope, appProfileId: 'app-different' })
+    f.get('tax-reports-export').click()
+    await flush()
+    expect(f.createObjectURL).not.toHaveBeenCalled()
+    expect(f.get('tax-reports-export-status').textContent).toContain('changed')
+    expect(f.snapshot).toHaveBeenCalledOnce()
+  })
+
   it('loads its independent renderer module from the app page', () => {
     expect(html).toContain('<script type="module" src="/src/commercialista-reports.ts"></script>')
     expect(html).not.toContain('onclick="exportTaxCSV()"')
@@ -548,6 +656,10 @@ describe('database-only Commercialista Reports', () => {
     expect(f.rows()).toHaveLength(1)
     expect(f.rows()[0].textContent).toContain('No assigned, dated records in this year')
     expect(f.get('tax-reports-freshness').hidden).toBe(false)
+    expect(f.get('tax-dashboard-cards').textContent).not.toMatch(/€\s*0|0[,.]00\s*EUR/)
+    expect(f.get('tax-dashboard-chart-empty').hidden).toBe(false)
+    expect(f.get('tax-dashboard-chart-empty').textContent).toMatch(/no.*payment|no.*record/i)
+    expect(f.get('commercialista-status').textContent).toContain('do not mean zero tax is due')
   })
 
   it('keeps initial errors distinct from an empty ledger and allows a manual retry', async () => {
@@ -831,7 +943,9 @@ describe('database-only Commercialista Reports', () => {
       expect(f.get('tax-dashboard-content').hidden).toBe(true)
       expect(f.get('tax-dashboard-freshness').hidden).toBe(true)
       expect(f.get('tax-dashboard-months').children).toHaveLength(0)
+      expect(f.get('tax-dashboard-chart').children).toHaveLength(0)
       expect(f.get('tax-dashboard-estimates').children).toHaveLength(0)
+      f.getScope.mockResolvedValue(scope)
       pending.resolve(scope)
       await flush()
       expect(f.get('tax-reports-context').textContent).toContain('New selected profile')
@@ -869,6 +983,35 @@ describe('database-only Commercialista Reports', () => {
     expect(f.get('tax-reports-context').textContent).toContain('2025')
     expect(f.get('tax-invoice-count').textContent).toBe('0')
     expect(f.get('tax-reports-export').disabled).toBe(false)
+  })
+
+  it('clears stale reports while the app profile changes and loads only its linked taxpayer', async () => {
+    const f = await setup()
+    const old = deferred<KasaSnapshot>()
+    f.snapshot.mockReturnValueOnce(old.promise)
+    f.changed()
+    await flush()
+    f.get('view-tax').dataset.appProfileBusy = 'true'
+    f.emit('kasa:app-profile-busy')
+    expect(f.get('tax-dashboard-content').hidden).toBe(true)
+    expect(f.get('tax-reports-export').disabled).toBe(true)
+    old.resolve(records(99))
+    await flush()
+    expect(f.get('tax-dashboard-content').hidden).toBe(true)
+    const next = scopeFor()
+    next.appProfileId = 'new-app-profile'
+    delete next.activeTaxpayerId
+    f.getScope.mockResolvedValue(next)
+    f.emit('kasa:app-profile-updated', { scope: next })
+    const calls = f.snapshot.mock.calls.length
+    f.get('view-tax').dataset.appProfileBusy = 'false'
+    f.emit('kasa:app-profile-busy')
+    await flush()
+    expect(f.snapshot).toHaveBeenCalledTimes(calls)
+    expect(f.get('tax-dashboard-content').hidden).toBe(true)
+    expect(f.get('tax-year-rows').children).toHaveLength(0)
+    expect(f.get('tax-reports-export').disabled).toBe(true)
+    expect(f.forbiddenAccess).not.toHaveBeenCalled()
   })
 
   it('clears earlier totals when saved scope cannot be read, without a legacy profile fallback', async () => {
@@ -1038,6 +1181,231 @@ describe('database-only Commercialista Reports', () => {
 })
 
 describe('database-only Commercialista Overview', () => {
+  it('provides a labelled chart control and an accessible numeric table behind the visual bars', () => {
+    expect(html).toMatch(/<label[^>]*>Show<select id="tax-dashboard-chart-mode"/)
+    expect(html).toMatch(/<div id="tax-dashboard-chart"[^>]*aria-hidden="true"/)
+    expect(html).toContain('<summary>View monthly figures</summary>')
+    expect(html).toContain('Monthly payment activity for the selected app profile and year')
+    expect(html).toMatch(/<table aria-describedby="tax-dashboard-months-help">/)
+    expect(html).toContain('<th scope="col">Received</th>')
+    expect(html).toContain('<th scope="col">Sent</th>')
+    expect(html).toMatch(
+      /<details id="tax-dashboard-details"[^>]*>\s*<summary>How is my estimate worked out\?/
+    )
+    expect(html).toContain('Saved amounts by asset &amp; source')
+  })
+
+  function evidencedActivity(): { saved: KasaSnapshot; scope: TaxScope } {
+    const saved = records()
+    saved.payments.push({
+      ...saved.payments[0],
+      nodeIdx: 8,
+      direction: 'out',
+      txid: 'saved-outgoing-transaction',
+      receivedRaw: 3000000
+    })
+    const scope = scopeFor(saved)
+    scope.appProfileId = 'app-personal'
+    scope.accounts[0].sourceId = source.id
+    scope.enrichments = scope.assignments.map((assignment) => ({
+      ...assignment,
+      classification: 'income',
+      valuation: {
+        eur: assignment.recordKey === 'payment:7' ? '10.25' : '3.15',
+        date: '2026-05-10',
+        source: 'Saved EUR statement',
+        reference: 'Documented fixture value'
+      },
+      fee: {
+        status: 'none',
+        amount: '',
+        assetId: '',
+        purpose: '',
+        reference: '',
+        valuation: { eur: '', date: '', source: '', reference: '' }
+      },
+      relatedRecordKey: ''
+    }))
+    return { saved, scope }
+  }
+
+  it('renders evidenced EUR activity and accessible monthly values without deriving euros from token amounts', async () => {
+    const { saved, scope } = evidencedActivity()
+    const original = structuredClone({ saved, scope })
+    const f = await setup(Promise.resolve(saved), scope)
+    expect(f.get('tax-dashboard-chart-mode').value).toBe('eur')
+    const may = f.get('tax-dashboard-months').children[4]
+    expect(may.children[0].textContent).toBe('May')
+    expect(may.children[1].textContent).toContain('10.25')
+    expect(may.children[2].textContent).toContain('3.15')
+    expect(may.textContent).not.toContain('2.000001')
+    const barTitles = f
+      .get('tax-dashboard-chart')
+      .querySelectorAll('*')
+      .map((node) => node.title)
+      .filter(Boolean)
+    expect(barTitles.some((title) => /May.*Received.*10\.25/.test(title))).toBe(true)
+    expect(barTitles.some((title) => /May.*Sent.*3\.15/.test(title))).toBe(true)
+    expect(f.get('tax-dashboard-cards').children[2].textContent).toContain('2 of 2')
+    expect(f.get('tax-dashboard-months-help').textContent).toMatch(
+      /not (the same as )?taxable profit/
+    )
+    expect(f.snapshot).toHaveBeenCalledOnce()
+    expect(f.forbiddenAccess).not.toHaveBeenCalled()
+    expect({ saved, scope }).toEqual(original)
+  })
+
+  it.each([
+    ['0.01', 0.01, 0.005],
+    ['0.00000001', 0.00000001, 0.000000005]
+  ] as const)(
+    'keeps a small EUR maximum of %s visible on the chart scale',
+    async (eur, maximum, midpoint) => {
+      const { saved, scope } = evidencedActivity()
+      for (const enrichment of scope.enrichments ?? []) enrichment.valuation.eur = eur
+      const f = await setup(Promise.resolve(saved), scope)
+      const ticks = f
+        .get('tax-dashboard-chart')
+        .children[0].children.map((tick) => tick.textContent)
+      expect(ticks.map((tick) => Number(tick.replace('€', '')))).toEqual([maximum, midpoint, 0])
+      if (eur === '0.01') expect(ticks).toEqual(['€0.01', '€0.005', '€0'])
+      expect(f.get('tax-dashboard-months').children[4].children[1].textContent).toBe(`€${eur}`)
+      expect(f.snapshot).toHaveBeenCalledOnce()
+      expect(f.forbiddenAccess).not.toHaveBeenCalled()
+    }
+  )
+
+  it('uses integer ticks without a fractional payment for a one-payment count scale', async () => {
+    const f = await setup()
+    expect(f.get('tax-dashboard-chart-mode').value).toBe('count')
+    expect(
+      f.get('tax-dashboard-chart').children[0].children.map((tick) => tick.textContent)
+    ).toEqual(['1', '0'])
+    expect(f.forbiddenAccess).not.toHaveBeenCalled()
+  })
+
+  it('clears the previous profile heading when another app profile has no linked tax setup', async () => {
+    const scope = scopeFor()
+    scope.appProfileId = 'app-business'
+    Object.assign(scope.taxpayers[0].profile, {
+      userType: 'business',
+      personalRegime: null,
+      businessType: 'company',
+      businessRegime: 'ordinary'
+    })
+    const f = await setup(Promise.resolve(records()), scope)
+    expect(f.get('tax-dashboard-title').textContent).toBe('A clearer view of business taxes')
+    const next = structuredClone(scope)
+    next.appProfileId = 'app-unlinked'
+    delete next.activeTaxpayerId
+    f.getScope.mockResolvedValue(next)
+    f.emit('kasa:app-profile-updated', { scope: next })
+    expect(f.get('tax-dashboard-title').textContent).toBe('A clearer view of your taxes')
+    expect(f.get('tax-dashboard-subtitle').textContent).toBe(
+      'Your saved payments, useful estimates and the details still needed.'
+    )
+    expect(f.get('tax-dashboard-content').hidden).toBe(true)
+    await flush()
+    expect(f.get('tax-dashboard-title').textContent).toBe('A clearer view of your taxes')
+    expect(f.get('tax-dashboard-context').textContent).toBe('')
+    expect(f.snapshot).toHaveBeenCalledOnce()
+    expect(f.forbiddenAccess).not.toHaveBeenCalled()
+  })
+
+  it('switches chart units using the same saved read and resets them for another profile or tax year', async () => {
+    const { saved, scope } = evidencedActivity()
+    const f = await setup(Promise.resolve(saved), scope)
+    f.snapshot.mockResolvedValue(saved)
+    const mode = f.get('tax-dashboard-chart-mode')
+    mode.value = 'count'
+    await mode.onchange?.()
+    expect(
+      f.get('tax-dashboard-months').children[4].children.map((cell) => cell.textContent)
+    ).toEqual(['May', '1', '1'])
+    expect(f.snapshot).toHaveBeenCalledOnce()
+    expect(f.getScope).toHaveBeenCalledTimes(2)
+
+    const next = structuredClone(scope)
+    next.taxpayers[0].profile.taxYear = 2025
+    f.getScope.mockResolvedValue(next)
+    const pending = deferred<KasaSnapshot>()
+    f.snapshot.mockReturnValueOnce(pending.promise)
+    f.emit('kasa:tax-scope-updated', { scope: next })
+    expect(f.get('tax-dashboard-content').hidden).toBe(true)
+    expect(f.get('tax-dashboard-chart').children).toHaveLength(0)
+    expect(f.get('tax-dashboard-months').children).toHaveLength(0)
+    pending.resolve(saved)
+    await flush()
+    expect(mode.value).toBe('count')
+    expect(f.get('tax-dashboard-context').textContent).toContain('2025')
+    expect(f.get('tax-dashboard-months').textContent).not.toContain('10.25')
+
+    const other = structuredClone(scope)
+    other.appProfileId = 'app-other'
+    other.taxpayers[0].label = 'Another saved app profile'
+    f.getScope.mockResolvedValue(other)
+    f.emit('kasa:app-profile-updated', { scope: other })
+    await flush()
+    expect(mode.value).toBe('eur')
+    expect(f.get('tax-dashboard-context').textContent).toContain('Another saved app profile')
+    expect(f.forbiddenAccess).not.toHaveBeenCalled()
+  })
+
+  it('falls back to counts when no saved EUR evidence exists and labels this without suggesting zero tax', async () => {
+    const f = await setup()
+    expect(f.get('tax-dashboard-chart-mode').value).toBe('count')
+    const euro = f.get('tax-dashboard-chart-mode').children.find((option) => option.value === 'eur')
+    expect(euro?.disabled).toBe(true)
+    expect(f.get('tax-dashboard-months').children[4].children[1].textContent).toBe('1')
+    expect(f.get('tax-dashboard-cards').textContent).not.toMatch(/€\s*0|0[,.]00\s*EUR/)
+    expect(f.get('tax-dashboard-months-help').textContent).toMatch(/count|record/i)
+    expect(f.get('tax-dashboard-cards').textContent).toContain('0 of 1')
+    expect(f.forbiddenAccess).not.toHaveBeenCalled()
+  })
+
+  it('keeps partial EUR coverage visible and excludes pending, undated, test and invoice amounts from its bars', async () => {
+    const { saved, scope } = evidencedActivity()
+    saved.invoices[0].amountRaw = 999000000
+    saved.payments.push(
+      { ...saved.payments[0], nodeIdx: 9, txid: 'without-eur', receivedRaw: 999000000 },
+      { ...saved.payments[0], nodeIdx: 10, txid: 'pending-eur', status: 'pending' },
+      { ...saved.payments[0], nodeIdx: 11, txid: 'undated-eur', blockTime: null },
+      {
+        ...saved.payments[0],
+        nodeIdx: 12,
+        txid: 'test-only-eur',
+        source: { ...source, id: 'saved-test', asset: { ...source.asset, environment: 'test' } }
+      }
+    )
+    scope.assignments.push(
+      ...[9, 10, 11, 12].map((index) => ({
+        recordKey: `payment:${index}`,
+        accountId: scope.accounts[0].id,
+        assetId: scope.assets[0].id
+      }))
+    )
+    const f = await setup(Promise.resolve(saved), scope)
+    expect(f.get('tax-dashboard-chart-mode').value).toBe('eur')
+    const may = f.get('tax-dashboard-months').children[4]
+    expect(may.children[1].textContent).toContain('10.25')
+    expect(may.children[2].textContent).toContain('3.15')
+    expect(may.textContent).not.toContain('999')
+    const coverage =
+      f.get('tax-dashboard-chart-summary').textContent +
+      f.get('tax-dashboard-months-help').textContent
+    expect(coverage).toMatch(/2 of 4/)
+    expect(coverage).toMatch(/partial|excluded|not included/i)
+    expect(f.get('tax-dashboard-cards').children[2].textContent).toContain('2 of 4')
+    f.get('tax-dashboard-chart-mode').value = 'count'
+    await f.get('tax-dashboard-chart-mode').onchange?.()
+    expect(
+      f.get('tax-dashboard-months').children[4].children.map((cell) => cell.textContent)
+    ).toEqual(['May', '3', '1'])
+    expect(f.get('tax-dashboard-months-help').textContent).toMatch(/test/i)
+    expect(f.snapshot).toHaveBeenCalledOnce()
+    expect(f.forbiddenAccess).not.toHaveBeenCalled()
+  })
+
   it('shares the selected profile/year and counts payment observations without adding invoice requests', async () => {
     const saved = records()
     const bitcoin: LedgerSource = {
@@ -1110,20 +1478,19 @@ describe('database-only Commercialista Overview', () => {
       '4 dated payment records and 2 invoice requests'
     )
     expect(f.get('tax-dashboard-coverage').textContent).toContain('not been independently verified')
-    expect(
-      f.get('tax-dashboard-cards').children.map((card) => card.children[1].textContent)
-    ).toEqual(['2', '1', '1'])
+    expect(f.get('tax-dashboard-cards').children).toHaveLength(3)
+    expect(f.get('tax-dashboard-cards').textContent).toContain('Bitcoin disposal estimate')
+    expect(f.get('tax-dashboard-cards').textContent).toContain('Annual holding tax')
+    expect(f.get('tax-dashboard-cards').textContent).toContain('Payment details documented')
     const months = f.get('tax-dashboard-months').children
     expect(months).toHaveLength(12)
-    expect(months[4].children.map((cell) => cell.textContent)).toEqual(['May', '1', '0', '0'])
-    expect(months[5].children.map((cell) => cell.textContent)).toEqual(['Jun', '0', '1', '1'])
-    expect(months[11].children.map((cell) => cell.textContent)).toEqual(['Dec', '1', '0', '0'])
-    for (const column of [1, 2, 3]) {
-      const count = months.reduce((sum, row) => sum + Number(row.children[column].textContent), 0)
-      expect(String(count)).toBe(
-        f.get('tax-dashboard-cards').children[column - 1].children[1].textContent
-      )
-    }
+    expect(months[4].children.map((cell) => cell.textContent)).toEqual(['May', '1', '0'])
+    expect(months[5].children.map((cell) => cell.textContent)).toEqual(['Jun', '0', '1'])
+    expect(months[11].children.map((cell) => cell.textContent)).toEqual(['Dec', '1', '0'])
+    expect(f.get('tax-dashboard-chart-mode').value).toBe('count')
+    expect(f.get('tax-dashboard-months-help').textContent).toMatch(
+      /not (the same as )?taxable profit/
+    )
     const assets = f.get('tax-dashboard-assets').children
     expect(assets).toHaveLength(2)
     expect(assets[0].textContent).toContain('2.000001 USDT')
@@ -1155,6 +1522,16 @@ describe('database-only Commercialista Overview', () => {
       }
       const f = await setup(Promise.resolve(records()), scope)
       const estimates = f.get('tax-dashboard-estimates')
+      const primary = f.get('tax-dashboard-cards')
+      expect(primary.children).toHaveLength(3)
+      expect(primary.textContent).toContain('Payment details documented')
+      expect(primary.textContent).toContain(
+        userType === 'personal' ? 'Bitcoin disposal estimate' : 'VAT estimate'
+      )
+      expect(primary.textContent).toContain(
+        userType === 'personal' ? 'Annual holding tax' : 'Income tax estimate'
+      )
+      expect(primary.textContent).not.toMatch(/€\s*0|0[,.]00\s*EUR/)
       expect(estimates.children.length).toBeGreaterThan(0)
       for (const card of estimates.children)
         expect(card.children[1].textContent).toBe('Not yet estimable')
@@ -1244,19 +1621,25 @@ describe('database-only Commercialista Overview', () => {
     expect(f.forbiddenAccess).not.toHaveBeenCalled()
   })
 
-  it.each(['enrichmentDirty', 'activityEditing', 'scopeBusy', 'taxBasisDirty'])(
-    'blocks next-step navigation when %s is active without discarding edits',
-    async (flag) => {
-      const f = await setup()
-      const root = f.get('view-tax')
-      root.dataset[flag] = 'true'
-      for (const step of f.get('tax-dashboard-next').children) step.children[2].click()
-      expect(f.dispatchEvent).not.toHaveBeenCalled()
-      expect(root.dataset[flag]).toBe('true')
-      expect(f.get('tax-dashboard-status').textContent).toMatch(/Wait|Save or discard/)
-      expect(f.forbiddenAccess).not.toHaveBeenCalled()
-    }
-  )
+  it.each([
+    'enrichmentDirty',
+    'activityEditing',
+    'scopeBusy',
+    'taxBasisDirty',
+    'appProfileDirty',
+    'appProfileBusy',
+    'taxSetupDirty',
+    'taxHistoryDirty'
+  ])('blocks next-step navigation when %s is active without discarding edits', async (flag) => {
+    const f = await setup()
+    const root = f.get('view-tax')
+    root.dataset[flag] = 'true'
+    for (const step of f.get('tax-dashboard-next').children) step.children[2].click()
+    expect(f.dispatchEvent).not.toHaveBeenCalled()
+    expect(root.dataset[flag]).toBe('true')
+    expect(f.get('tax-dashboard-status').textContent).toMatch(/Wait|Save or discard/)
+    expect(f.forbiddenAccess).not.toHaveBeenCalled()
+  })
 })
 
 describe('Reports and focused questions share the saved-data context', () => {
@@ -1294,7 +1677,7 @@ describe('Reports and focused questions share the saved-data context', () => {
       expect(f.get('tax-questions-title').focus).not.toHaveBeenCalled()
       expect(f.get('tax-questions-title').scrollIntoView).not.toHaveBeenCalled()
       expect(f.snapshot).toHaveBeenCalledOnce()
-      expect(f.getScope).toHaveBeenCalledOnce()
+      expect(f.getScope).toHaveBeenCalledTimes(2)
       expect(f.forbiddenAccess).not.toHaveBeenCalled()
     }
   )
@@ -1323,7 +1706,7 @@ describe('Reports and focused questions share the saved-data context', () => {
       section: 'purpose'
     })
     expect(f.snapshot).toHaveBeenCalledOnce()
-    expect(f.getScope).toHaveBeenCalledOnce()
+    expect(f.getScope).toHaveBeenCalledTimes(2)
     expect(f.status).not.toHaveBeenCalled()
     expect(f.forbiddenAccess).not.toHaveBeenCalled()
   })
@@ -1338,6 +1721,7 @@ describe('Reports and focused questions share the saved-data context', () => {
     expect(f.get('tax-questions-content').hidden).toBe(true)
     expect(f.get('tax-question-records').children).toHaveLength(0)
     expect(f.get('tax-question-save').disabled).toBe(true)
+    f.getScope.mockResolvedValue(changedScope)
     pending.resolve(changedScope)
     await flush()
     expect(f.get('tax-questions-content').hidden).toBe(false)
@@ -1346,7 +1730,7 @@ describe('Reports and focused questions share the saved-data context', () => {
     expect(f.get('tax-question-records').textContent).toContain('does not verify the records')
     expect(f.get('tax-invoice-count').textContent).toBe('0')
     expect(f.snapshot).toHaveBeenCalledTimes(2)
-    expect(f.getScope).toHaveBeenCalledTimes(2)
+    expect(f.getScope).toHaveBeenCalledTimes(4)
     expect(f.forbiddenAccess).not.toHaveBeenCalled()
   })
 
@@ -1360,6 +1744,8 @@ describe('Reports and focused questions share the saved-data context', () => {
     expect(f.get('tax-reports-summary').hidden).toBe(false)
     expect(f.get('tax-invoice-count').textContent).toBe('1')
     expect(f.get('tax-reports-export').disabled).toBe(false)
+    expect(f.get('tax-dashboard-cards').textContent).toMatch(/unsupported|not supported/i)
+    expect(f.get('tax-dashboard-cards').textContent).not.toMatch(/€\s*0|0[,.]00\s*EUR/)
     expect(f.snapshot).toHaveBeenCalledOnce()
     expect(f.forbiddenAccess).not.toHaveBeenCalled()
   })
@@ -1414,7 +1800,60 @@ describe('Reports and the personal disposal estimator share saved database recor
     return { saved, scope }
   }
 
-  it('uses one scope and snapshot read for Reports, questions and the disposal panel', async () => {
+  it.each(['regime', 'year'])(
+    'distinguishes an unsupported Bitcoin %s from missing information in the primary card',
+    async (reason) => {
+      const { saved, scope } = disposalFixture()
+      if (reason === 'regime') scope.taxpayers[0].profile.personalRegime = 'amministrato'
+      else scope.taxpayers[0].profile.taxYear = 2027
+      const f = await setup(Promise.resolve(saved), scope)
+      const card = f.get('tax-dashboard-cards').children[0]
+      expect(card.children[0].textContent).toBe('Bitcoin disposal estimate')
+      expect(card.children[1].textContent).toBe('€—')
+      expect(card.textContent).toContain('Outside supported calculation')
+      expect(card.textContent).not.toContain('Not yet estimable')
+      expect(f.get('tax-reports-summary').hidden).toBe(false)
+      expect(f.forbiddenAccess).not.toHaveBeenCalled()
+    }
+  )
+
+  it('shows the exact documented Bitcoin tax subtotal in the primary card and keeps its limits visible', async () => {
+    const { saved, scope } = disposalFixture()
+    scope.appProfileId = 'app-personal'
+    scope.disposalBases = [
+      {
+        taxpayerId: 'personal',
+        taxYear: 2026,
+        recordKey: 'payment:7',
+        facts: createDisposalFacts(scope, saved, 'payment:7'),
+        transactionKind: 'fiat-sale',
+        costBasisEur: '600',
+        reference: 'Documented LIFO allocation for the included disposal',
+        reviewed: true
+      }
+    ]
+    const original = structuredClone({ saved, scope })
+    const f = await setup(Promise.resolve(saved), scope)
+    const cards = f.get('tax-dashboard-cards').children
+    expect(cards).toHaveLength(3)
+    expect(cards[0].children[0].textContent).toBe('Bitcoin disposal estimate')
+    // Documented proceeds of EUR 1,000 less EUR 600 basis, at the existing 2026 rate.
+    expect(cards[0].children[1].textContent).toBe('€132.00')
+    expect(cards[0].textContent).toContain('Provisional subtotal')
+    expect(cards[0].textContent).toContain('before earlier losses and other adjustments')
+    expect(cards[0].textContent).toContain('not your whole tax bill')
+    expect(cards[1].textContent).toContain('Annual holding tax')
+    expect(cards[1].children[1].textContent).toBe('€—')
+    expect(cards[2].textContent).toContain('1 of 1')
+    expect(f.get('tax-dashboard-cards').textContent).not.toContain('VAT')
+    expect(f.get('tax-dashboard-estimates').textContent).toContain('132.00 EUR')
+    expect(f.get('tax-personal-summary').textContent).toContain('132.00 EUR')
+    expect(f.snapshot).toHaveBeenCalledOnce()
+    expect(f.forbiddenAccess).not.toHaveBeenCalled()
+    expect({ saved, scope }).toEqual(original)
+  })
+
+  it('shares one snapshot and confirmed scope between Reports, questions and the disposal panel', async () => {
     const { saved, scope } = disposalFixture()
     const original = structuredClone({ saved, scope })
     const f = await setup(Promise.resolve(saved), scope)
@@ -1427,7 +1866,7 @@ describe('Reports and the personal disposal estimator share saved database recor
     expect(f.get('tax-questions-content').hidden).toBe(false)
     expect(f.get('tax-reports-context').textContent).toContain('Personal profile')
     expect(f.get('tax-personal-sources').querySelectorAll('a').length).toBeGreaterThan(0)
-    expect(f.getScope).toHaveBeenCalledOnce()
+    expect(f.getScope).toHaveBeenCalledTimes(2)
     expect(f.snapshot).toHaveBeenCalledOnce()
     expect(f.forbiddenAccess).not.toHaveBeenCalled()
     expect({ saved, scope }).toEqual(original)
@@ -1446,13 +1885,14 @@ describe('Reports and the personal disposal estimator share saved database recor
     expect(f.get('tax-personal-content').hidden).toBe(true)
     expect(f.get('tax-personal-summary').hidden).toBe(true)
     expect(f.get('tax-basis-save').disabled).toBe(true)
+    f.getScope.mockResolvedValue(next)
     pending.resolve(next)
     await flush()
     expect(f.get('tax-personal-content').hidden).toBe(false)
     expect(f.get('tax-personal-context').textContent).toContain('New profile year · 2025')
     expect(f.get('tax-personal-rows').textContent).not.toContain('Payment 7')
     expect(f.get('tax-basis-form').hidden).toBe(true)
-    expect(f.getScope).toHaveBeenCalledTimes(2)
+    expect(f.getScope).toHaveBeenCalledTimes(4)
     expect(f.snapshot).toHaveBeenCalledTimes(2)
     expect(f.forbiddenAccess).not.toHaveBeenCalled()
   })
@@ -1469,7 +1909,7 @@ describe('Reports and the personal disposal estimator share saved database recor
     expect(f.get('tax-personal-context').textContent).toContain('Personal profile · 2026')
     expect(f.get('tax-personal-rows').textContent).toContain('Payment 7')
     expect(f.get('commercialista-status').textContent).toContain('may be out of date')
-    expect(f.getScope).toHaveBeenCalledTimes(2)
+    expect(f.getScope).toHaveBeenCalledTimes(3)
     expect(f.snapshot).toHaveBeenCalledTimes(2)
     expect(f.forbiddenAccess).not.toHaveBeenCalled()
   })
@@ -1489,7 +1929,7 @@ describe('Reports and the personal disposal estimator share saved database recor
     expect(navigations[0].detail).toEqual({ target: 'tax-personal-title' })
     expect(f.get('tax-personal-title').focus).toHaveBeenCalledOnce()
     expect(f.get('tax-personal-title').scrollIntoView).toHaveBeenCalledOnce()
-    expect(f.getScope).toHaveBeenCalledOnce()
+    expect(f.getScope).toHaveBeenCalledTimes(2)
     expect(f.snapshot).toHaveBeenCalledOnce()
     expect(f.forbiddenAccess).not.toHaveBeenCalled()
   })
@@ -1540,7 +1980,7 @@ describe('Reports and the personal disposal estimator share saved database recor
     expect(f.get('tax-basis-cost').value).toBe('Unsaved cost draft')
     expect(f.get('tax-questions-title').focus).not.toHaveBeenCalled()
     expect(f.dispatchEvent).not.toHaveBeenCalled()
-    expect(f.getScope).toHaveBeenCalledOnce()
+    expect(f.getScope).toHaveBeenCalledTimes(2)
     expect(f.snapshot).toHaveBeenCalledOnce()
     expect(f.forbiddenAccess).not.toHaveBeenCalled()
     f.get('view-tax').dataset.taxBasisDirty = 'false'

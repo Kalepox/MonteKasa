@@ -6,6 +6,7 @@ import {
   type TaxPreparationAnswer
 } from '../../shared/tax-questions'
 import { recordKeys, scopedRecords, type TaxScope } from '../../shared/tax-scope'
+import { taxScopeKey } from '../../shared/tax-selection'
 import { relatedRecordCandidates } from './tax-enrichment-flow'
 import type { TaxReport } from './tax-report'
 import { taxYearReview } from './tax-year-ledger'
@@ -83,9 +84,9 @@ export function buildTaxQuestionReview(
   calculationId: TaxCalculationId
 ): TaxQuestionReview | null {
   const taxpayer = scope.taxpayers.find((entry) => entry.id === scope.activeTaxpayerId)
-  if (!taxpayer || taxpayer.profile.country !== 'IT') return null
+  const scopeKey = taxScopeKey(scope)
+  if (!scopeKey || !taxpayer || taxpayer.profile.country !== 'IT') return null
   const year = taxpayer.profile.taxYear
-  const scopeKey = JSON.stringify([scope.databaseId, taxpayer.id, year])
   if (report.scopeKey !== scopeKey || report.taxpayer.id !== taxpayer.id || report.year !== year)
     return null
   const calculation = calculationQuestions(taxpayer.profile).find(

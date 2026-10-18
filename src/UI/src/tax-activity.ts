@@ -20,10 +20,14 @@ let queued = false
 let limit = 100
 let formTaxpayerId = ''
 let unlinkedCount = 0
+let appRevision = 0
 const editingRecord = (): boolean =>
   root.dataset.enrichmentDirty === 'true' ||
   root.dataset.taxQuestionsDirty === 'true' ||
-  root.dataset.taxBasisDirty === 'true'
+  root.dataset.taxBasisDirty === 'true' ||
+  root.dataset.taxSetupDirty === 'true' ||
+  root.dataset.appProfileBusy === 'true' ||
+  root.dataset.appProfileDirty === 'true'
 const blocked = (): boolean => editingRecord() || !form.hidden || root.dataset.scopeBusy === 'true'
 const message = (error: unknown): string =>
   String(error instanceof Error ? error.message : error).replace(
@@ -243,10 +247,15 @@ async function refresh(): Promise<void> {
   try {
     while (queued && !blocked()) {
       queued = false
+      const revision = appRevision
       const next = await window.taxScope.organise()
       if (blocked()) {
         queued = true
         break
+      }
+      if (revision !== appRevision) {
+        queued = true
+        continue
       }
       const nextSignature = JSON.stringify(next)
       data = next
@@ -384,9 +393,19 @@ el('tax-activity-more').onclick = () => {
   limit += 100
   renderRows()
 }
-for (const event of ['kasa:tax-scope-updated', 'kasa:tax-profile-saved'])
+for (const event of [
+  'kasa:tax-scope-updated',
+  'kasa:tax-profile-saved',
+  'kasa:app-profile-updated'
+])
   window.addEventListener(event, () => {
+    if (event === 'kasa:app-profile-updated') appRevision++
     void refresh()
+  })
+for (const name of ['kasa:app-profile-dirty', 'kasa:app-profile-busy', 'kasa:tax-setup-dirty'])
+  window.addEventListener(name, () => {
+    controls()
+    if (!editingRecord() && queued) void refresh()
   })
 window.addEventListener('kasa:tax-questions-dirty', () => {
   controls()

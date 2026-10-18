@@ -17,7 +17,12 @@ import {
   type TaxRecordProfile
 } from './tax-record-profile'
 
-export type Taxpayer = { id: string; label: string; profile: TaxProfile }
+export type Taxpayer = {
+  id: string
+  label: string
+  profile: TaxProfile
+  yearProfiles?: TaxProfile[]
+}
 export type TaxAccount = {
   id: string
   taxpayerId: string
@@ -39,6 +44,9 @@ export type TaxScope = {
   version: 1
   databaseId: string
   activeTaxpayerId?: string
+  // Runtime app-profile context. The database-backed app profile registry owns
+  // this selection; legacy scope files never supply it as authority.
+  appProfileId?: string | null
   taxpayers: Taxpayer[]
   accounts: TaxAccount[]
   assets: TaxAsset[]
@@ -171,6 +179,10 @@ export function changeTaxScope(
       ['unknown', 'incomplete', 'complete'],
       'history coverage'
     )
+    if (taxpayer.yearProfiles)
+      taxpayer.yearProfiles = taxpayer.yearProfiles.map((profile) =>
+        profile.taxYear === taxpayer.profile.taxYear ? { ...taxpayer.profile } : profile
+      )
   } else if (c.kind === 'select-taxpayer') {
     if (!state.taxpayers.some((t) => t.id === c.taxpayerId))
       throw new Error('Select an existing profile.')
@@ -472,7 +484,7 @@ export function validateTaxScope(input: unknown, databaseId: string): TaxScope {
     ids.add(result)
     return result
   }
-  for (const t of source.taxpayers)
+  for (const t of source.taxpayers) {
     state = changeTaxScope(
       state,
       { kind: 'taxpayer', label: t.label },
@@ -480,6 +492,18 @@ export function validateTaxScope(input: unknown, databaseId: string): TaxScope {
       new Set(),
       id(t.id)
     )
+    if (t.yearProfiles !== undefined) {
+      if (!Array.isArray(t.yearProfiles)) throw new Error('Invalid annual tax settings.')
+      const years = new Set<number>()
+      const profiles = t.yearProfiles.map((entry) => {
+        const profile = validateTaxProfile(entry)
+        if (years.has(profile.taxYear)) throw new Error('Duplicate annual tax settings.')
+        years.add(profile.taxYear)
+        return profile
+      })
+      state.taxpayers[state.taxpayers.length - 1].yearProfiles = profiles
+    }
+  }
   const sourceIds = new Set<string>()
   for (const a of source.accounts) {
     state = changeTaxScope(

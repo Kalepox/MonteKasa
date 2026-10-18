@@ -183,6 +183,20 @@ describe('local setup drafts', () => {
     expect(setupDraftKey('/data/kasa.db')).not.toBe(setupDraftKey('/data/kasa-wdk.db'))
     expect(setupDraftKey('/data/kasa.db')).toBe(setupDraftKey('/data/kasa.db'))
   })
+
+  it('isolates app identities while preserving the separate legacy draft key', () => {
+    const keys = [
+      setupDraftKey('database'),
+      setupDraftKey('database', 'alice'),
+      setupDraftKey('database', 'bob'),
+      setupDraftKey('other-database', 'alice')
+    ]
+    expect(new Set(keys).size).toBe(4)
+    expect(setupDraftKey('database', 'alice')).toBe(setupDraftKey('database', 'alice'))
+    expect(setupDraftKey('database:app:alice', 'bob')).not.toBe(
+      setupDraftKey('database', 'alice:app:bob')
+    )
+  })
 })
 
 describe('compatibility with existing saved data', () => {

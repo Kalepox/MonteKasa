@@ -415,6 +415,19 @@ describe('database-only selected-year Overview model', () => {
     expect(() => buildTaxDashboard(scope, report)).toThrow('Reload')
   })
 
+  it('rejects stale app selection even when taxpayer and year are unchanged', () => {
+    const { scope, snapshot } = fixture()
+    scope.appProfileId = 'app-one'
+    const report = buildTaxReport(scope, snapshot)!
+    expect(buildTaxDashboard(scope, report).scopeKey).toBe(report.scopeKey)
+    for (const appProfileId of ['app-two', null, ''])
+      expect(() => buildTaxDashboard({ ...scope, appProfileId }, report)).toThrow('Reload')
+    expect(() => buildTaxDashboard(scope, { ...report, year: 2025 })).toThrow('Reload')
+    expect(() =>
+      buildTaxDashboard(scope, { ...report, taxpayer: { ...report.taxpayer, id: 'other' } })
+    ).toThrow('Reload')
+  })
+
   it('does not mutate saved declarations, records or the shared Reports model', () => {
     const { scope, snapshot } = fixture()
     const report = buildTaxReport(scope, snapshot)!

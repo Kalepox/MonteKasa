@@ -12,6 +12,7 @@ import type { KasaSnapshot } from '../../preload/index.d'
 import { updateTaxQuestions, clearTaxQuestions } from './tax-questions-ui'
 import { updatePersonalDisposal, clearPersonalDisposal } from './personal-disposal-ui'
 import { buildPersonalDisposalEstimate } from './personal-disposal'
+import { taxScopeKey } from '../../shared/tax-selection'
 
 const element = (id: string): HTMLElement => document.getElementById(id)!
 const root = element('view-tax')
@@ -34,6 +35,7 @@ let lastSuccess: {
 } | null = null
 let loading = false
 let scopeBusy = root.dataset.scopeBusy === 'true'
+const profileBusy = (): boolean => root.dataset.appProfileBusy === 'true'
 let exporting = false
 let exportingAll = false
 let disposed = false
@@ -99,16 +101,11 @@ const errorText = (error: unknown): string =>
     ''
   )
 
-function scopeKey(scope: TaxScope): string | null {
-  const taxpayer = scope.taxpayers.find((item) => item.id === scope.activeTaxpayerId)
-  return taxpayer ? JSON.stringify([scope.databaseId, taxpayer.id, taxpayer.profile.taxYear]) : null
-}
-
 function controls(): void {
-  exportButton.disabled = loading || scopeBusy || exporting || !displayed
+  exportButton.disabled = loading || scopeBusy || profileBusy() || exporting || !displayed
   allExportButton.disabled = exportingAll
-  ;(element('tax-dashboard-refresh') as HTMLButtonElement).disabled = scopeBusy
-  setTaxDashboardStatus(status.textContent ?? '', loading || scopeBusy)
+  ;(element('tax-dashboard-refresh') as HTMLButtonElement).disabled = scopeBusy || profileBusy()
+  setTaxDashboardStatus(status.textContent ?? '', loading || scopeBusy || profileBusy())
 }
 
 function clearReport(): void {
@@ -120,7 +117,7 @@ function clearReport(): void {
   element('tax-year-review').hidden = true
   element('tax-reports-freshness').hidden = true
   element('tax-reports-context').textContent =
-    'Select a saved profile and tax year above to see its report.'
+    'Choose an app profile and complete or link its tax setup to see a report.'
   element('tax-reports-attention').textContent = ''
   element('tax-reports-ownership').textContent = ''
   element('tax-report-groups').replaceChildren()
@@ -170,7 +167,7 @@ function render(report: TaxReport, dashboard: TaxDashboard, readAt: Date): void 
 }
 
 async function refresh(): Promise<void> {
-  if (disposed || scopeBusy) return
+  if (disposed || scopeBusy || profileBusy()) return
   const current = ++request
   loading = true
   controls()
@@ -185,11 +182,12 @@ async function refresh(): Promise<void> {
     // standalone profile or infer ownership from the current wallet/source.
     const scope = await window.taxScope.get()
     if (disposed || current !== request) return
-    const key = scopeKey(scope)
+    const key = taxScopeKey(scope)
     if (!key) {
       clearReport()
+      lastSuccess = null
       status.textContent =
-        'Choose or create a saved profile before reviewing its tax year. No database records have been included automatically.'
+        'Choose or create an app profile, then complete or link its tax setup. No records from other profiles are substituted.'
       return
     }
     const scopeSignature = JSON.stringify(scope)
@@ -209,9 +207,18 @@ async function refresh(): Promise<void> {
     }
     const snapshot = await window.kasa.snapshot()
     if (disposed || current !== request) return
+    // Profile/year changes can be saved while the ledger request is in flight.
+    // Recheck persisted declarations before publishing one coherent summary.
+    const confirmed = await window.taxScope.get()
+    if (disposed || current !== request) return
+    if (JSON.stringify(confirmed) !== scopeSignature) {
+      sameScope = false
+      lastSuccess = null
+      throw new Error('The app profile, tax year or saved tax details changed. Refresh records.')
+    }
     const report = buildTaxReport(scope, snapshot)
     if (!report) throw new Error('The selected saved profile is no longer available.')
-    const dashboard = buildTaxDashboard(scope, report)
+    const dashboard = buildTaxDashboard(scope, report, snapshot)
     dashboard.personalDisposal = buildPersonalDisposalEstimate(scope, snapshot, report)
     const readAt = new Date()
     render(report, dashboard, readAt)
@@ -251,7 +258,7 @@ function download(csv: string, filename: string): void {
 element('tax-reports-refresh').onclick = () => void refresh()
 element('tax-dashboard-refresh').onclick = () => void refresh()
 exportButton.onclick = async () => {
-  if (disposed || exporting || loading || scopeBusy || !displayed) return
+  if (disposed || exporting || loading || scopeBusy || profileBusy() || !displayed) return
   const expectedKey = displayed.scopeKey
   const revision = scopeRevision
   exporting = true
@@ -259,7 +266,7 @@ exportButton.onclick = async () => {
   exportStatus.textContent = 'Preparing the selected profile/year CSV from saved records…'
   try {
     const scope = await window.taxScope.get()
-    if (scopeKey(scope) !== expectedKey)
+    if (taxScopeKey(scope) !== expectedKey)
       throw new Error('Selected profile or year changed. Refresh Reports before exporting.')
     const snapshot = await window.kasa.snapshot()
     // Confirm saved declarations again so changed assignments cannot produce a mislabeled export.
@@ -322,7 +329,13 @@ window.addEventListener('kasa:tax-scope-idle', () => {
   scopeBusy = false
   void refresh()
 })
+window.addEventListener('kasa:app-profile-busy', () => {
+  if (profileBusy()) invalidateScope()
+  else void refresh()
+  controls()
+})
 for (const event of [
+  'kasa:app-profile-updated',
   'kasa:tax-scope-updated',
   'kasa:tax-activity-updated',
   'kasa:tax-profile-saved'

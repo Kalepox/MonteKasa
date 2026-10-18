@@ -458,6 +458,111 @@ describe('focused missing tax information controller', () => {
     expect(f.get('tax-questions-status').textContent).toMatch(/chang|match|reload/i)
   })
 
+  it('saves questions under the selected app profile identity', async () => {
+    const data = fixtures()
+    data.scope.appProfileId = 'app-selected'
+    const f = await setup(data)
+    f.set('tax-question-notes', 'Supporting history for this app profile')
+
+    await f.submit()
+
+    expect(f.change).toHaveBeenCalledTimes(1)
+    expect(f.get('view-tax').dataset.taxQuestionsDirty).toBe('false')
+    expect(f.get('tax-questions-status').textContent).toContain('saved locally')
+    expect(f.data.scope.appProfileId).toBe('app-selected')
+    expect(f.data.snapshot).toEqual(f.original.snapshot)
+    expect(f.forbidden).not.toHaveBeenCalled()
+  })
+
+  it.each(['another-app', null])(
+    'rejects a fresh saved app profile selection of %s even with the same taxpayer and year',
+    async (appProfileId) => {
+      const data = fixtures()
+      data.scope.appProfileId = 'app-selected'
+      const f = await setup(data)
+      f.set('tax-question-notes', 'Original app profile draft')
+      f.data.scope = { ...f.data.scope, appProfileId }
+
+      await f.submit()
+
+      expect(f.getScope).toHaveBeenCalledTimes(1)
+      expect(f.change).not.toHaveBeenCalled()
+      expect(f.get('tax-question-notes').value).toBe('Original app profile draft')
+      expect(f.get('tax-questions-status').textContent).toContain('changed')
+    }
+  )
+
+  it.each(['app profile', 'year'])(
+    'keeps an old draft read-only after the displayed %s changes',
+    async (changed) => {
+      const data = fixtures()
+      data.scope.appProfileId = 'app-selected'
+      const f = await setup(data)
+      f.set('tax-question-notes', 'Original selection draft')
+      const next = structuredClone(f.data.scope)
+      if (changed === 'app profile') next.appProfileId = 'another-app'
+      else next.taxpayers[0].profile.taxYear = 2025
+      f.render(next)
+
+      expect(f.get('tax-question-save').disabled).toBe(true)
+      expect(f.get('tax-question-notes').value).toBe('Original selection draft')
+      await f.submit()
+      expect(f.getScope).not.toHaveBeenCalled()
+      expect(f.change).not.toHaveBeenCalled()
+
+      f.get('tax-question-discard').onclick?.()
+      expect(f.get('tax-question-notes').value).toBe('')
+      expect(f.get('tax-question-save').disabled).toBe(false)
+      expect(f.get('tax-questions-context').textContent).toContain(
+        changed === 'year' ? '2025' : '2026'
+      )
+    }
+  )
+
+  it.each(['app profile', 'year'])(
+    'does not republish the old %s selection after a pending answer save completes',
+    async (changed) => {
+      const data = fixtures()
+      data.scope.appProfileId = 'app-selected'
+      const f = await setup(data)
+      f.set('tax-question-notes', 'Original selection answer')
+      const pending = deferred<TaxScope>()
+      f.change.mockReturnValueOnce(pending.promise)
+      const saving = f.submit()
+      await flush()
+      const next = structuredClone(f.data.scope)
+      if (changed === 'app profile') next.appProfileId = 'another-app'
+      else next.taxpayers[0].profile.taxYear = 2025
+      f.render(next)
+      f.dispatchEvent.mockClear()
+      pending.resolve({
+        ...f.data.scope,
+        preparationAnswers: [
+          {
+            taxpayerId: 'selected',
+            taxYear: 2026,
+            questionId: 'acquisition-history',
+            status: 'unknown',
+            reference: '',
+            notes: 'Original selection answer'
+          }
+        ]
+      })
+      await saving
+
+      expect(f.change).toHaveBeenCalledTimes(1)
+      expect(f.get('tax-question-notes').value).toBe('')
+      expect(f.get('tax-questions-context').textContent).toContain(
+        changed === 'year' ? '2025' : '2026'
+      )
+      const refresh = f.dispatchEvent.mock.calls
+        .map(([event]) => event as CustomEvent)
+        .find((event) => event.type === 'kasa:tax-scope-updated')
+      expect(refresh?.detail).toEqual({})
+      expect(f.data.snapshot).toEqual(f.original.snapshot)
+    }
+  )
+
   it('does not overwrite an answer changed by another saved-data view', async () => {
     const f = await setup()
     f.set('tax-question-notes', 'My unsaved draft')
@@ -624,13 +729,40 @@ describe('focused missing tax information controller', () => {
     expect(f.forbidden).not.toHaveBeenCalled()
   })
 
+  it('requests a fresh read without publishing old scope when context clears during a save', async () => {
+    const data = fixtures()
+    data.scope.appProfileId = 'app-selected'
+    const f = await setup(data)
+    f.set('tax-question-notes', 'Saved during refresh')
+    const pending = deferred<TaxScope>()
+    f.change.mockReturnValueOnce(pending.promise)
+    const saving = f.submit()
+    await flush()
+    f.controller.clearTaxQuestions()
+    f.dispatchEvent.mockClear()
+    pending.resolve(f.data.scope)
+    await saving
+
+    const refresh = f.dispatchEvent.mock.calls
+      .map(([event]) => event as CustomEvent)
+      .find((event) => event.type === 'kasa:tax-scope-updated')
+    expect(refresh?.detail).toEqual({})
+    expect(f.get('tax-questions-content').hidden).toBe(true)
+    expect(f.get('tax-question-save').disabled).toBe(true)
+    expect(f.get('view-tax').dataset.taxQuestionsDirty).toBe('false')
+    expect(f.data.snapshot).toEqual(f.original.snapshot)
+  })
+
   it('blocks submission while other tax editors are dirty or scope is busy', async () => {
     const f = await setup()
     f.set('tax-question-notes', 'Local question draft')
     for (const [flag, event] of [
       ['scopeBusy', 'kasa:tax-scope-busy'],
       ['enrichmentDirty', 'kasa:tax-enrichment-dirty'],
-      ['activityEditing', 'kasa:tax-activity-editing']
+      ['activityEditing', 'kasa:tax-activity-editing'],
+      ['appProfileBusy', 'kasa:app-profile-busy'],
+      ['appProfileDirty', 'kasa:app-profile-dirty'],
+      ['taxSetupDirty', 'kasa:tax-setup-dirty']
     ]) {
       f.get('view-tax').dataset[flag] = 'true'
       f.emit(event)

@@ -229,6 +229,270 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+describe('App profile controls the taxpayer selection', () => {
+  it('keeps another app profile’s record assignment read-only even with replacement checked', async () => {
+    const f = await setup((data) => {
+      data.scope.appProfileId = 'app-selected'
+    })
+    f.get('scope-record').value = 'payment:3'
+    f.get('scope-assign-account').value = 'first-account'
+    f.get('scope-assign-asset').value = 'first-asset'
+    f.get('scope-replace-confirm').checked = true
+    f.get('scope-replace-confirm').onchange?.()
+    expect(f.get('scope-assignment-preview').textContent).toContain('another app profile')
+    expect(f.get('scope-assign-save').disabled).toBe(true)
+    expect(f.get('scope-unassign').disabled).toBe(true)
+    f.get('scope-assignment-form').onsubmit?.({ preventDefault: vi.fn() })
+    f.get('scope-unassign').onclick?.()
+    expect(f.change).not.toHaveBeenCalled()
+    expect(f.data.scope.assignments).toEqual(f.original.scope.assignments)
+  })
+
+  it('shows only the active app profile taxpayer and rejects independent taxpayer switching', async () => {
+    const f = await setup((data) => {
+      data.scope.appProfileId = 'app-selected'
+    })
+    expect(f.get('scope-taxpayer').disabled).toBe(true)
+    expect(f.get('scope-taxpayer').children.map((option) => option.value)).toEqual(['', 'selected'])
+    f.get('scope-taxpayer').value = 'other'
+    f.get('scope-taxpayer').onchange?.()
+    expect(f.get('scope-taxpayer').value).toBe('selected')
+    expect(f.change).not.toHaveBeenCalled()
+    expect(f.forbidden).not.toHaveBeenCalled()
+  })
+
+  it('reloads the linked taxpayer after an app profile switch without changing saved record ownership', async () => {
+    const f = await setup((data) => {
+      data.scope.appProfileId = 'app-selected'
+    })
+    const before = structuredClone(f.data.scope.assignments)
+    const next = { ...f.data.scope, appProfileId: 'app-other', activeTaxpayerId: 'other' }
+    f.getScope.mockResolvedValue(next)
+    f.get('view-tax').dataset.appProfileBusy = 'true'
+    f.dispatchEvent(new Event('kasa:app-profile-busy'))
+    f.dispatchEvent(new CustomEvent('kasa:app-profile-updated', { detail: { scope: next } }))
+    expect(f.get('tax-scope-fields').disabled).toBe(true)
+    f.get('view-tax').dataset.appProfileBusy = 'false'
+    f.dispatchEvent(new Event('kasa:app-profile-busy'))
+    for (let i = 0; i < 20; i++) await Promise.resolve()
+    expect(f.get('scope-taxpayer').value).toBe('other')
+    expect(f.get('scope-taxpayer').disabled).toBe(true)
+    expect(f.get('scope-record-counts').textContent).toContain('1 payment observations')
+    expect(f.data.scope.assignments).toEqual(before)
+    expect(f.change).not.toHaveBeenCalled()
+    expect(f.forbidden).not.toHaveBeenCalled()
+  })
+
+  it.each(['appProfileDirty', 'appProfileBusy', 'taxSetupDirty'])(
+    'blocks record edits during %s',
+    async (flag) => {
+      const f = await setup()
+      f.get('view-tax').dataset[flag] = 'true'
+      f.dispatchEvent(
+        new Event(
+          flag === 'taxSetupDirty'
+            ? 'kasa:tax-setup-dirty'
+            : flag === 'appProfileDirty'
+              ? 'kasa:app-profile-dirty'
+              : 'kasa:app-profile-busy'
+        )
+      )
+      f.review('selected', 'payment:1')
+      expect(f.get('tax-scope-fields').disabled).toBe(true)
+      expect(f.get('enrichment-title').focus).not.toHaveBeenCalled()
+      expect(f.change).not.toHaveBeenCalled()
+    }
+  )
+})
+
+describe('History coverage drafts belong to one app profile and tax year', () => {
+  it('reloads canonical scope instead of applying a delayed activity payload from another year', async () => {
+    const f = await setup((data) => {
+      data.scope.appProfileId = 'app-selected'
+    })
+    const previous = structuredClone(f.data.scope)
+    previous.taxpayers[0].profile.taxYear = 2025
+    previous.taxpayers[0].profile.recordsCoverage = 'incomplete'
+    f.dispatchEvent(
+      new CustomEvent('kasa:tax-activity-updated', {
+        detail: { scope: previous, snapshot: { invoices: [], payments: [], proposals: [] } }
+      })
+    )
+    expect(f.get('scope-profile').textContent).toContain('2026')
+    expect(f.get('scope-history').value).toBe('complete')
+    for (let i = 0; i < 20; i++) await Promise.resolve()
+    expect(f.getScope).toHaveBeenCalledTimes(2)
+    expect(f.get('scope-profile').textContent).toContain('2026')
+    expect(f.get('scope-history').value).toBe('complete')
+    expect(f.get('scope-record-counts').textContent).toContain('2 payment observations')
+    expect(f.get('view-tax').dataset.taxHistoryDirty).toBe('false')
+    expect(f.change).not.toHaveBeenCalled()
+    expect(f.forbidden).not.toHaveBeenCalled()
+    expect(f.data).toEqual(f.original)
+  })
+
+  it('publishes edit and revert status and blocks manual reload from discarding the answer', async () => {
+    const f = await setup()
+    expect(f.get('view-tax').dataset.taxHistoryDirty).toBe('false')
+    f.get('scope-history').value = 'incomplete'
+    f.get('scope-history').onchange?.()
+    expect(f.get('view-tax').dataset.taxHistoryDirty).toBe('true')
+    expect(f.get('tax-scope-refresh').disabled).toBe(true)
+    f.get('tax-scope-refresh').onclick?.()
+    for (let i = 0; i < 20; i++) await Promise.resolve()
+    expect(f.getScope).toHaveBeenCalledOnce()
+    expect(f.snapshot).toHaveBeenCalledOnce()
+    expect(f.get('scope-history').value).toBe('incomplete')
+    expect(f.get('scope-history-saved').textContent).toContain('Unsaved answer')
+    f.get('scope-history').value = 'complete'
+    f.get('scope-history').onchange?.()
+    expect(f.get('view-tax').dataset.taxHistoryDirty).toBe('false')
+    expect(f.get('tax-scope-refresh').disabled).toBe(false)
+    expect(f.get('scope-history-saved').textContent).toContain('Saved answer')
+    const changes = f.dispatchEvent.mock.calls
+      .map(([event]) => event)
+      .filter((event) => event.type === 'kasa:tax-history-dirty') as CustomEvent<{
+      dirty: boolean
+    }>[]
+    expect(changes.map((event) => event.detail.dirty)).toEqual([true, false])
+    expect(f.change).not.toHaveBeenCalled()
+    expect(f.forbidden).not.toHaveBeenCalled()
+  })
+
+  it('retains an unsaved answer through an activity refresh for the identical scope', async () => {
+    const f = await setup((data) => {
+      data.scope.appProfileId = 'app-selected'
+    })
+    f.get('scope-history').value = 'incomplete'
+    f.get('scope-history').onchange?.()
+    f.dispatchEvent.mockClear()
+    f.dispatchEvent(
+      new CustomEvent('kasa:tax-activity-updated', {
+        detail: { scope: structuredClone(f.data.scope), snapshot: f.data.snapshot }
+      })
+    )
+    expect(f.get('scope-history').value).toBe('incomplete')
+    expect(f.get('view-tax').dataset.taxHistoryDirty).toBe('true')
+    expect(f.get('scope-profile').textContent).toContain('2026')
+    expect(
+      f.dispatchEvent.mock.calls.some(([event]) => event.type === 'kasa:tax-history-dirty')
+    ).toBe(false)
+    expect(f.change).not.toHaveBeenCalled()
+    expect(f.forbidden).not.toHaveBeenCalled()
+  })
+
+  it.each(['year', 'app', 'taxpayer'])(
+    'retains the original draft when activity arrives for another %s, then reloads after revert',
+    async (different) => {
+      const f = await setup((data) => {
+        data.scope.appProfileId = 'app-selected'
+      })
+      f.get('scope-history').value = 'incomplete'
+      f.get('scope-history').onchange?.()
+      const next = structuredClone(f.data.scope)
+      if (different === 'year') next.taxpayers[0].profile.taxYear = 2025
+      if (different === 'app') next.appProfileId = 'app-other'
+      if (different === 'taxpayer') next.activeTaxpayerId = 'other'
+      f.getScope.mockResolvedValue(next)
+      f.dispatchEvent(
+        new CustomEvent('kasa:tax-activity-updated', {
+          detail: { scope: next, snapshot: f.data.snapshot }
+        })
+      )
+      expect(f.get('view-tax').dataset.taxHistoryDirty).toBe('true')
+      expect(f.get('scope-history').value).toBe('incomplete')
+      expect(f.get('scope-taxpayer').value).toBe('selected')
+      expect(f.get('scope-profile').textContent).toContain('2026')
+      expect(f.get('scope-history-saved').textContent).toContain('previous selection')
+      expect(f.getScope).toHaveBeenCalledOnce()
+      f.get('scope-history').value = 'complete'
+      f.get('scope-history').onchange?.()
+      for (let i = 0; i < 20; i++) await Promise.resolve()
+      expect(f.get('view-tax').dataset.taxHistoryDirty).toBe('false')
+      expect(f.getScope).toHaveBeenCalledTimes(2)
+      expect(f.get('scope-taxpayer').value).toBe(next.activeTaxpayerId)
+      expect(f.get('scope-profile').textContent).toContain(different === 'year' ? '2025' : '2026')
+      expect(f.change).not.toHaveBeenCalled()
+      expect(f.data).toEqual(f.original)
+      expect(f.forbidden).not.toHaveBeenCalled()
+    }
+  )
+
+  it('keeps a draft through an external app-year change and rejects saving it into that new year', async () => {
+    const f = await setup((data) => {
+      data.scope.appProfileId = 'app-selected'
+    })
+    f.get('scope-history').value = 'incomplete'
+    f.get('scope-history').onchange?.()
+    const next = structuredClone(f.data.scope)
+    next.taxpayers[0].profile.taxYear = 2025
+    f.getScope.mockResolvedValue(next)
+    f.dispatchEvent(new CustomEvent('kasa:app-profile-updated', { detail: { scope: next } }))
+    expect(f.getScope).toHaveBeenCalledOnce()
+    expect(f.get('scope-profile').textContent).toContain('2026')
+    expect(f.get('scope-history').value).toBe('incomplete')
+    f.get('scope-history-form').onsubmit?.({ preventDefault: vi.fn() })
+    for (let i = 0; i < 20; i++) await Promise.resolve()
+    expect(f.change).not.toHaveBeenCalled()
+    expect(f.get('view-tax').dataset.taxHistoryDirty).toBe('true')
+    expect(f.get('scope-history').value).toBe('incomplete')
+    expect(f.get('tax-scope-status').textContent).toContain('profile or tax year changed')
+    expect(f.get('scope-profile').textContent).toContain('2026')
+    expect(f.forbidden).not.toHaveBeenCalled()
+  })
+
+  it('saves the active-year answer and clears its dirty flag only after the save succeeds', async () => {
+    const f = await setup()
+    let finish!: (scope: TaxScope) => void
+    f.change.mockReturnValue(new Promise((resolve) => (finish = resolve)))
+    f.get('scope-history').value = 'incomplete'
+    f.get('scope-history').onchange?.()
+    f.get('scope-history-form').onsubmit?.({ preventDefault: vi.fn() })
+    for (let i = 0; i < 20; i++) await Promise.resolve()
+    expect(f.change).toHaveBeenCalledExactlyOnceWith({
+      kind: 'history-coverage',
+      taxpayerId: 'selected',
+      coverage: 'incomplete'
+    })
+    expect(f.get('view-tax').dataset.taxHistoryDirty).toBe('true')
+    expect(f.get('view-tax').dataset.scopeBusy).toBe('true')
+    finish(
+      changeTaxScope(
+        f.data.scope,
+        { kind: 'history-coverage', taxpayerId: 'selected', coverage: 'incomplete' },
+        null,
+        recordKeys(f.data.snapshot),
+        'unused-id'
+      )
+    )
+    for (let i = 0; i < 20; i++) await Promise.resolve()
+    expect(f.get('view-tax').dataset.taxHistoryDirty).toBe('false')
+    expect(f.get('view-tax').dataset.scopeBusy).toBe('false')
+    expect(f.get('scope-history').value).toBe('incomplete')
+    expect(f.get('scope-history-saved').textContent).toContain('Saved answer: Some records')
+    expect(f.get('tax-scope-status').textContent).toContain('History answer saved')
+    expect(f.forbidden).not.toHaveBeenCalled()
+    expect(f.data).toEqual(f.original)
+  })
+
+  it('retains the history answer and dirty flag on a failed save', async () => {
+    const f = await setup()
+    f.change.mockRejectedValue(new Error('Fixture database unavailable'))
+    f.get('scope-history').value = 'incomplete'
+    f.get('scope-history').onchange?.()
+    f.get('scope-history-form').onsubmit?.({ preventDefault: vi.fn() })
+    for (let i = 0; i < 20; i++) await Promise.resolve()
+    expect(f.get('view-tax').dataset.taxHistoryDirty).toBe('true')
+    expect(f.get('scope-history').value).toBe('incomplete')
+    expect(f.get('tax-scope-status').textContent).toContain('Fixture database unavailable')
+    expect(f.get('scope-history-saved').textContent).toContain('Unsaved answer')
+    expect(f.get('tax-scope-refresh').disabled).toBe(true)
+    expect(f.get('view-tax').dataset.scopeBusy).toBe('false')
+    expect(f.forbidden).not.toHaveBeenCalled()
+    expect(f.data).toEqual(f.original)
+  })
+})
+
 describe('Overview navigation into the saved tax record editor', () => {
   it('refreshes filters, counts and calculation requirements together while preserving the unsaved history answer', async () => {
     const f = await setup()
@@ -331,6 +595,62 @@ describe('Overview navigation into the saved tax record editor', () => {
 })
 
 describe('Focused tax question navigation and enrichment refresh', () => {
+  it('locks profile switching during a clean enrichment clear and preserves other editor locks afterward', async () => {
+    const f = await setup()
+    f.restrict()
+    let finish!: (scope: TaxScope) => void
+    f.change.mockReturnValue(new Promise((resolve) => (finish = resolve)))
+    f.get('enrichment-clear-confirm').checked = true
+    expect(f.get('view-tax').dataset.enrichmentDirty).toBe('false')
+    f.get('enrichment-clear').onclick?.()
+    expect(f.change).toHaveBeenCalledExactlyOnceWith({
+      kind: 'clear-enrichment',
+      recordKey: 'payment:1'
+    })
+    expect(f.get('view-tax').dataset.scopeBusy).toBe('true')
+    expect(f.dispatchEvent.mock.calls.some(([event]) => event.type === 'kasa:tax-scope-busy')).toBe(
+      true
+    )
+    f.get('view-tax').dataset.appProfileBusy = 'true'
+    f.dispatchEvent(new Event('kasa:app-profile-busy'))
+    finish(f.data.scope)
+    for (let i = 0; i < 20; i++) await Promise.resolve()
+    expect(f.get('view-tax').dataset.scopeBusy).toBe('false')
+    expect(f.dispatchEvent.mock.calls.some(([event]) => event.type === 'kasa:tax-scope-idle')).toBe(
+      true
+    )
+    expect(f.get('enrichment-fields').disabled).toBe(true)
+    expect(f.forbidden).not.toHaveBeenCalled()
+    expect(f.data).toEqual(f.original)
+  })
+
+  it('discards an old enrichment response and reloads the current app profile', async () => {
+    const f = await setup((data) => {
+      data.scope.appProfileId = 'app-selected'
+    })
+    f.restrict()
+    let finish!: (scope: TaxScope) => void
+    f.change.mockReturnValue(new Promise((resolve) => (finish = resolve)))
+    f.get('enrichment-clear-confirm').checked = true
+    f.get('enrichment-clear').onclick?.()
+    const next = { ...f.data.scope, appProfileId: 'app-other', activeTaxpayerId: 'other' }
+    f.getScope.mockResolvedValue(next)
+    f.dispatchEvent(new CustomEvent('kasa:app-profile-updated', { detail: { scope: next } }))
+    finish(f.data.scope)
+    for (let i = 0; i < 30; i++) await Promise.resolve()
+    expect(f.get('scope-taxpayer').value).toBe('other')
+    expect(f.get('view-tax').dataset.scopeBusy).toBe('false')
+    const updates = f.dispatchEvent.mock.calls
+      .map(([event]) => event)
+      .filter((event) => event.type === 'kasa:tax-scope-updated') as CustomEvent<{
+      scope: TaxScope
+    }>[]
+    expect(updates).toHaveLength(1)
+    expect(updates[0].detail.scope.activeTaxpayerId).toBe('other')
+    expect(f.forbidden).not.toHaveBeenCalled()
+    expect(f.data).toEqual(f.original)
+  })
+
   it('opens the EUR value and evidence sections together for a value question', async () => {
     const f = await setup()
     f.restrict()

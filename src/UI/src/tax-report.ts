@@ -1,6 +1,7 @@
 import type { KasaSnapshot } from '../../preload/index.d'
 import { observedSources } from '../../shared/tax-activity'
 import { recordTaxpayerMap } from '../../shared/tax-record-profile'
+import { taxScopeKey } from '../../shared/tax-selection'
 import { recordKeys, scopedRecords, type Taxpayer, type TaxScope } from '../../shared/tax-scope'
 import { taxLedgerSummary, type LedgerSummaryGroup } from './ledger'
 import {
@@ -32,8 +33,9 @@ export type TaxReport = {
 // Reporting reads saved profile relationships, declarations and ledger records.
 // A profile relationship does not establish an account, asset or ownership share.
 export function buildTaxReport(scope: TaxScope, snapshot: KasaSnapshot): TaxReport | null {
+  const scopeKey = taxScopeKey(scope)
   const taxpayer = scope.taxpayers.find((entry) => entry.id === scope.activeTaxpayerId)
-  if (!taxpayer) return null
+  if (!scopeKey || !taxpayer) return null
   const year = taxpayer.profile.taxYear
   const taxpayers = new Set(scope.taxpayers.map((entry) => entry.id))
   const accounts = new Map(scope.accounts.map((account) => [account.id, account]))
@@ -69,7 +71,7 @@ export function buildTaxReport(scope: TaxScope, snapshot: KasaSnapshot): TaxRepo
   return {
     taxpayer,
     year,
-    scopeKey: JSON.stringify([scope.databaseId, taxpayer.id, year]),
+    scopeKey,
     summary: {
       ...summary,
       // Invoice receipts are cumulative and cannot be attributed to the selected year.

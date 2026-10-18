@@ -261,6 +261,23 @@ describe('personal Bitcoin disposal subtotal', () => {
     expect(estimate(state).status).toBe('unsupported')
   })
 
+  it('does not reuse a disposal result after the app profile changes', () => {
+    const state = fixture()
+    state.scope.appProfileId = 'app-one'
+    const report = buildTaxReport(state.scope, state.snapshot)!
+    expect(estimate(state).scopeKey).toBe(report.scopeKey)
+    expect(
+      buildPersonalDisposalEstimate(
+        { ...state.scope, appProfileId: 'app-two' },
+        state.snapshot,
+        report
+      )
+    ).toMatchObject({ status: 'blocked', rows: [], taxEur: null })
+    expect(
+      buildPersonalDisposalEstimate({ ...state.scope, appProfileId: null }, state.snapshot, report)
+    ).toMatchObject({ status: 'unsupported', rows: [], taxEur: null })
+  })
+
   it.each(['unknown', 'incomplete'] as const)(
     'requires reviewed complete history when coverage is %s',
     (coverage) => {
@@ -277,7 +294,7 @@ describe('personal Bitcoin disposal subtotal', () => {
     expect(reasons(state)).toContain('No supported outgoing Bitcoin disposals')
   })
 
-  it('counts payments once and excludes invoices, other years/profiles, incoming and unassigned records', () => {
+  it('counts only the selected taxpayer’s exclusions and never includes foreign or unassigned records', () => {
     const state = fixture()
     const original = structuredClone(state.snapshot.payments[0])
     state.snapshot.payments.push(
@@ -305,12 +322,36 @@ describe('personal Bitcoin disposal subtotal', () => {
       state: 'Paid'
     })
     state.snapshot.payments[0].invoiceId = 'request'
+    state.scope.recordProfiles = [{ recordKey: 'invoice:request', taxpayerId: 'me' }]
     const result = estimate(state)
     expect(result.status).toBe('estimate')
     expect(result.rows).toHaveLength(1)
     expect(result.taxEur).toBe('16.50')
-    expect(result.excluded.count).toBe(5)
+    expect(result.excluded.count).toBe(3)
     expect(result.excluded.details.join(' ')).toContain('Invoice requests')
+  })
+
+  it('keeps unrelated profiles and unassigned records out of the entire disposal summary', () => {
+    const state = fixture()
+    const before = estimate(state)
+    const payment = structuredClone(state.snapshot.payments[0])
+    state.scope.taxpayers.push({ ...structuredClone(state.scope.taxpayers[0]), id: 'other' })
+    state.scope.accounts.push({ ...state.scope.accounts[0], id: 'foreign', taxpayerId: 'other' })
+    state.scope.assignments.push({ recordKey: 'payment:9', accountId: 'foreign', assetId: 'btc' })
+    state.snapshot.payments.push({ ...payment, nodeIdx: 9 }, { ...payment, nodeIdx: 10 })
+    state.snapshot.invoices.push({
+      id: 'foreign-invoice',
+      client: 'Other profile',
+      amount: 999,
+      received: 999,
+      createdAt: payment.blockTime!,
+      expiresAt: payment.blockTime!,
+      state: 'Paid',
+      rgbInvoice: 'fixture',
+      recipientId: 'fixture'
+    })
+    state.scope.recordProfiles = [{ recordKey: 'invoice:foreign-invoice', taxpayerId: 'other' }]
+    expect(estimate(state)).toEqual(before)
   })
 
   it.each([

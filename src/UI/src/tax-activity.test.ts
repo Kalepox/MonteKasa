@@ -150,6 +150,7 @@ async function setup(data = fixtures()): Promise<{
   data: TaxActivitySnapshot
   get: (id: string) => Element
   getScope: ReturnType<typeof vi.fn<() => Promise<TaxActivitySnapshot['scope']>>>
+  organise: ReturnType<typeof vi.fn<() => Promise<TaxActivitySnapshot>>>
   change: ReturnType<typeof vi.fn<(command: ScopeCommand) => Promise<TaxActivitySnapshot['scope']>>>
   forbidden: ReturnType<typeof vi.fn>
   dispatchEvent: (event: Event) => boolean
@@ -187,8 +188,9 @@ async function setup(data = fixtures()): Promise<{
       )
       return structuredClone(data.scope)
     })
+  const organise = vi.fn(async () => structuredClone(data))
   const windowFixture = {
-    taxScope: { organise: vi.fn(async () => structuredClone(data)), get: getScope, change },
+    taxScope: { organise, get: getScope, change },
     kasa: {
       onChanged: vi.fn(() => vi.fn()),
       snapshot: forbidden,
@@ -213,6 +215,7 @@ async function setup(data = fixtures()): Promise<{
     data,
     get,
     getScope,
+    organise,
     change,
     forbidden,
     dispatchEvent,
@@ -229,6 +232,56 @@ afterEach(() => {
 })
 
 describe('link saved activity to the selected taxpayer', () => {
+  it('drains the queued app-profile refresh when its earlier database response arrives after the switch', async () => {
+    const data = fixtures()
+    data.scope.recordProfiles!.push({ recordKey: 'payment:1', taxpayerId: 'me' })
+    const f = await setup(data)
+    expect(f.get('tax-activity-rows').textContent).toContain('My profile')
+    const previous = structuredClone(data)
+    let resolve!: (value: TaxActivitySnapshot) => void
+    f.organise.mockReturnValueOnce(
+      new Promise((yes) => {
+        resolve = yes
+      })
+    )
+    f.get('tax-activity-refresh').onclick?.()
+    await flush()
+    f.get('view-tax').dataset.appProfileBusy = 'true'
+    f.dispatchEvent(new Event('kasa:app-profile-busy'))
+    data.scope.activeTaxpayerId = 'other'
+    f.dispatchEvent(new CustomEvent('kasa:app-profile-updated', { detail: { scope: data.scope } }))
+    f.get('view-tax').dataset.appProfileBusy = 'false'
+    f.dispatchEvent(new Event('kasa:app-profile-busy'))
+    resolve(previous)
+    await flush()
+    expect(f.organise).toHaveBeenCalledTimes(3)
+    expect(f.get('tax-activity-rows').textContent).toContain('Other profile')
+    expect(f.get('tax-activity-rows').textContent).not.toContain('My profile')
+    expect(f.change).not.toHaveBeenCalled()
+    expect(f.forbidden).not.toHaveBeenCalled()
+  })
+
+  it.each(['appProfileDirty', 'appProfileBusy', 'taxSetupDirty'])(
+    'blocks linking while %s is active',
+    async (flag) => {
+      const f = await setup()
+      f.get('view-tax').dataset[flag] = 'true'
+      f.dispatchEvent(
+        new Event(
+          flag === 'taxSetupDirty'
+            ? 'kasa:tax-setup-dirty'
+            : flag === 'appProfileDirty'
+              ? 'kasa:app-profile-dirty'
+              : 'kasa:app-profile-busy'
+        )
+      )
+      expect(f.get('tax-activity-link-profile').disabled).toBe(true)
+      await f.click()
+      expect(f.change).not.toHaveBeenCalled()
+      expect(f.forbidden).not.toHaveBeenCalled()
+    }
+  )
+
   it('links only unowned saved invoices and payments without inventing account or asset details', async () => {
     const f = await setup()
     const before = structuredClone(f.data)

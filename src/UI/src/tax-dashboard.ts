@@ -1,10 +1,13 @@
 import type { KasaSnapshot } from '../../preload/index.d'
 import { enrichmentGaps, feeGaps } from '../../shared/tax-enrichment'
 import { calculationCompleteness, type Completeness, type TaxScope } from '../../shared/tax-scope'
+import { taxScopeKey } from '../../shared/tax-selection'
 import type { TaxReport } from './tax-report'
 import type { PersonalDisposalEstimate } from './personal-disposal'
+import { buildDashboardVisuals, type DashboardVisuals } from './tax-dashboard-visuals'
 
 export type TaxDashboard = {
+  visuals: DashboardVisuals
   personalDisposal?: PersonalDisposalEstimate
   scopeKey: string
   taxpayerLabel: string
@@ -85,11 +88,19 @@ const explanations: Record<string, string> = {
 
 // This view reads the same selected-year report as Reports. It is a record overview,
 // not an independent tax engine, balance lookup or verification of declarations.
-export function buildTaxDashboard(scope: TaxScope, report: TaxReport): TaxDashboard {
+export function buildTaxDashboard(
+  scope: TaxScope,
+  report: TaxReport,
+  snapshot?: KasaSnapshot
+): TaxDashboard {
   const taxpayer = scope.taxpayers.find((entry) => entry.id === scope.activeTaxpayerId)
+  const scopeKey = taxScopeKey(scope)
   if (
     !taxpayer ||
-    report.scopeKey !== JSON.stringify([scope.databaseId, taxpayer.id, taxpayer.profile.taxYear])
+    !scopeKey ||
+    report.scopeKey !== scopeKey ||
+    report.taxpayer.id !== taxpayer.id ||
+    report.year !== taxpayer.profile.taxYear
   )
     throw new Error('Reload the report for the selected profile and tax year.')
 
@@ -248,6 +259,7 @@ export function buildTaxDashboard(scope: TaxScope, report: TaxReport): TaxDashbo
   })
 
   return {
+    visuals: buildDashboardVisuals(scope, report, snapshot),
     scopeKey: report.scopeKey,
     taxpayerLabel: taxpayer.label,
     year: report.year,

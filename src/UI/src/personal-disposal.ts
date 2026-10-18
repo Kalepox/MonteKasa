@@ -2,6 +2,8 @@ import type { KasaPayment, KasaSnapshot } from '../../preload/index.d'
 import { readLedgerSource } from '../../shared/ledger-source'
 import { personalBtcRules } from '../../shared/personal-btc-rules'
 import { observedSources } from '../../shared/tax-activity'
+import { recordTaxpayerMap } from '../../shared/tax-record-profile'
+import { taxScopeKey } from '../../shared/tax-selection'
 import type { TaxEnrichment } from '../../shared/tax-enrichment'
 import type {
   TaxAccount,
@@ -134,8 +136,9 @@ export function buildPersonalDisposalEstimate(
 ): PersonalDisposalEstimate {
   const taxpayer = scope.taxpayers.find((entry) => entry.id === scope.activeTaxpayerId)
   const profile = taxpayer?.profile
+  const scopeKey = taxScopeKey(scope)
   const result: PersonalDisposalEstimate = {
-    scopeKey: JSON.stringify([scope.databaseId, taxpayer?.id ?? null, profile?.taxYear ?? null]),
+    scopeKey: scopeKey ?? '',
     status: 'unsupported',
     reasons: [],
     rows: [],
@@ -144,6 +147,10 @@ export function buildPersonalDisposalEstimate(
     ratePercent: null,
     excluded: { count: 0, details: [] },
     limitations: [...personalBtcRules.limitations]
+  }
+  if (!scopeKey) {
+    result.reasons.push('Choose an app profile with saved tax settings before reviewing disposals.')
+    return result
   }
   if (
     !taxpayer ||
@@ -184,6 +191,7 @@ export function buildPersonalDisposalEstimate(
       .map((entry) => [entry.recordKey, entry])
   )
   const payments = new Map(snapshot.payments.map((entry) => [`payment:${entry.nodeIdx}`, entry]))
+  const owners = recordTaxpayerMap(scope)
   const conflicts = new Set(
     observedSources(snapshot)
       .filter((entry) => entry.conflict)
@@ -208,9 +216,20 @@ export function buildPersonalDisposalEstimate(
     result.excluded.count += count
     exclusions.set(reason, (exclusions.get(reason) ?? 0) + count)
   }
-  exclude('Invoice requests are not disposal payments', snapshot.invoices.length)
+  exclude(
+    'Invoice requests are not disposal payments',
+    snapshot.invoices.filter((invoice) => {
+      if (owners.get(`invoice:${invoice.id}`) !== taxpayer.id) return false
+      const date = savedDate(invoice.createdAt)
+      return !date || Number(date.slice(0, 4)) === profile.taxYear
+    }).length
+  )
   for (const payment of snapshot.payments) {
     const recordKey = `payment:${payment.nodeIdx}`
+    // Other profiles and unassigned database records are outside this subtotal,
+    // including its exclusion counts. Keep all saved rows available above for
+    // duplicate detection and own-transfer reconciliation.
+    if (owners.get(recordKey) !== taxpayer.id) continue
     const assignment = assignments.get(recordKey)
     const account = accounts.get(assignment?.accountId ?? '')
     if (!assignment || !account || account.taxpayerId !== taxpayer.id) {

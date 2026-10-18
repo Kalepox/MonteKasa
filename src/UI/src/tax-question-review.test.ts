@@ -237,6 +237,19 @@ describe('focused missing-tax-information questions', () => {
     expect(keys(result, 'links')).toEqual([])
   })
 
+  it('does not reuse questions across app profiles with the same taxpayer and year', () => {
+    const { scope, snapshot } = fixture()
+    scope.appProfileId = 'app-one'
+    const report = buildTaxReport(scope, snapshot)!
+    expect(buildTaxQuestionReview(scope, snapshot, report, 'personal-gains')?.scopeKey).toBe(
+      report.scopeKey
+    )
+    for (const appProfileId of ['app-two', null, ''])
+      expect(
+        buildTaxQuestionReview({ ...scope, appProfileId }, snapshot, report, 'personal-gains')
+      ).toBeNull()
+  })
+
   it('removes completed record follow-ups while keeping unverified preparation warnings', () => {
     const { scope, snapshot } = fixture()
     const sale = enrich(scope, 'payment:1', 'sale')

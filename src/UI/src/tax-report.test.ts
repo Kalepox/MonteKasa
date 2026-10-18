@@ -158,6 +158,34 @@ describe('selected taxpayer and tax-year Reports', () => {
     const { scope, snapshot } = fixture()
     for (const activeTaxpayerId of [undefined, '', 'missing'])
       expect(buildTaxReport({ ...scope, activeTaxpayerId }, snapshot)).toBeNull()
+    for (const appProfileId of [null, ''])
+      expect(buildTaxReport({ ...scope, appProfileId }, snapshot)).toBeNull()
+  })
+
+  it('uses the app profile identity and keeps two profiles and saved years separate without changing records', () => {
+    const { scope, snapshot } = fixture()
+    scope.appProfileId = 'app-personal'
+    const personal = scope.taxpayers[0]
+    personal.yearProfiles = [{ ...personal.profile, taxYear: 2025 }, { ...personal.profile }]
+    const before = structuredClone({ scope, snapshot })
+    const report = buildTaxReport(scope, snapshot)!
+    const priorScope = {
+      ...scope,
+      taxpayers: [{ ...personal, profile: personal.yearProfiles[0] }, scope.taxpayers[1]]
+    }
+    const prior = buildTaxReport(priorScope, snapshot)!
+    const business = buildTaxReport(
+      { ...scope, appProfileId: 'app-business', activeTaxpayerId: 'business' },
+      snapshot
+    )!
+    expect(report.scopeKey).toBe(
+      JSON.stringify(['fixture-database', 'app-personal', 'personal', 2026])
+    )
+    expect(new Set([report.scopeKey, prior.scopeKey, business.scopeKey]).size).toBe(3)
+    expect(prior.review.payments.map((row) => row.nodeIdx)).toEqual([6])
+    expect(business.review.payments.map((row) => row.nodeIdx)).toEqual([3])
+    expect(taxReportCsv(prior)).not.toContain('Client foreign')
+    expect({ scope, snapshot }).toEqual(before)
   })
 
   it('uses all selected-profile accounts and assets without inferring a different owner from invoice links', () => {

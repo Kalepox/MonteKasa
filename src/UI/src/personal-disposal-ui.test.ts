@@ -307,7 +307,8 @@ describe('personal Bitcoin disposal controller', () => {
     expect(f.get('tax-basis-cost').value).toBe('')
     expect(f.get('tax-personal-summary').textContent).toContain('Not yet estimable')
     expect(f.get('tax-personal-summary').textContent).not.toContain('0.00 EUR')
-    expect(f.get('tax-personal-excluded').textContent).toContain('1 excluded')
+    // The other taxpayer's record does not enter this profile's summary or excluded count.
+    expect(f.get('tax-personal-excluded').textContent).toContain('0 excluded')
     expect(f.getScope).not.toHaveBeenCalled()
     expect(f.getSnapshot).not.toHaveBeenCalled()
     expect(f.change).not.toHaveBeenCalled()
@@ -498,6 +499,100 @@ describe('personal Bitcoin disposal controller', () => {
     expect(f.change).not.toHaveBeenCalled()
   })
 
+  it('saves a cost review under the selected app profile identity', async () => {
+    const data = fixtures()
+    data.scope.appProfileId = 'app-selected'
+    const f = await setup(data)
+    f.draft()
+
+    await f.submit()
+
+    expect(f.change).toHaveBeenCalledTimes(1)
+    expect(f.get('view-tax').dataset.taxBasisDirty).toBe('false')
+    expect(f.get('tax-personal-summary').textContent).toContain('132.00 EUR')
+    expect(f.data.scope.appProfileId).toBe('app-selected')
+    expect(f.data.snapshot).toEqual(f.original.snapshot)
+    expect(f.forbidden).not.toHaveBeenCalled()
+  })
+
+  it.each(['another-app', null])(
+    'rejects a fresh saved app profile selection of %s even with the same taxpayer and year',
+    async (appProfileId) => {
+      const data = fixtures()
+      data.scope.appProfileId = 'app-selected'
+      const f = await setup(data)
+      f.draft()
+      f.data.scope = { ...f.data.scope, appProfileId }
+
+      await f.submit()
+
+      expect(f.getScope).toHaveBeenCalledTimes(1)
+      expect(f.change).not.toHaveBeenCalled()
+      expect(f.get('tax-basis-reference').value).toBe('LIFO allocation schedule')
+      expect(f.get('tax-basis-status').textContent).toContain('changed')
+    }
+  )
+
+  it.each(['app profile', 'year'])(
+    'keeps an old cost draft read-only after the displayed %s changes',
+    async (changed) => {
+      const data = fixtures()
+      data.scope.appProfileId = 'app-selected'
+      const f = await setup(data)
+      f.draft()
+      const next = structuredClone(f.data.scope)
+      if (changed === 'app profile') next.appProfileId = 'another-app'
+      else next.taxpayers[0].profile.taxYear = 2025
+      f.render(next)
+
+      expect(f.get('tax-personal-summary').hidden).toBe(true)
+      expect(f.get('tax-basis-save').disabled).toBe(true)
+      expect(f.get('tax-basis-reference').value).toBe('LIFO allocation schedule')
+      await f.submit()
+      expect(f.getScope).not.toHaveBeenCalled()
+      expect(f.change).not.toHaveBeenCalled()
+
+      f.get('tax-basis-discard').onclick?.()
+      expect(f.get('view-tax').dataset.taxBasisDirty).toBe('false')
+      expect(f.get('tax-personal-context').textContent).toContain(
+        changed === 'year' ? '2025' : '2026'
+      )
+      expect(f.get('tax-personal-summary').textContent).not.toContain('132.00 EUR')
+    }
+  )
+
+  it.each(['app profile', 'year'])(
+    'does not restore the old %s subtotal after a pending cost save completes',
+    async (changed) => {
+      const data = fixtures()
+      data.scope.appProfileId = 'app-selected'
+      const f = await setup(data)
+      f.draft()
+      const pending = deferred<TaxScope>()
+      f.change.mockReturnValueOnce(pending.promise)
+      const saving = f.submit()
+      await flush()
+      const next = structuredClone(f.data.scope)
+      if (changed === 'app profile') next.appProfileId = 'another-app'
+      else next.taxpayers[0].profile.taxYear = 2025
+      f.render(next)
+      f.dispatchEvent.mockClear()
+      pending.resolve({ ...f.data.scope, disposalBases: [basisFor(f.data)] })
+      await saving
+
+      expect(f.change).toHaveBeenCalledTimes(1)
+      expect(f.get('tax-personal-context').textContent).toContain(
+        changed === 'year' ? '2025' : '2026'
+      )
+      expect(f.get('tax-personal-summary').textContent).not.toContain('132.00 EUR')
+      const refresh = f.dispatchEvent.mock.calls
+        .map(([event]) => event as CustomEvent)
+        .find((event) => event.type === 'kasa:tax-scope-updated')
+      expect(refresh?.detail).toEqual({})
+      expect(f.data.snapshot).toEqual(f.original.snapshot)
+    }
+  )
+
   it('hides the old subtotal when another disposal changes during an unrelated cost draft', async () => {
     const data = fixtures()
     data.scope.assignments[1].accountId = 'selected-account'
@@ -566,7 +661,10 @@ describe('personal Bitcoin disposal controller', () => {
       ['scopeBusy', 'kasa:tax-scope-busy'],
       ['enrichmentDirty', 'kasa:tax-enrichment-dirty'],
       ['activityEditing', 'kasa:tax-activity-editing'],
-      ['taxQuestionsDirty', 'kasa:tax-questions-dirty']
+      ['taxQuestionsDirty', 'kasa:tax-questions-dirty'],
+      ['appProfileBusy', 'kasa:app-profile-busy'],
+      ['appProfileDirty', 'kasa:app-profile-dirty'],
+      ['taxSetupDirty', 'kasa:tax-setup-dirty']
     ]) {
       f.get('view-tax').dataset[flag] = 'true'
       f.emit(event)
@@ -616,6 +714,30 @@ describe('personal Bitcoin disposal controller', () => {
 
     expect(f.get('view-tax').dataset.taxBasisDirty).toBe('false')
     expect(f.get('tax-basis-fields').disabled).toBe(false)
+    expect(f.data.snapshot).toEqual(f.original.snapshot)
+  })
+
+  it('requests a fresh read without publishing old scope when context clears during a save', async () => {
+    const data = fixtures()
+    data.scope.appProfileId = 'app-selected'
+    const f = await setup(data)
+    f.draft()
+    const pending = deferred<TaxScope>()
+    f.change.mockReturnValueOnce(pending.promise)
+    const saving = f.submit()
+    await flush()
+    f.controller.clearPersonalDisposal()
+    f.dispatchEvent.mockClear()
+    pending.resolve({ ...f.data.scope, disposalBases: [basisFor(f.data)] })
+    await saving
+
+    const refresh = f.dispatchEvent.mock.calls
+      .map(([event]) => event as CustomEvent)
+      .find((event) => event.type === 'kasa:tax-scope-updated')
+    expect(refresh?.detail).toEqual({})
+    expect(f.get('tax-personal-summary').hidden).toBe(true)
+    expect(f.get('tax-basis-save').disabled).toBe(true)
+    expect(f.get('view-tax').dataset.taxBasisDirty).toBe('false')
     expect(f.data.snapshot).toEqual(f.original.snapshot)
   })
 
