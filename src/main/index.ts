@@ -14,6 +14,7 @@ import { Kasa } from './core/kasa'
 import { toRaw, toUsdt } from './core/units'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { Agent } from './ai/agent'
+import { buildCommercialistaContext, type CommercialistaContext } from './ai/commercialista-context'
 import { freshSecurityContext } from './ai/fresh-security-context'
 import type { SecurityTarget } from '../shared/agent'
 import { invoiceDocumentHtml } from '../shared/invoice-document'
@@ -26,9 +27,14 @@ guardDisconnectedOutput(process.stdout)
 guardDisconnectedOutput(process.stderr)
 
 let readSecurity: ((target?: SecurityTarget, query?: string) => Promise<string>) | undefined
+let readTax: ((scopeKey: string) => CommercialistaContext) | undefined
 const agent = new Agent(
   undefined,
-  (target, query) => readSecurity?.(target, query) ?? 'Security checks are not initialized.'
+  (target, query) => readSecurity?.(target, query) ?? 'Security checks are not initialized.',
+  (scopeKey) => {
+    if (!readTax) throw new Error('Commercialista database context is not initialized.')
+    return readTax(scopeKey)
+  }
 )
 // A single instance owns the local operation ledger.
 if (!app.requestSingleInstanceLock()) app.exit(0)
@@ -172,6 +178,15 @@ app.whenReady().then(() => {
   // keeps a migration error reportable in the UI without preventing app startup.
   const profiles = (): AppProfilesStore =>
     (profileStore ??= new AppProfilesStore(getDb(), () => legacyTaxScope.get()))
+  // Synchronous saved-database reads only. Never use the security chat's monitor.
+  readTax = (scopeKey) =>
+    buildCommercialistaContext(profiles().getTaxScope(), kasa.snapshot(), scopeKey)
+  handle('agent:commercialista-chat', (event, message: unknown, scopeKey: unknown) => {
+    if (event.senderFrame !== event.sender.mainFrame) throw new Error('Main frame required.')
+    return agent.commercialistaChat(message, scopeKey, (update) => {
+      if (!event.sender.isDestroyed()) event.sender.send('agent:event', update)
+    })
+  })
   handle('app-profiles:get', () => profiles().get())
   handle('app-profiles:change', (_event, command: unknown) => profiles().change(command))
   handle('tax-scope:get', () => profiles().getTaxScope())

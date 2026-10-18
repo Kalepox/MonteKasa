@@ -26,6 +26,8 @@ const agent: AgentAPI = {
   status: () => ipcRenderer.invoke('agent:status'),
   prepare: () => ipcRenderer.invoke('agent:prepare'),
   chat: (message, target) => ipcRenderer.invoke('agent:chat', message, target),
+  commercialistaChat: (message, scopeKey) =>
+    ipcRenderer.invoke('agent:commercialista-chat', message, scopeKey),
   close: () => ipcRenderer.invoke('agent:close'),
   stop: () => ipcRenderer.invoke('agent:stop'),
   reset: () => ipcRenderer.invoke('agent:reset'),

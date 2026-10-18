@@ -1581,6 +1581,7 @@
         <section class="tax-panel tax-dashboard" data-tax-panel="overview" aria-labelledby="tax-dashboard-title">
           <div class="tax-section-heading">
             <div><span class="tax-eyebrow">Tax &amp; VAT</span><h3 id="tax-dashboard-title">A clearer view of your taxes</h3><p id="tax-dashboard-subtitle">Your saved payments, useful estimates and the details still needed.</p></div>
+            <button id="tax-dashboard-explain" class="btn btn-s" type="button">Explain with Commercialista</button>
             <button id="tax-dashboard-refresh" class="btn btn-s" type="button" aria-controls="tax-dashboard-content">Refresh records</button>
           </div>
           <p id="tax-dashboard-status" role="status" aria-live="polite">Reading the selected profile and saved records…</p>
@@ -1841,12 +1842,13 @@
           </section>
         </section>
         <div class="tax-panel tax-ai-panel" data-tax-panel="profile" hidden aria-label="Shared local AI">
-          <strong>Local AI</strong>
+          <strong>Commercialista explanations</strong>
           <p id="tax-ai-status" role="status">Checking local AI…</p>
           <button id="tax-ai-prepare" class="btn btn-p" type="button" disabled>Checking…</button>
+          <button id="tax-ai-open" class="btn btn-s" type="button">Ask Commercialista</button>
           <button id="tax-ai-close" class="btn btn-s" type="button" disabled>Turn off agent</button>
           <p>Uses the same model as Kasa Assistant. Closing AI switches it off for both sections; downloaded files stay on this device.</p>
-          <p>AI tax explanations are not available yet. Focused questions, supported deterministic estimates, ledger summaries and CSV export work without AI.</p>
+          <p>Ask about the selected profile and tax year’s saved activity, estimates and missing information. Explanations are read-only and use the same results as Reports. Each question is independent; no wallet access or live legal research. Calculations, summaries and CSV export still work without AI.</p>
         </div>
         <section class="tax-panel" data-tax-panel="reports" hidden aria-label="Database records and exports">
           <div class="tax-section-heading">

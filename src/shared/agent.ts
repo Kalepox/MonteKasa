@@ -9,6 +9,7 @@ export interface AgentAPI {
   status(): Promise<{ ready: boolean; installed: boolean }>
   prepare(): Promise<void>
   chat(message: string, target?: SecurityTarget): Promise<string>
+  commercialistaChat(message: string, scopeKey: string): Promise<string>
   close(): Promise<void>
   stop(): Promise<void>
   reset(): Promise<void>
