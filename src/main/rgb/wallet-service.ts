@@ -5,6 +5,21 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import { rgbConfig } from './config'
 
+// turns a failed wallet-service start into an instruction a new user can follow
+function startFailure(code: number | null, stderr: string, node: string): string {
+  if (code === 2)
+    return 'Another app is already using this wallet. Close the other MonteKasa window first.'
+  if (/ERR_MODULE_NOT_FOUND|Cannot find (package|module)/.test(stderr))
+    return 'The wallet service is not installed yet. In the project folder run: cd wallet-service && nvm exec 22 npm install'
+  if (
+    /NODE_MODULE_VERSION|was compiled against|ERR_DLOPEN_FAILED|invalid ELF|wrong ELF|incompatible architecture/.test(
+      stderr
+    )
+  )
+    return `The wallet service needs Node.js 22, but "${node}" is a different version. Run: nvm install 22, then reinstall with: cd wallet-service && nvm exec 22 npm install`
+  return `Wallet service exited (code ${code}). See the [wallet] lines in the terminal. It needs Node.js 22 ("${node}").`
+}
+
 export class WalletService {
   private child?: ChildProcess
   private port?: number
@@ -30,7 +45,23 @@ export class WalletService {
         }
       })
       this.child = child
-      const timer = setTimeout(() => reject(new Error('Wallet service did not start within 30 s')), 30_000)
+      let stderr = '' // last output, to explain a failed start in plain words
+      const fail = (error: Error): void => {
+        clearTimeout(timer)
+        this.child = this.port = this.starting = undefined // so "Try again" starts a fresh service
+        reject(error)
+      }
+      const timer = setTimeout(() => {
+        child.kill('SIGTERM')
+        fail(new Error('Wallet service did not start within 30 s. Try again.'))
+      }, 30_000)
+      child.on('error', (e) =>
+        fail(
+          new Error(
+            `Could not start the wallet service with "${rgbConfig.walletNode}": ${e.message}. Install Node.js 22 (nvm install 22).`
+          )
+        )
+      )
 
       let buffer = ''
       child.stdout!.on('data', (chunk: Buffer) => {
@@ -49,17 +80,13 @@ export class WalletService {
         }
         buffer = buffer.slice(buffer.lastIndexOf('\n') + 1)
       })
-      child.stderr!.on('data', (d: Buffer) => console.error('[wallet]', d.toString().trim()))
+      child.stderr!.on('data', (d: Buffer) => {
+        stderr = (stderr + d.toString()).slice(-4000)
+        console.error('[wallet]', d.toString().trim())
+      })
       child.on('exit', (code) => {
-        clearTimeout(timer)
-        this.child = this.port = this.starting = undefined
-        reject(
-          new Error(
-            code === 2
-              ? 'Another app is already using this wallet. Close the other MonteKasa window first.'
-              : `Wallet service exited (code ${code}). Is WALLET_NODE a Node 22 binary?`
-          )
-        )
+        if (!this.starting) return // already failed (timeout / spawn error)
+        fail(new Error(startFailure(code, stderr, rgbConfig.walletNode)))
       })
     })
     return this.starting

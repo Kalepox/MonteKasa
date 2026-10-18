@@ -69,7 +69,14 @@
   padding: 9px 12px;
   margin: 8px 8px 0 0;
   border-radius: 6px;
-  background: #3b4655;
+  background: #fff;
+  color: #18212d;
+  border: 1px solid var(--borderB, #d5dbe2);
+  font-weight: 600;
+  cursor: pointer;
+}
+.security-dialog button:hover:not(:disabled) {
+  background: #f0f2f5;
 }
 .security-dialog button:disabled {
   opacity: 0.5;

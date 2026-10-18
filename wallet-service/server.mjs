@@ -8,6 +8,7 @@ import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
 import { timingSafeEqual } from 'node:crypto'
+import { createRequire } from 'node:module'
 import bip39 from 'bip39'
 import WalletManagerRgb from '@utexo/wdk-wallet-rgb'
 import rgblib from '@utexo/rgb-lib'
@@ -119,6 +120,7 @@ async function syncOnce() {
       const r = await account.registerWallet() // goes online the first time, syncs, returns BTC balance
       view = { address: r.address, btc: r.btcBalance, at: Date.now() }
       btcDirty = false
+      await releaseExpired()
     }
     syncError = null
   } catch (e) {
@@ -127,6 +129,35 @@ async function syncOnce() {
     tick++
   }
 }
+
+// Every receive invoice reserves a wallet output ("allocation slot") until it's paid. Expired, unpaid
+// invoices keep theirs until they're failed, so a busy wallet runs out of slots
+// (InsufficientAllocationSlots). releaseExpired() fails them. It calls rgb-lib's native fail_transfers
+// directly: the JS wrapper in @utexo/rgb-lib 2.0.3 rejects every batch index (its i32 check refuses
+// positive numbers), while the native call takes the index as a string. Checked on a test wallet.
+let nativeRgbLib
+try {
+  nativeRgbLib = createRequire(import.meta.url)(`@utexo/rgb-lib-${process.platform}-${process.arch}/rgblib`)
+} catch { /* not found: expired invoices are simply left alone */ }
+
+async function releaseExpired() {
+  const client = account?._wallet?.client
+  if (!nativeRgbLib || !client?.wallet?.wallet) return 0
+  let released = 0
+  try {
+    const list = async (assetId) => { try { return await account.listTransfers(assetId) } catch { return [] } }
+    const seen = new Set()
+    for (const t of [...(ASSET_ID ? await list(ASSET_ID) : []), ...(await list())]) {
+      if (seen.has(t.batchTransferIdx)) continue
+      seen.add(t.batchTransferIdx)
+      if (t.status !== 'WaitingCounterparty' || !t.kind?.startsWith('Receive')) continue
+      if (!t.expiration || t.expiration * 1000 > Date.now()) continue
+      if (String(nativeRgbLib.rgblib_fail_transfers(client.wallet.wallet, client.getOnline(), String(t.batchTransferIdx), false, true)) === 'true') released++
+    }
+  } catch { /* best effort; the next sync tries again */ }
+  return released
+}
+const noSlots = (e) => /InsufficientAllocationSlots|InsufficientBitcoins|NoAvailableUtxos/.test(String(e?.message ?? e))
 
 // While the merchant is reviewing or sending a payment, timer syncs step aside: rgb-lib's calls block
 // the whole service while they run, so a sync in progress made reviews wait seconds.
@@ -308,11 +339,39 @@ const api = {
 
   async createInvoice({ assetId, amountRaw }) {
     const a = unlocked()
+    const receive = async () => {
+      try {
+        return await a.receiveAsset({ assetId, amount: amountRaw ?? 0 })
+      } catch (e) {
+        if (!notFound(e)) throw e
+        return await a.receiveAsset({ amount: 0 }) // first receive: any-asset invoice
+      }
+    }
     try {
-      return await a.receiveAsset({ assetId, amount: amountRaw ?? 0 })
+      return await receive()
     } catch (e) {
-      if (!notFound(e)) throw e
-      return await a.receiveAsset({ amount: 0 }) // first receive: any-asset invoice
+      if (!noSlots(e)) throw e
+    }
+    // out of slots: free the ones held by expired invoices first
+    if (await releaseExpired()) {
+      try {
+        return await receive()
+      } catch (e) {
+        if (!noSlots(e)) throw e
+      }
+    }
+    // still none: make a few new outputs (uses a little test BTC) and try once more
+    try {
+      await a.createUtxos({ num: 5, size: 3000, feeRate: 2 })
+      btcDirty = true
+    } catch {
+      throw new Error('No free wallet outputs to receive on, and not enough test BTC to make new ones. Add test BTC (Wallet → address → faucet), then try again.')
+    }
+    try {
+      return await receive()
+    } catch (e) {
+      if (!noSlots(e)) throw e
+      throw new Error('Made new wallet outputs for receiving; they are confirming on Bitcoin. Try again in about a minute.')
     }
   },
 

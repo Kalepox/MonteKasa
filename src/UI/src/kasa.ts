@@ -259,14 +259,19 @@ function renderInvoices(): void {
 // the transfers currently listed in the wallet tables; a clicked row's data-tx indexes into this
 let shownMoves: KasaPayment[] = []
 
+// set while the password is being checked and the wallet opens: "Loading…" instead of "Locked"
+let unlocking = false
+
 function renderWallet(st: KasaStatus): void {
   walletBalance = st.state === 'online' ? st.balance : 0
+  if (st.state !== 'locked') unlocking = false
   // what to show instead of a number: still loading, locked, or a real problem
-  const pending = ['syncing', 'timeout'].includes(st.state)
-    ? 'Loading…'
-    : st.state === 'locked'
-      ? 'Locked'
-      : 'Unavailable'
+  const pending =
+    ['syncing', 'timeout'].includes(st.state) || (st.state === 'locked' && unlocking)
+      ? 'Loading…'
+      : st.state === 'locked'
+        ? 'Locked'
+        : 'Unavailable'
   // shown balance includes payments on their way; spending (Send → Available) uses settled only
   const shown = st.future ?? st.balance
   setText('w-balance', st.state === 'online' ? `${fmt(shown)} USDT` : pending)
@@ -309,7 +314,7 @@ function renderStatus(st: KasaStatus): void {
     : {
         online: 'Mutinynet connected',
         syncing: 'Node syncing…',
-        locked: 'Node locked',
+        locked: unlocking ? 'Opening wallet…' : 'Node locked',
         offline: 'Node unreachable',
         timeout: 'Node timed out — retry status check',
         error: 'Node error — inspect diagnostics'
@@ -825,6 +830,17 @@ w.openInvoice = async (id: string): Promise<void> => {
 // ---------- start ----------
 window.kasa.onChanged(() => void refresh())
 window.addEventListener('wallet-unlocked', () => void refresh()) // from wallet-gate.ts
+window.addEventListener('wallet-unlocking', () => {
+  unlocking = true
+  for (const id of ['w-balance', 'w-usdt', 'w-btc', 'send-avail-bal']) setText(id, 'Loading…')
+  document
+    .querySelectorAll('.tb-net-pill span:last-child')
+    .forEach((e) => (e.textContent = 'Opening wallet…'))
+})
+window.addEventListener('wallet-unlock-failed', () => {
+  unlocking = false
+  void refresh()
+})
 window.kasa.onPayment((p) => {
   const who = p.client ? `from ${p.client}` : 'to your wallet'
   w.toast(
