@@ -1,5 +1,6 @@
 import type { TaxScopeAPI } from '../shared/tax-scope'
 import type { TaxProfileAPI } from '../shared/tax-profile'
+import type { AppProfilesAPI } from '../shared/app-profile'
 import { contextBridge, ipcRenderer } from 'electron'
 import type { IpcRendererEvent } from 'electron'
 import type { SecurityAPI } from '../shared/security'
@@ -9,6 +10,11 @@ const taxScope: TaxScopeAPI = {
   organise: () => ipcRenderer.invoke('tax-scope:organise'),
   get: () => ipcRenderer.invoke('tax-scope:get'),
   change: (command) => ipcRenderer.invoke('tax-scope:change', command)
+}
+
+const appProfiles: AppProfilesAPI = {
+  get: () => ipcRenderer.invoke('app-profiles:get'),
+  change: (command) => ipcRenderer.invoke('app-profiles:change', command)
 }
 
 const taxProfile: TaxProfileAPI = {
@@ -81,6 +87,7 @@ const kasa = {
 // just add to the DOM global.
 if (process.contextIsolated) {
   try {
+    contextBridge.exposeInMainWorld('appProfiles', appProfiles)
     contextBridge.exposeInMainWorld('taxScope', taxScope)
     contextBridge.exposeInMainWorld('taxProfile', taxProfile)
     contextBridge.exposeInMainWorld('security', security)
@@ -90,6 +97,7 @@ if (process.contextIsolated) {
     console.error(error)
   }
 } else {
+  window.appProfiles = appProfiles
   window.taxScope = taxScope
   window.taxProfile = taxProfile
   // @ts-ignore (define in dts)

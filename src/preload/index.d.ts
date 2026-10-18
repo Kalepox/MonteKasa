@@ -1,5 +1,6 @@
 import type { TaxScopeAPI } from '../shared/tax-scope'
 import type { TaxProfileAPI } from '../shared/tax-profile'
+import type { AppProfilesAPI } from '../shared/app-profile'
 import type { SecurityAPI } from '../shared/security'
 import type { AgentAPI } from '../shared/agent'
 import type { LedgerSource } from '../shared/ledger-source'
@@ -65,6 +66,7 @@ export interface KasaSnapshot {
 
 declare global {
   interface Window {
+    appProfiles: AppProfilesAPI
     taxScope: TaxScopeAPI
     taxProfile: TaxProfileAPI
     agent: AgentAPI

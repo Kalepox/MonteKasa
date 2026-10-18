@@ -50,8 +50,11 @@ export function setupProfile(draft: TaxSetupDraft, year = currentTaxYear()): Tax
   return validateTaxProfile(draft, year)
 }
 
-export function setupDraftKey(databaseId: string): string {
-  return `kasa:commercialista-setup:v1:${encodeURIComponent(databaseId)}`
+export function setupDraftKey(databaseId: string, appProfileId?: string): string {
+  const databaseKey = `kasa:commercialista-setup:v1:${encodeURIComponent(databaseId)}`
+  return appProfileId === undefined
+    ? databaseKey
+    : `${databaseKey}:app:${encodeURIComponent(appProfileId)}`
 }
 
 export function setupStepError(draft: TaxSetupDraft, step: number): string | null {

@@ -1,4 +1,5 @@
 import { TaxScopeStore } from './tax-scope'
+import { AppProfilesStore } from './app-profiles'
 import { recordKeys } from '../shared/tax-scope'
 import { getDb } from './db'
 import { app, shell, BrowserWindow, ipcMain, Notification } from 'electron'
@@ -162,20 +163,25 @@ app.whenReady().then(() => {
 
   readSecurity = (target, query) => freshSecurityContext(kasa.security, target, query)
   kasa.start()
-  const taxScope = new TaxScopeStore(join(app.getPath('userData'), 'tax-scopes.json'), getDb().name)
-  handle('tax-scope:get', () => taxScope.get())
+  const legacyTaxScope = new TaxScopeStore(
+    join(app.getPath('userData'), 'tax-scopes.json'),
+    getDb().name
+  )
+  let profileStore: AppProfilesStore | undefined
+  // Read legacy declarations once into the ledger's metadata tables. Lazy loading
+  // keeps a migration error reportable in the UI without preventing app startup.
+  const profiles = (): AppProfilesStore =>
+    (profileStore ??= new AppProfilesStore(getDb(), () => legacyTaxScope.get()))
+  handle('app-profiles:get', () => profiles().get())
+  handle('app-profiles:change', (_event, command: unknown) => profiles().change(command))
+  handle('tax-scope:get', () => profiles().getTaxScope())
   handle('tax-scope:organise', () => {
     const snapshot = kasa.snapshot()
-    return { scope: taxScope.organise(snapshot), snapshot }
+    return { scope: profiles().organise(snapshot), snapshot }
   })
   handle('tax-scope:change', (_event, command: unknown) => {
     const snapshot = kasa.snapshot()
-    return taxScope.change(
-      command,
-      (command as { kind?: unknown } | null)?.kind === 'taxpayer' ? taxProfile.get() : null,
-      recordKeys(snapshot),
-      snapshot
-    )
+    return profiles().changeTaxScope(command, recordKeys(snapshot), snapshot)
   })
 
   handle('security:review', (_e, intent: PaymentIntent) => kasa.reviewPayment(intent))

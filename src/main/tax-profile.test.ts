@@ -99,7 +99,8 @@ describe('tax profile validation', () => {
     expect(notes).toContain('professional review')
     expect(notes).toContain('regime still needs to be confirmed')
     expect(notes).toContain('not been independently verified')
-    expect(notes).toContain('all recorded dates')
+    expect(notes).toContain('selected saved profile’s assignments and tax year')
+    expect(notes).toContain('separate entire-database export')
   })
 })
 
