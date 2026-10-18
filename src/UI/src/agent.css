@@ -139,3 +139,16 @@
 #agent-off {
   margin-right: auto;
 }
+
+.agent-selector {
+  display: flex;
+  gap: 6px;
+  padding: 8px 14px 0;
+}
+.agent-selector button {
+  flex: 1;
+}
+#agent-panel .agent-selector button[aria-pressed='true'] {
+  background: var(--blue);
+  color: white;
+}

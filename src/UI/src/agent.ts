@@ -1,3 +1,4 @@
+import { taxScopeKey } from '../../shared/tax-selection'
 import type { SecurityTarget } from '../../shared/agent'
 import './agent.css'
 
@@ -6,10 +7,14 @@ root.id = 'agent-panel'
 root.innerHTML = `
   <button id="agent-toggle" aria-expanded="false" aria-controls="agent-chat">✦ Ask AI</button>
   <section id="agent-chat" aria-label="Kasa Assistant" hidden>
-    <header><div><strong>Kasa Assistant</strong><small>Qwen3.5 2B · <span id="agent-power-state">Checking…</span></small></div>
+    <header><div><strong id="agent-title">Kasa Assistant</strong><small>Qwen3.5 2B · <span id="agent-power-state">Checking…</span></small></div>
       <button id="agent-clear" type="button">New chat</button>
       <button id="agent-close" type="button" aria-label="Hide agent">Hide agent</button></header>
-    <p class="agent-security-note">Payment summaries use recorded checks. AI explanations may be imperfect. Sending funds always requires your confirmation.</p>
+    <div class="agent-selector" role="group" aria-label="Choose assistant">
+      <button id="agent-security-mode" type="button" aria-pressed="true">Kasa Assistant</button>
+      <button id="agent-tax-mode" type="button" aria-pressed="false">Commercialista</button>
+    </div>
+    <p id="agent-note" class="agent-security-note">Payment summaries use recorded checks. AI explanations may be imperfect. Sending funds always requires your confirmation.</p>
     <div id="agent-messages" role="log" aria-label="Conversation"></div>
     <p id="agent-status" role="status">Checking the assistant connection…</p>
     <button id="agent-prepare" type="button" disabled>Prepare AI model · 1.28 GB</button>
@@ -45,6 +50,113 @@ const status = element<HTMLElement>('agent-status')
 const messages = element<HTMLElement>('agent-messages')
 let reply: HTMLElement | undefined
 let busy = false
+let mode: 'security' | 'tax' = 'security'
+let taxKey: string | null = null
+let selectionRevision = 0
+let selectionRequest = 0
+let taxSelectionVerified = false
+let selectionLabel = ''
+let suppressReply = false
+const securityNote = element('agent-note').textContent
+const taxAvailable = typeof window.agent?.commercialistaChat === 'function'
+const taxSelectionBusy = (): boolean => {
+  const view = document.getElementById('view-tax')
+  return view?.dataset?.scopeBusy === 'true' || view?.dataset?.appProfileBusy === 'true'
+}
+
+// Conversations are session-only UI state. A model is shared, but drafts and
+// transcripts are not. Tax conversations are additionally isolated by saved scope.
+type Conversation = { draft: string; nodes: Node[]; status: string }
+const conversations = new Map<string, Conversation>()
+let conversationKey = 'security'
+function saveConversation(): void {
+  conversations.set(conversationKey, {
+    draft: input.value,
+    nodes: Array.from(messages.childNodes),
+    status: status.textContent ?? ''
+  })
+}
+function displayConversation(key: string): void {
+  if (key === conversationKey) return
+  saveConversation()
+  conversationKey = key
+  const saved = conversations.get(key)
+  messages.replaceChildren(...(saved?.nodes ?? []))
+  input.value = saved?.draft ?? ''
+  status.textContent = saved?.status ?? 'New conversation. Ask a question to begin.'
+}
+function taxNote(): void {
+  if (mode !== 'tax') return
+  element('agent-note').textContent = taxKey
+    ? `${selectionLabel}. Saved database data only. Each question is independent; check app results in Reports. This conversation stays separate from Kasa Assistant.`
+    : 'Choose an app profile and complete or link its tax setup first. Your draft is kept here.'
+}
+function checkingTaxSelection(): void {
+  ++selectionRequest
+  taxSelectionVerified = false
+  // A refresh is not a change of identity. Keep the editor, caret and transcript.
+  updateControls()
+}
+async function loadTaxSelection(): Promise<void> {
+  const request = ++selectionRequest
+  taxSelectionVerified = false
+  updateControls()
+  if (taxSelectionBusy()) return
+  try {
+    const scope = await window.taxScope.get()
+    if (request !== selectionRequest) return
+    const nextKey = scope.appProfileId ? taxScopeKey(scope) : null
+    const taxpayer = scope.taxpayers.find((entry) => entry.id === scope.activeTaxpayerId)
+    const changed = nextKey !== taxKey
+    if (changed) {
+      ++selectionRevision
+      if (busy && !preparing && mode === 'tax') {
+        suppressReply = true
+        if (reply) reply.textContent = 'Reply stopped because the selected profile or year changed.'
+        status.textContent = 'Reply stopped after a selection change. Ask again for this scope.'
+        void window.agent.stop().catch(() => {})
+      }
+      taxKey = nextKey
+      if (mode === 'tax') displayConversation(`tax:${taxKey ?? 'unselected'}`)
+    }
+    selectionLabel = taxKey && taxpayer ? `${taxpayer.label} · ${taxpayer.profile.taxYear}` : ''
+    taxSelectionVerified = true
+    taxNote()
+  } catch (error) {
+    if (request === selectionRequest && mode === 'tax')
+      status.textContent = `${errorText(error)} Your draft is kept. Reopen Commercialista to retry.`
+  } finally {
+    if (request === selectionRequest) updateControls()
+  }
+}
+function switchMode(next: 'security' | 'tax'): void {
+  if (mode === next) return
+  displayConversation(next === 'security' ? 'security' : `tax:${taxKey ?? 'unselected'}`)
+  mode = next
+  suppressReply = false
+  input.maxLength = next === 'tax' ? 1000 : 4000
+  element('agent-title').textContent = next === 'tax' ? 'Commercialista' : 'Kasa Assistant'
+  panel.setAttribute('aria-label', next === 'tax' ? 'Commercialista' : 'Kasa Assistant')
+  element('agent-security-mode').setAttribute('aria-pressed', String(next === 'security'))
+  element('agent-tax-mode').setAttribute('aria-pressed', String(next === 'tax'))
+  element('agent-note').textContent = securityNote
+  taxNote()
+}
+async function openTax(): Promise<void> {
+  if (busy || closing) {
+    show(true)
+    return
+  }
+  switchMode('tax')
+  show(true)
+  if (!taxAvailable) {
+    status.textContent = 'Restart the desktop app to load Commercialista explanations.'
+    updateControls()
+    return
+  }
+  await loadTaxSelection()
+  if (mode === 'tax' && !panel.hidden && !input.disabled) input.focus()
+}
 const show = (open: boolean): void => {
   panel.hidden = !open
   toggle.setAttribute('aria-expanded', String(open))
@@ -107,7 +219,14 @@ const errorText = (error: unknown): string => {
   return message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 }
 const updateControls = (): void => {
-  send.disabled = input.disabled = busy || closing || checking || setupError || !modelReady
+  input.disabled = busy || closing || checking || setupError || !modelReady
+  send.disabled =
+    busy ||
+    closing ||
+    checking ||
+    setupError ||
+    !modelReady ||
+    (mode === 'tax' && (!taxKey || !taxAvailable || !taxSelectionVerified || taxSelectionBusy()))
   clear.disabled = busy || closing || checking || setupError || !modelReady
   prepare.disabled = busy || closing || checking || !available
   prepare.hidden = modelReady && !setupError
@@ -121,6 +240,10 @@ const updateControls = (): void => {
           ? 'Turn on agent'
           : 'Download AI model · 1.28 GB'
   toggle.disabled = false
+  element<HTMLButtonElement>('agent-security-mode').disabled = busy || closing
+  element<HTMLButtonElement>('agent-tax-mode').disabled = busy || closing
+  for (const id of ['tax-ai-open', 'tax-dashboard-explain'])
+    (document.getElementById(id) as HTMLButtonElement).disabled = busy || closing
   element<HTMLButtonElement>('agent-close').disabled = false
   const power = !available
     ? 'Unavailable'
@@ -154,20 +277,26 @@ const updateControls = (): void => {
           : preparing
             ? status.textContent
             : busy
-              ? 'AI is answering a question in Kasa Assistant.'
+              ? `AI is answering a question in ${mode === 'tax' ? 'Commercialista' : 'Kasa Assistant'}.`
               : modelReady
-                ? 'Local AI is running. Commercialista tax chat is not available yet.'
+                ? 'Local AI is running. Ask Commercialista to explain the selected profile and year.'
                 : installed
-                  ? 'AI is installed on this device. Turn it on to use Kasa Assistant.'
+                  ? 'AI is installed on this device. Turn it on for explanations.'
                   : 'Download the model once to use local AI. Automatic summaries remain available.'
   stop.disabled = !busy
-  input.placeholder = modelReady ? 'How can I help?' : 'Turn on the agent to start chatting'
+  input.placeholder = modelReady
+    ? mode === 'tax'
+      ? 'Ask about saved activity, estimates or missing details'
+      : 'How can I help?'
+    : 'Turn on the agent to start chatting'
 }
 window.addEventListener('kasa:explain-security', ((event: CustomEvent<SecurityTarget>) => {
   if (busy || closing) {
     show(true)
     return
   }
+  switchMode('security')
+  updateControls()
   securityTarget = event.detail
   input.value = `Explain this ${securityTarget.kind} (${securityTarget.id}): what was observed, why it matters, and what should I check next?`
   show(true)
@@ -234,9 +363,12 @@ if (!available) {
       finishEvents?.()
       return
     }
-    if (!busy) return
+    if (!busy || (suppressReply && !preparing)) return
     if (event.type === 'evidence') {
-      const facts = add('Payment details', event.text)
+      const facts = add(
+        mode === 'tax' ? 'Saved tax summary · app results' : 'Payment details',
+        event.text
+      )
       facts.parentElement?.classList.add('agent-facts')
       if (reply) messages.insertBefore(facts.parentElement!, reply.parentElement!)
     } else if (event.type === 'evidence-details') {
@@ -263,9 +395,13 @@ if (!available) {
   })
   clear.onclick = async () => {
     try {
-      await window.agent.reset()
-      securityTarget = undefined
+      if (mode === 'security') {
+        await window.agent.reset()
+        securityTarget = undefined
+      }
       messages.replaceChildren()
+      input.value = ''
+      conversations.delete(conversationKey)
       status.textContent = 'New conversation started.'
       if (!panel.hidden) input.focus()
     } catch (error) {
@@ -285,24 +421,46 @@ if (!available) {
   element<HTMLFormElement>('agent-form').onsubmit = async (event) => {
     event.preventDefault()
     const text = input.value.trim()
-    if (!text || busy || closing || checking || setupError || !modelReady) return
+    if (
+      !text ||
+      busy ||
+      closing ||
+      checking ||
+      setupError ||
+      !modelReady ||
+      (mode === 'tax' && (!taxKey || !taxAvailable || !taxSelectionVerified || taxSelectionBusy()))
+    )
+      return
     busy = true
+    suppressReply = false
+    const turnMode = mode
+    const revision = selectionRevision
+    const scopeKey = taxKey
     updateControls()
     add('You', text)
-    reply = add('Explanation', '')
+    const turnReply = add('Explanation', '')
+    reply = turnReply
     input.value = ''
     status.textContent = 'Starting…'
     try {
       const eventsDone = new Promise<void>((resolve) => {
         finishEvents = resolve
       })
-      const answer = await window.agent.chat(text, securityTarget)
+      const answer =
+        turnMode === 'tax'
+          ? await window.agent.commercialistaChat(text, scopeKey!)
+          : await window.agent.chat(text, securityTarget)
       await eventsDone
-      reply.textContent = answer
-      status.textContent = 'Ready · replies stay on this device.'
+      if (turnMode === 'tax' && revision !== selectionRevision) return
+      turnReply.textContent = answer
+      status.textContent =
+        turnMode === 'tax'
+          ? `Ready · ${selectionLabel} · saved data only`
+          : 'Ready · replies stay on this device.'
     } catch (error) {
+      if (turnMode === 'tax' && revision !== selectionRevision) return
       status.textContent = errorText(error)
-      if (!reply.textContent) reply.textContent = 'No reply completed.'
+      if (!turnReply.textContent) turnReply.textContent = 'No reply completed.'
       input.value = text
     } finally {
       busy = false
@@ -319,3 +477,29 @@ taxPrepare.onclick = () => prepare.click()
 taxClose.onclick = () => {
   void turnOff()
 }
+
+for (const id of ['tax-ai-open', 'tax-dashboard-explain'])
+  document.getElementById(id)!.onclick = () => void openTax()
+element('agent-security-mode').onclick = () => {
+  if (busy || closing) return
+  switchMode('security')
+  updateControls()
+}
+element('agent-tax-mode').onclick = () => void openTax()
+for (const event of ['kasa:tax-scope-busy', 'kasa:app-profile-busy'])
+  window.addEventListener(event, () => {
+    if (mode === 'tax') {
+      if (event === 'kasa:app-profile-busy' && !taxSelectionBusy()) void loadTaxSelection()
+      else checkingTaxSelection()
+    }
+  })
+for (const event of [
+  'kasa:tax-scope-idle',
+  'kasa:tax-scope-updated',
+  'kasa:app-profile-updated',
+  'kasa:tax-activity-updated',
+  'kasa:tax-profile-saved'
+])
+  window.addEventListener(event, () => {
+    if (mode === 'tax') void loadTaxSelection()
+  })

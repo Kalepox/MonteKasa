@@ -31,6 +31,8 @@ export class Kasa extends EventEmitter {
     string,
     { checkedAt: number; valid: boolean; confirmations?: number }
   >()
+  // a settled payment can flip to 'confirming' and back when a chain check fails, so remember who was announced
+  private notifiedPayments = new Set<number>()
   readonly security: SecurityCoordinator
 
   constructor(private rgb: RgbBackend) {
@@ -221,13 +223,16 @@ export class Kasa extends EventEmitter {
           paymentChanged &&
           t.direction === 'in' &&
           t.status === 'settled' &&
-          previous?.status !== 'settled'
-        )
+          previous?.status !== 'settled' &&
+          !this.notifiedPayments.has(t.idx)
+        ) {
+          this.notifiedPayments.add(t.idx)
           newlySettled.push({
             amount: toUsdt(t.receivedRaw),
             client: invoice?.client,
             invoiceId: invoice?.id
           })
+        }
       }
 
       // 2. Record chain timing. Tax recognition may require separate fiscal evidence.
