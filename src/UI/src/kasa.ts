@@ -38,7 +38,10 @@ const setText = (id: string, v: string): void => {
 }
 // IPC errors arrive as "Error invoking remote method 'kasa:send': Error: <message>"
 const errText = (e: unknown): string =>
-  String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+  String((e as Error)?.message ?? e).replace(
+    /^Error invoking remote method '[^']+': (Error: )?/,
+    ''
+  )
 const toastErr = (title: string, e: unknown, retry?: () => void): void =>
   w.toast('err', '!', title, esc(errText(e)), 'red', retry)
 
@@ -185,6 +188,28 @@ function renderInvoices(): void {
 
   // Invoices page: summary cards, record count, and per-status filter tab counts
   setText('inv-record-count', `${snap.invoices.length} Records`)
+  // Invoices page cards: New Invoice invoices only
+  const settled = snap.invoices.filter((i) => ['Paid', 'Overpaid', 'Underpaid'].includes(i.state))
+  const awaiting = snap.invoices.filter((i) => ['Issued', 'Pending'].includes(i.state))
+  setText('inv-stat-total', `${fmt(snap.invoices.reduce((s, i) => s + i.amount, 0))} USDT`)
+  setText('inv-stat-settled', `${fmt(settled.reduce((s, i) => s + i.received, 0))} USDT`)
+  setText('inv-stat-awaiting', `${fmt(awaiting.reduce((s, i) => s + i.amount, 0))} USDT`)
+
+  const settlementDays = settled
+    .map((i) => snap.payments.find((p) => p.invoiceId === i.id && p.blockTime))
+    .filter((p): p is NonNullable<typeof p> => !!p?.blockTime)
+    .map(
+      (p) =>
+        (p.blockTime! - (settled.find((i) => i.id === p.invoiceId)?.createdAt ?? p.blockTime!)) /
+        86400
+    )
+  setText(
+    'inv-stat-avgtime',
+    settlementDays.length
+      ? `${(settlementDays.reduce((a, b) => a + b, 0) / settlementDays.length).toFixed(1)} Days`
+      : '—'
+  )
+
 
   const upcoming = $('upcoming-due')
   if (upcoming) {
@@ -218,7 +243,9 @@ function renderInvoices(): void {
   setText('ft-count-overpaid', String(snap.invoices.filter((i) => i.state === 'Overpaid').length))
   setText(
     'ft-count-flagged',
-    String(snap.invoices.filter((i) => ['Underpaid', 'Expired', 'Flagged'].includes(i.state)).length)
+    String(
+      snap.invoices.filter((i) => ['Underpaid', 'Expired', 'Flagged'].includes(i.state)).length
+    )
   )
 }
 
@@ -228,7 +255,11 @@ let shownMoves: KasaPayment[] = []
 function renderWallet(st: KasaStatus): void {
   walletBalance = st.state === 'online' ? st.balance : 0
   // what to show instead of a number: still loading, locked, or a real problem
-  const pending = ['syncing', 'timeout'].includes(st.state) ? 'Loading…' : st.state === 'locked' ? 'Locked' : 'Unavailable'
+  const pending = ['syncing', 'timeout'].includes(st.state)
+    ? 'Loading…'
+    : st.state === 'locked'
+      ? 'Locked'
+      : 'Unavailable'
   // shown balance includes payments on their way; spending (Send → Available) uses settled only
   const shown = st.future ?? st.balance
   setText('w-balance', st.state === 'online' ? `${fmt(shown)} USDT` : pending)
@@ -289,19 +320,51 @@ function notifyNewFlags(previous: KasaSnapshot, current: KasaSnapshot): void {
     const was = prevState.get(i.id)
     if (was === i.state) continue
     if (i.state === 'Overpaid')
-      w.pushNotification('&#x26A0;', 'Invoice Overpaid', `${esc(i.client)} sent extra on ${shortId(i)}.`, 'amber', () => w.openInvoice(i.id))
+      w.pushNotification(
+        '&#x26A0;',
+        'Invoice Overpaid',
+        `${esc(i.client)} sent extra on ${shortId(i)}.`,
+        'amber',
+        () => w.openInvoice(i.id)
+      )
     else if (i.state === 'Underpaid')
-      w.pushNotification('&#x26A0;', 'Invoice Underpaid', `${esc(i.client)} sent less than ${shortId(i)} requires.`, 'red', () => w.openInvoice(i.id))
+      w.pushNotification(
+        '&#x26A0;',
+        'Invoice Underpaid',
+        `${esc(i.client)} sent less than ${shortId(i)} requires.`,
+        'red',
+        () => w.openInvoice(i.id)
+      )
     else if (i.state === 'Flagged')
-      w.pushNotification('&#x2691;', 'Invoice Flagged', `${shortId(i)} needs manual review.`, 'red', () => w.openInvoice(i.id))
+      w.pushNotification(
+        '&#x2691;',
+        'Invoice Flagged',
+        `${shortId(i)} needs manual review.`,
+        'red',
+        () => w.openInvoice(i.id)
+      )
     else if (i.state === 'Expired' && was && was !== 'Expired')
-      w.pushNotification('&#x23F0;', 'Invoice Expired', `${esc(i.client)}'s ${shortId(i)} expired unpaid.`, 'amber', () => w.openInvoice(i.id))
+      w.pushNotification(
+        '&#x23F0;',
+        'Invoice Expired',
+        `${esc(i.client)}'s ${shortId(i)} expired unpaid.`,
+        'amber',
+        () => w.openInvoice(i.id)
+      )
   }
   const prevProposals = new Set(previous.proposals.map((p) => p.id))
   for (const p of current.proposals) {
     if (p.status !== 'open' || prevProposals.has(p.id)) continue
     const inv = current.invoices.find((i) => i.id === p.invoiceId)
-    w.pushNotification('&#x1F916;', 'Refund Proposed', inv ? `${p.kind} for ${shortId(inv)}: ${fmt(p.amount)} USDT.` : `${p.kind}: ${fmt(p.amount)} USDT.`, 'blue', inv ? () => w.openInvoice(inv.id) : undefined)
+    w.pushNotification(
+      '&#x1F916;',
+      'Refund Proposed',
+      inv
+        ? `${p.kind} for ${shortId(inv)}: ${fmt(p.amount)} USDT.`
+        : `${p.kind}: ${fmt(p.amount)} USDT.`,
+      'blue',
+      inv ? () => w.openInvoice(inv.id) : undefined
+    )
   }
 }
 
@@ -500,7 +563,8 @@ async function fillReceive(fresh = false, amount?: string): Promise<void> {
     toastErr('No receive invoice', e, () => void fillReceive())
   }
 }
-const currentReceiveAmount = (): string => (($('rcv-amount') as HTMLInputElement | null)?.value ?? '').trim()
+const currentReceiveAmount = (): string =>
+  (($('rcv-amount') as HTMLInputElement | null)?.value ?? '').trim()
 w.setReceiveAsset = (asset: string): void => {
   if (asset !== 'usdt') return
   void fillReceive(false, currentReceiveAmount() || undefined)
@@ -509,7 +573,10 @@ w.generateFreshSeal = (): Promise<void> => fillReceive(true, currentReceiveAmoun
 let receiveAmountDebounce: ReturnType<typeof setTimeout> | undefined
 w.onReceiveAmountInput = (): void => {
   clearTimeout(receiveAmountDebounce)
-  receiveAmountDebounce = setTimeout(() => void fillReceive(true, currentReceiveAmount() || undefined), 500)
+  receiveAmountDebounce = setTimeout(
+    () => void fillReceive(true, currentReceiveAmount() || undefined),
+    500
+  )
 }
 w.openRecv = w.openReceiveModal
 w.copyReceiveAddress = async (): Promise<void> => {
@@ -538,18 +605,38 @@ w.emailReceiveRequest = async (): Promise<void> => {
   const to = ($('rcv-email') as HTMLInputElement | null)?.value.trim() ?? ''
   const amount = currentReceiveAmount()
   const subject = `Payment Request${amount ? ` — ${amount} USDT` : ''}`
+  const st = await window.kasa.status().catch(() => null)
+  const page = st?.payPage ?? 'https://kalepox.github.io/MonteKasa/pay.html'
+  const link = `${page}#${encodeURIComponent(receiveInvoice.invoice)}`
+
+  const due = new Date(receiveInvoice.expiresAt * 1000).toLocaleString()
   const body = [
-    `You have a payment request${amount ? ` for ${amount} USDT` : ''} on the RGB / Bitcoin network.`,
+    'Hello,',
     '',
-    'Wallet / RGB invoice:',
-    receiveInvoice.invoice,
+    `please find below a payment request${amount ? ` for ${amount} USDT` : ''}.`,
     '',
-    `Valid until ${new Date(receiveInvoice.expiresAt * 1000).toLocaleString()}.`,
-    'Open this link with a KaleidoSwap-compatible RGB wallet to pay it directly, or copy the invoice string into your wallet app.'
+    `Amount:      ${amount ? `${amount} USDT` : 'any amount'}`,
+    `Valid until: ${due}`,
+    'Network:     USDT on RGB (Bitcoin)',
+    '',
+    'Pay with MonteKasa:',
+    link,
+    '',
+    'Nothing is sent automatically: you review and approve the payment in the app.',
+    '',
+    'Other RGB wallet? Paste this invoice:',
+    receiveInvoice.invoice
   ].join('\n')
+
   try {
     await window.kasa.emailInvoice(to || undefined, subject, body)
-    w.toast('rcv-em', '&#x2709;', 'Email draft opened', 'Review it in your mail app and hit send.', 'green')
+    w.toast(
+      'rcv-em',
+      '&#x2709;',
+      'Email draft opened',
+      'Review it in your mail app and hit send.',
+      'green'
+    )
   } catch (e) {
     toastErr('Could not open mail app', e)
   }

@@ -13,6 +13,7 @@ export interface KasaStatus {
   balance: number // spendable (settled)
   future?: number // display: settled + incoming − outgoing still on their way
   btcSats: number
+  payPage?: string
 }
 
 export interface KasaInvoice {

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pay with MonteKasa</title>
+<style>
+  body{margin:0;font:15px system-ui;background:#111113;color:#f4f4f5;display:grid;place-items:center;min-height:100vh}
+  .card{max-width:440px;margin:16px;padding:28px;background:#18181a;border:1px solid #ffffff1f;border-radius:14px}
+  h1{font-size:20px;margin:0 0 4px} p{color:#c4c4c8;font-size:13px;line-height:1.5}
+  .amt{font-size:32px;font-weight:700;margin:12px 0}
+  a.btn,button{display:block;width:100%;box-sizing:border-box;padding:12px;margin-top:10px;border-radius:8px;
+    border:1px solid #ffffff1f;background:#f4f4f5;color:#111;font:600 14px system-ui;text-align:center;text-decoration:none;cursor:pointer}
+  button{background:transparent;color:#f4f4f5}
+  code{display:block;word-break:break-all;font-size:11px;background:#111113;padding:10px;border-radius:6px;margin-top:14px}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Payment request</h1>
+  <div class="amt" id="amt">USDT</div>
+  <p>Paid in USDT over RGB on Bitcoin. Opening MonteKasa only fills in the payment: nothing is sent until you review and approve it in the app.</p>
+  <a class="btn" id="open">Open in MonteKasa</a>
+  <button id="copy">Copy invoice</button>
+  <code id="inv"></code>
+</div>
+<script>
+  const invoice = decodeURIComponent(location.hash.slice(1))
+  const ok = /^rgb:[A-Za-z0-9~_\-.:/?=&]{10,1000}$/.test(invoice)
+  document.getElementById('inv').textContent = ok ? invoice : 'This link has no valid invoice.'
+  // the invoice format is rgb:<asset>/<amount or "aa">/<...>
+  const amount = ok && invoice.split('/')[1]
+  document.getElementById('amt').textContent =
+    amount && /^\d+$/.test(amount) ? `${(Number(amount) / 1e6).toLocaleString('en-US')} USDT` : 'Any amount'
+  const open = document.getElementById('open')
+  if (ok) open.href = 'montekasa://pay?invoice=' + encodeURIComponent(invoice)
+  else open.style.display = 'none'
+  document.getElementById('copy').onclick = () => navigator.clipboard.writeText(invoice)
+</script>
+</body>
+</html>

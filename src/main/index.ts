@@ -19,6 +19,7 @@ import { invoiceDocumentHtml } from '../shared/invoice-document'
 import { transactionDocumentHtml } from '../shared/transaction-document'
 import { TaxProfileStore } from './tax-profile'
 import { guardDisconnectedOutput } from './core/stdio'
+import { rgbConfig } from './rgb/config'
 
 guardDisconnectedOutput(process.stdout)
 guardDisconnectedOutput(process.stderr)
@@ -191,7 +192,8 @@ app.whenReady().then(() => {
       balance: toUsdt(s.balanceRaw ?? 0),
       // display balance incl. transfers on their way; other backends: same as balance
       future: toUsdt(s.futureRaw ?? s.balanceRaw ?? 0),
-      btcSats: s.btcSats ?? 0
+      btcSats: s.btcSats ?? 0,
+      payPage: rgbConfig.payPage
     }
   })
   handle('kasa:snapshot', () => kasa.snapshot())
